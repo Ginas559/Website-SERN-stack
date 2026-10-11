@@ -1,156 +1,117 @@
-# NGHIÊN CỨU CÔNG NGHỆ SERN STACK VÀ PHÁT TRIỂN HỆ THỐNG WEBSITE THƯƠNG MẠI ĐIỆN TỬ BÁN SÁCH TRỰC TUYẾN
+# SERN Bookstore
 
-## Giới thiệu
+## Công nghệ
 
-Đây là repository của đồ án/tiểu luận chuyên ngành tại HCMUTE với đề tài nghiên cứu công nghệ SERN Stack và phát triển hệ thống website thương mại điện tử bán sách trực tuyến.
+- SQL Server
+- Express.js và Node.js
+- React.js và Vite
+- JWT, bcryptjs, express-validator
 
-Trong phạm vi đề tài, SERN Stack được sử dụng với:
-
-* SQL Server
-* Express.js
-* React.js
-* Node.js
-
-Repository được tổ chức theo mô hình tách biệt Frontend và Backend nhằm hỗ trợ quá trình phát triển và quản lý mã nguồn.
-
-## Mục tiêu
-
-Mục tiêu của dự án là nghiên cứu và ứng dụng SERN Stack trong việc phát triển một hệ thống website thương mại điện tử bán sách trực tuyến.
-
-Ở thời điểm hiện tại, project đang trong giai đoạn khởi tạo và thiết lập môi trường phát triển.
-
-## Công nghệ sử dụng
-
-### Frontend
-
-* React.js
-* Vite
-
-### Backend
-
-* Node.js
-* Express.js
-
-### Database
-
-* Microsoft SQL Server
-
-### Công cụ
-
-* Visual Studio Code
-* Git
-* npm
-
-## Kiến trúc dự kiến
-
-Hệ thống được định hướng theo kiến trúc Client - Server:
-
-```text
-React.js (Frontend)
-        │
-        │ HTTP/API
-        ▼
-Node.js + Express.js (Backend)
-        │
-        │ Database Access
-        ▼
-Microsoft SQL Server
-```
-
-Frontend chịu trách nhiệm xây dựng giao diện người dùng.
-
-Backend chịu trách nhiệm xử lý các request từ frontend và cung cấp API cho hệ thống.
-
-Microsoft SQL Server dự kiến được sử dụng làm hệ quản trị cơ sở dữ liệu của hệ thống.
-
-> Các thành phần và chức năng chi tiết sẽ được triển khai trong các giai đoạn phát triển tiếp theo.
-
-## Cấu trúc thư mục
+## Cấu trúc chính
 
 ```text
 website/
-├── client/                 # Frontend - React.js + Vite
-├── server/                 # Backend - Node.js + Express.js
-├── .gitignore
-└── README.md
+├── client/
+└── server/
+    ├── server.js
+    └── src/
+        ├── app.js
+        ├── config/
+        ├── controllers/
+        ├── middleware/
+        ├── migration/
+        ├── models/
+        ├── routes/
+        ├── services/
+        └── utils/
 ```
 
-## Yêu cầu môi trường
-
-Project hiện được phát triển với các công cụ chính:
-
-* Node.js
-* npm
-* Git
-* Microsoft SQL Server
-
-## Cài đặt và chạy dự án
-
-### 1. Clone repository
-
-```bash
-git clone <repository-url>
-cd website
-```
-
-### 2. Chạy Frontend
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-Frontend mặc định chạy tại:
-
-```text
-http://localhost:5173/
-```
-
-### 3. Chạy Backend
-
-Mở một terminal khác:
+## Cài đặt
 
 ```bash
 cd server
 npm install
+cd ../client
+npm install
+```
+
+Tạo database `BookStore` trong SQL Server. Sau đó tạo `server/.env` từ
+[`server/.env.example`](server/.env.example), điền thông tin SQL Server,
+`ACCESS_TOKEN_SECRET` và `REFRESH_TOKEN_SECRET`.
+
+Không chạy trực tiếp từng file SQL. Migration được quản lý bằng:
+
+```text
+server/src/migration/
+├── 001_create_users_table.sql
+├── 002_create_refresh_tokens_table.sql
+├── 003_rebuild_users_table.sql
+└── migrationRunner.js
+```
+
+Kiểm tra trạng thái migration:
+
+```bash
+cd server
+npm run migration:status
+```
+
+Ví dụ:
+
+```text
+[x] 001_create_users_table.sql
+[ ] 002_create_refresh_tokens_table.sql
+```
+
+Chạy các migration chưa chạy:
+
+```bash
+npm run migration:run
+```
+
+Runner sẽ tạo bảng `dbo.DatabaseMigrations`, đọc các file `.sql` theo thứ tự số,
+chạy file chưa có trong bảng lịch sử, và ghi nhận file sau khi chạy thành công.
+Mỗi migration được chạy trong transaction; nếu lỗi thì transaction rollback và
+file đó vẫn ở trạng thái `[ ]`. Các thành viên có số lượng migration khác nhau
+chỉ cần kéo code mới và chạy lại lệnh trên.
+
+Không sửa nội dung migration đã chạy. Khi cần thay đổi database, tạo file mới,
+ví dụ `003_add_phone_to_users.sql`.
+
+## Chạy ứng dụng
+
+Terminal 1:
+
+```bash
+cd server
 npm start
 ```
 
-Backend chạy tại:
+Terminal 2:
 
-```text
-http://localhost:3000/
+```bash
+cd client
+npm run dev
 ```
 
-Endpoint kiểm tra hiện tại:
+Frontend: `http://localhost:5173/`  
+Health check: `GET http://localhost:3000/api/health`
 
-```text
-GET /
+## Authentication API
+
+| Method | Endpoint | Mục đích |
+| --- | --- | --- |
+| POST | `/api/auth/register` | Đăng ký Customer và hash password |
+| POST | `/api/auth/login` | Nhận access token và HttpOnly refresh cookie |
+| POST | `/api/auth/refresh` | Rotation refresh token |
+| POST | `/api/auth/logout` | Thu hồi refresh token và xóa cookie |
+| POST | `/api/auth/forgot-password` | Tạo reset token có thời hạn |
+| POST | `/api/auth/reset-password` | Đổi password bằng reset token |
+| GET | `/api/users/me` | Lấy user hiện tại bằng Bearer access token |
+| GET | `/api/users/admin-check` | Route chỉ dành cho Admin |
+
+Tài khoản đăng ký mới có role `Customer`. Có thể cấp quyền Admin bằng SQL:
+
+```sql
+UPDATE dbo.Users SET isAdmin = 1 WHERE email = 'admin@example.com';
 ```
-
-Response:
-
-```text
-SERN Bookstore Backend is running.
-```
-
-## Trạng thái dự án
-
-**Project initialization completed.**
-
-Hiện tại project đã hoàn thành các công việc khởi tạo:
-
-* Khởi tạo Git repository.
-* Khởi tạo Frontend với React.js và Vite.
-* Khởi tạo Backend với Node.js và Express.js.
-* Thiết lập `.gitignore`.
-* Kiểm tra Frontend có thể chạy.
-* Kiểm tra Backend có thể chạy.
-
-Các chức năng nghiệp vụ của hệ thống chưa được triển khai ở giai đoạn này.
-
-## Tác giả
-
-Sinh viên ngành Công nghệ Thông tin
-HCMUTE
