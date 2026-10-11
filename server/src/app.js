@@ -1,0 +1,19 @@
+const express = require("express");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const { clientUrl } = require("./config/config");
+const authRoutes = require("./routes/authRoutes");
+const webRoutes = require("./routes/webRoutes");
+const errorHandler = require("./middleware/errorMiddleware");
+
+const app = express();
+app.use(cors({ origin: clientUrl, credentials: true }));
+app.use(express.json({ limit: "10kb" }));
+app.use(cookieParser());
+app.get("/", (req, res) => res.json({ message: "SERN Bookstore Backend is running." }));
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.use("/api/auth", authRoutes);
+app.use("/api/users", webRoutes);
+app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
+app.use(errorHandler);
+module.exports = app;
