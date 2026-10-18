@@ -15,6 +15,13 @@ export default [
         },
         rules: {
             ...js.configs.recommended.rules,
+            "no-unused-vars": [
+                "error",
+                {
+                    args: "none",
+                    varsIgnorePattern: "^refreshToken$",
+                },
+            ],
         },
     },
 ];
