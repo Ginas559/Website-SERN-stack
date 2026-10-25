@@ -4,7 +4,8 @@ const { v4: uuidv4 } = require("uuid");
 const userModel = require("../models/userModel");
 const AppError = require("../utils/AppError");
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require("../utils/jwt");
-const { refreshTokenExpiresIn, resetTokenExpiresMinutes, enableDevResetToken } = require("../config/config");
+const { refreshTokenExpiresIn, resetTokenExpiresMinutes } = require("../config/config");
+const { sendPasswordResetEmail } = require("./emailService");
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 const publicUser = (user) => ({ id: user.id, username: user.username, fullName: user.full_name, email: user.email, isAdmin: Boolean(user.isAdmin) });
@@ -83,14 +84,30 @@ async function logout(refreshToken) {
 async function requestPasswordReset(email) {
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + resetTokenExpiresMinutes * 60000);
-    const saved = await userModel.saveResetToken(normalizeEmail(email), userModel.hashResetToken(token), expiresAt);
-    return saved && enableDevResetToken ? { resetToken: token } : {};
+    const normalizedEmail = normalizeEmail(email);
+    const saved = await userModel.saveResetToken(normalizedEmail, userModel.hashResetToken(token), expiresAt);
+    if (saved) {
+        sendPasswordResetEmail(normalizedEmail, token).catch(() => {
+            console.error("Password reset email delivery failed.");
+        });
+    }
 }
 
 async function resetPassword(token, password) {
     const user = await userModel.resetPassword(userModel.hashResetToken(token), await bcrypt.hash(password, 12));
     if (!user) throw new AppError("Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.", 400);
-    return { user: publicUser(user), ...(await issueTokens(user)) };
+    await userModel.revokeUserRefreshTokens(user.id);
+    return { message: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại." };
 }
 
-module.exports = { register, login, refresh, logout, requestPasswordReset, resetPassword };
+async function changePassword(userId, currentPassword, newPassword) {
+    const user = await userModel.findPasswordById(userId);
+    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+        throw new AppError("Mật khẩu hiện tại không chính xác.", 401);
+    }
+    const changed = await userModel.changePassword(userId, user.password, await bcrypt.hash(newPassword, 12));
+    if (!changed) throw new AppError("Không thể đổi mật khẩu.", 409);
+    return { message: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại." };
+}
+
+module.exports = { register, login, refresh, logout, requestPasswordReset, resetPassword, changePassword };

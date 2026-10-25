@@ -21,6 +21,7 @@
     "express-validator": "^7.3.2",
     "jsonwebtoken": "^9.0.3",
     "mssql": "^12.7.10",
+    "nodemailer": "^7.0.13",
     "uuid": "^14.0.3"
   },
   "devDependencies": {

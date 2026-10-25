@@ -16,9 +16,12 @@ async function logout(req, res) {
     res.status(204).send();
 }
 async function forgotPassword(req, res) {
-    const result = await authService.requestPasswordReset(req.body.email);
-    res.json({ message: "Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.", ...result });
+    await authService.requestPasswordReset(req.body.email);
+    res.json({ message: "Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi." });
 }
-async function resetPassword(req, res) { sendAuthResponse(res, await authService.resetPassword(req.body.token, req.body.password)); }
+async function resetPassword(req, res) { res.json(await authService.resetPassword(req.body.token, req.body.password)); }
+async function changePassword(req, res) {
+    res.json(await authService.changePassword(req.user.id, req.body.currentPassword, req.body.newPassword));
+}
 
-module.exports = { register, login, refresh, logout, forgotPassword, resetPassword };
+module.exports = { register, login, refresh, logout, forgotPassword, resetPassword, changePassword };

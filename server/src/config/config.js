@@ -14,5 +14,12 @@ module.exports = {
     accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || "15m",
     refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
     resetTokenExpiresMinutes: Number(process.env.RESET_TOKEN_EXPIRES_MINUTES || 30),
-    enableDevResetToken: process.env.ENABLE_DEV_RESET_TOKEN === "true",
+    smtp: {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === "true",
+        user: process.env.SMTP_USER,
+        password: process.env.SMTP_PASSWORD,
+        from: process.env.SMTP_FROM,
+    },
 };

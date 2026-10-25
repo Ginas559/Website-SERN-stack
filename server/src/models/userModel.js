@@ -25,6 +25,13 @@ async function findById(id) {
     return result.recordset[0] || null;
 }
 
+async function findPasswordById(id) {
+    const pool = await connectDB();
+    const result = await pool.request().input("id", sql.Char(36), id)
+        .query("SELECT TOP 1 id, [password] FROM dbo.Users WHERE id = @id AND isDelete = 0");
+    return result.recordset[0] || null;
+}
+
 async function create({ id, username, fullName, email, phone, address, passwordHash }) {
     const pool = await connectDB();
     const result = await pool.request()
@@ -75,18 +82,24 @@ async function revokeRefreshToken(tokenId) {
         .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE TokenId = @tokenId AND RevokedAt IS NULL");
 }
 
+async function revokeUserRefreshTokens(userId) {
+    const pool = await connectDB();
+    await pool.request().input("userId", sql.Char(36), userId)
+        .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE UserId = @userId AND RevokedAt IS NULL");
+}
+
 async function saveResetToken(email, tokenHash, expiresAt) {
     const pool = await connectDB();
     const result = await pool.request().input("email", sql.VarChar(255), email)
         .input("tokenHash", sql.Char(64), tokenHash).input("expiresAt", sql.DateTime2, expiresAt)
-        .query("UPDATE dbo.Users SET verificationToken = @tokenHash, resetPasswordExpiresAt = @expiresAt, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
+        .query("UPDATE dbo.Users SET verificationToken = @tokenHash, resetPasswordExpiresAt = @expiresAt, resetPasswordUsedAt = NULL, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
     return result.recordset[0] || null;
 }
 
 async function resetPassword(tokenHash, passwordHash) {
     const pool = await connectDB();
     const result = await pool.request().input("tokenHash", sql.VarChar(255), tokenHash).input("passwordHash", sql.VarChar(255), passwordHash)
-        .query(`UPDATE dbo.Users SET [password] = @passwordHash, verificationToken = NULL, resetPasswordExpiresAt = NULL, updatedAt = SYSUTCDATETIME() OUTPUT ${insertedPublicColumns} WHERE verificationToken = @tokenHash AND resetPasswordExpiresAt > SYSUTCDATETIME() AND isDelete = 0`);
+        .query(`UPDATE dbo.Users SET [password] = @passwordHash, verificationToken = NULL, resetPasswordExpiresAt = NULL, resetPasswordUsedAt = SYSUTCDATETIME(), updatedAt = SYSUTCDATETIME() OUTPUT ${insertedPublicColumns} WHERE verificationToken = @tokenHash AND resetPasswordExpiresAt > SYSUTCDATETIME() AND resetPasswordUsedAt IS NULL AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 
@@ -94,4 +107,37 @@ function hashResetToken(token) {
     return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-module.exports = { findByEmail, findByUsername, findById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, saveResetToken, resetPassword, hashResetToken };
+async function changePassword(userId, currentPasswordHash, passwordHash) {
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+        const userResult = await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .query("SELECT TOP 1 [password] FROM dbo.Users WHERE id = @userId AND isDelete = 0");
+        const user = userResult.recordset[0];
+        if (!user) {
+            await transaction.rollback();
+            return null;
+        }
+        const result = await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .input("currentPasswordHash", sql.VarChar(255), currentPasswordHash)
+            .input("passwordHash", sql.VarChar(255), passwordHash)
+            .query("UPDATE dbo.Users SET [password] = @passwordHash, updatedAt = SYSUTCDATETIME() WHERE id = @userId AND [password] = @currentPasswordHash AND isDelete = 0");
+        if (!result.rowsAffected[0]) {
+            await transaction.rollback();
+            return null;
+        }
+        await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE UserId = @userId AND RevokedAt IS NULL");
+        await transaction.commit();
+        return true;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
+
+module.exports = { findByEmail, findByUsername, findById, findPasswordById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeUserRefreshTokens, saveResetToken, resetPassword, changePassword, hashResetToken };

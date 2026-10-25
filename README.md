@@ -46,6 +46,8 @@ server/src/migration/
 ├── 001_create_users_table.sql
 ├── 002_create_refresh_tokens_table.sql
 ├── 003_rebuild_users_table.sql
+├── 004_add_reset_password_expiry.sql
+├── 005_add_reset_password_used_at.sql
 └── migrationRunner.js
 ```
 
@@ -107,6 +109,15 @@ Health check: `GET http://localhost:3000/api/health`
 | POST | `/api/auth/logout` | Thu hồi refresh token và xóa cookie |
 | POST | `/api/auth/forgot-password` | Tạo reset token có thời hạn |
 | POST | `/api/auth/reset-password` | Đổi password bằng reset token |
+| POST | `/api/auth/change-password` | Đổi password khi đã đăng nhập |
+
+Payload cho các luồng mật khẩu:
+
+- `POST /api/auth/forgot-password`: `{ "email": "..." }`
+- `POST /api/auth/reset-password`: `{ "token": "...", "password": "...", "confirmPassword": "..." }`
+- `POST /api/auth/change-password`: `{ "currentPassword": "...", "newPassword": "...", "confirmPassword": "..." }`
+
+Endpoint `change-password` yêu cầu `Authorization: Bearer <accessToken>`.
 | GET | `/api/users/me` | Lấy user hiện tại bằng Bearer access token |
 | GET | `/api/users/admin-check` | Route chỉ dành cho Admin |
 
@@ -115,3 +126,8 @@ Tài khoản đăng ký mới có role `Customer`. Có thể cấp quyền Admin
 ```sql
 UPDATE dbo.Users SET isAdmin = 1 WHERE email = 'admin@example.com';
 ```
+
+Để bật email reset password, tự điền `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+`SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` và `CLIENT_URL` trong `server/.env`.
+Không chạy migration tự động khi khởi động ứng dụng; sau khi kiểm tra trạng thái,
+chạy `npm run migration:run` thủ công.
