@@ -19,11 +19,31 @@ async function issueTokens(user) {
     return { accessToken: generateAccessToken(user), refreshToken: generateRefreshToken(user, tokenId) };
 }
 
-async function register({ username, fullName, email, password }) {
+async function register({ username, fullName, email, phone, address, password }) {
+    username = username.trim();
+    fullName = fullName.trim();
     email = normalizeEmail(email);
+    phone = phone.trim();
+    address = address.trim();
+    if (await userModel.findByUsername(username)) throw new AppError("Username đã được sử dụng.", 409);
     if (await userModel.findByEmail(email)) throw new AppError("Email đã được sử dụng.", 409);
-    const user = await userModel.create({ id: uuidv4(), username: username.trim(), fullName: fullName.trim(), email, passwordHash: await bcrypt.hash(password, 12) });
-    return { user: publicUser(user), ...(await issueTokens(user)) };
+    try {
+        const user = await userModel.create({
+            id: uuidv4(),
+            username,
+            fullName,
+            email,
+            phone,
+            address,
+            passwordHash: await bcrypt.hash(password, 12),
+        });
+        return { message: "Đăng ký thành công.", user: publicUser(user) };
+    } catch (error) {
+        if (error.number === 2601 || error.number === 2627) {
+            throw new AppError("Username hoặc email đã được sử dụng.", 409);
+        }
+        throw error;
+    }
 }
 
 async function login({ email, password }) {
