@@ -70,14 +70,14 @@ async function saveResetToken(email, tokenHash, expiresAt) {
     const pool = await connectDB();
     const result = await pool.request().input("email", sql.VarChar(255), email)
         .input("tokenHash", sql.Char(64), tokenHash).input("expiresAt", sql.DateTime2, expiresAt)
-        .query("UPDATE dbo.Users SET verificationToken = @tokenHash, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
+        .query("UPDATE dbo.Users SET verificationToken = @tokenHash, resetPasswordExpiresAt = @expiresAt, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
     return result.recordset[0] || null;
 }
 
 async function resetPassword(tokenHash, passwordHash) {
     const pool = await connectDB();
     const result = await pool.request().input("tokenHash", sql.VarChar(255), tokenHash).input("passwordHash", sql.VarChar(255), passwordHash)
-        .query(`UPDATE dbo.Users SET [password] = @passwordHash, verificationToken = NULL, updatedAt = SYSUTCDATETIME() OUTPUT ${insertedPublicColumns} WHERE verificationToken = @tokenHash AND isDelete = 0`);
+        .query(`UPDATE dbo.Users SET [password] = @passwordHash, verificationToken = NULL, resetPasswordExpiresAt = NULL, updatedAt = SYSUTCDATETIME() OUTPUT ${insertedPublicColumns} WHERE verificationToken = @tokenHash AND resetPasswordExpiresAt > SYSUTCDATETIME() AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 

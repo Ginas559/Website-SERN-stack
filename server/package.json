@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "migration:status": "node src/migration/migrationRunner.js status",
+    "migration:run": "node src/migration/migrationRunner.js run"
   },
   "keywords": [],
   "author": "",
