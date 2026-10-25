@@ -25,4 +25,8 @@ button:hover { background: #a95d26; }
 .error { color: #b33b32; }
 .welcome { text-align: center; margin: auto; }
 .welcome h1 { font-size: 3rem; color: #20201f; }
+.welcome form { text-align: left; margin-top: 28px; }
+.secondary { margin-left: 10px; background: #83796e; }
+.secondary:hover { background: #665d53; }
+button:disabled { opacity: .65; cursor: wait; }
 @media (max-width: 760px) { .page { grid-template-columns: 1fr; gap: 30px; padding: 28px 20px; } .intro { text-align: center; } .intro p { margin: auto; } .auth-card { width: auto; } }
