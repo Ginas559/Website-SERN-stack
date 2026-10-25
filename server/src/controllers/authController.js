@@ -7,7 +7,7 @@ function sendAuthResponse(res, result) {
     res.json(response);
 }
 
-async function register(req, res) { sendAuthResponse(res, await authService.register(req.body)); }
+async function register(req, res) { res.status(201).json(await authService.register(req.body)); }
 async function login(req, res) { sendAuthResponse(res, await authService.login(req.body)); }
 async function refresh(req, res) { sendAuthResponse(res, await authService.refresh(req.cookies.refreshToken)); }
 async function logout(req, res) {

@@ -11,6 +11,13 @@ async function findByEmail(email) {
     return result.recordset[0] || null;
 }
 
+async function findByUsername(username) {
+    const pool = await connectDB();
+    const result = await pool.request().input("username", sql.VarChar(255), username)
+        .query(`SELECT TOP 1 ${publicColumns} FROM dbo.Users WHERE username = @username`);
+    return result.recordset[0] || null;
+}
+
 async function findById(id) {
     const pool = await connectDB();
     const result = await pool.request()    .input("id", sql.Char(36), id)
@@ -18,15 +25,17 @@ async function findById(id) {
     return result.recordset[0] || null;
 }
 
-async function create({ id, username, fullName, email, passwordHash }) {
+async function create({ id, username, fullName, email, phone, address, passwordHash }) {
     const pool = await connectDB();
     const result = await pool.request()
         .input("id", sql.Char(36), id)
         .input("username", sql.VarChar(255), username)
         .input("fullName", sql.VarChar(255), fullName)
         .input("email", sql.VarChar(255), email)
+        .input("phone", sql.VarChar(255), phone)
+        .input("address", sql.VarChar(255), address)
         .input("password", sql.VarChar(255), passwordHash)
-        .query(`INSERT INTO dbo.Users (id, username, full_name, email, [password]) OUTPUT ${insertedPublicColumns} VALUES (@id, @username, @fullName, @email, @password)`);
+        .query(`INSERT INTO dbo.Users (id, username, full_name, email, phone_number, [address], [password]) OUTPUT ${insertedPublicColumns} VALUES (@id, @username, @fullName, @email, @phone, @address, @password)`);
     return result.recordset[0];
 }
 
@@ -85,4 +94,4 @@ function hashResetToken(token) {
     return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-module.exports = { findByEmail, findById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, saveResetToken, resetPassword, hashResetToken };
+module.exports = { findByEmail, findByUsername, findById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, saveResetToken, resetPassword, hashResetToken };

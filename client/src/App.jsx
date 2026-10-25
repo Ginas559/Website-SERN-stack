@@ -16,7 +16,7 @@ async function request(path, options = {}) {
 
 function App() {
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ username: '', fullName: '', email: '', password: '', token: '' })
+  const [form, setForm] = useState({ username: '', fullName: '', email: '', phone: '', address: '', password: '', confirmPassword: '', token: '' })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
@@ -37,18 +37,30 @@ function App() {
         : mode === 'forgot' ? '/auth/forgot-password'
           : mode === 'reset' ? '/auth/reset-password' : '/auth/login'
       const payload = mode === 'register'
-        ? { username: form.username, fullName: form.fullName, email: form.email, password: form.password }
+        ? {
+            username: form.username,
+            fullName: form.fullName,
+            email: form.email,
+            phone: form.phone,
+            address: form.address,
+            password: form.password,
+            confirmPassword: form.confirmPassword,
+          }
         : mode === 'reset'
           ? { token: form.token, password: form.password }
           : { email: form.email, password: form.password }
       const data = await request(path, { method: 'POST', body: JSON.stringify(payload) })
       if (mode === 'forgot') {
         setMessage(data.resetToken ? `Mã thử nghiệm: ${data.resetToken}` : data.message)
+      } else if (mode === 'register') {
+        setMode('login')
+        setForm({ username: '', fullName: '', email: form.email, phone: '', address: '', password: '', confirmPassword: '', token: '' })
+        setMessage(data.message || 'Đăng ký thành công.')
       } else {
         setUser(data.user)
         localStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('user', JSON.stringify(data.user))
-        setMessage(mode === 'register' ? 'Đăng ký thành công.' : 'Đăng nhập thành công.')
+        setMessage('Đăng nhập thành công.')
       }
     } catch (submitError) {
       setError(submitError.message)
@@ -94,9 +106,12 @@ function App() {
         <form onSubmit={submit}>
           {mode === 'register' && <label>Họ và tên<input name="fullName" value={form.fullName} onChange={update} required minLength="2" /></label>}
           {mode === 'register' && <label>Username<input name="username" value={form.username} onChange={update} required minLength="3" /></label>}
+          {mode === 'register' && <label>Số điện thoại<input name="phone" value={form.phone} onChange={update} required /></label>}
+          {mode === 'register' && <label>Địa chỉ<input name="address" value={form.address} onChange={update} required minLength="2" /></label>}
           {mode === 'reset' && <label>Mã đặt lại mật khẩu<input name="token" value={form.token} onChange={update} required /></label>}
           {mode !== 'reset' && <label>Email<input type="email" name="email" value={form.email} onChange={update} required /></label>}
           {mode !== 'forgot' && <label>Mật khẩu<input type="password" name="password" value={form.password} onChange={update} required minLength="8" /></label>}
+          {mode === 'register' && <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>}
           <button type="submit">{mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Gửi yêu cầu' : mode === 'reset' ? 'Đổi mật khẩu' : 'Đăng nhập'}</button>
         </form>
         {mode === 'login' && <button className="link" onClick={() => changeMode('forgot')}>Quên mật khẩu?</button>}
