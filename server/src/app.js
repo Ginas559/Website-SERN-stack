@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const { clientUrl } = require("./config/config");
 const authRoutes = require("./routes/authRoutes");
 const webRoutes = require("./routes/webRoutes");
+const bookRoutes = require("./routes/bookRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -14,6 +15,7 @@ app.get("/", (req, res) => res.json({ message: "SERN Bookstore Backend is runnin
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/users", webRoutes);
+app.use("/api/admin/books", bookRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);
 module.exports = app;
