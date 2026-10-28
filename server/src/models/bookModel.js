@@ -4,9 +4,21 @@ const bookColumns = "id, title, author, price, description, image, publication_d
 const insertedBookColumns = "INSERTED.id, INSERTED.title, INSERTED.author, INSERTED.price, INSERTED.description, INSERTED.image, INSERTED.publication_date, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.quantity, INSERTED.discount, INSERTED.purchase_price";
 
 async function syncBookCategories(transaction, bookId, categoryIds) {
-    if (!Array.isArray(categoryIds)) return;
+    if (!Array.isArray(categoryIds)) {
+        const error = new Error("categoryIds phải là một danh sách mảng.");
+        error.statusCode = 400;
+        throw error;
+    }
 
-    const cleanIds = [...new Set(categoryIds.map(Number))].filter((id) => id > 0);
+    for (const cid of categoryIds) {
+        if (typeof cid !== "number" || !Number.isInteger(cid) || cid <= 0) {
+            const error = new Error("Mỗi ID thể loại phải là một số nguyên dương hợp lệ.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const cleanIds = [...new Set(categoryIds)];
 
     if (cleanIds.length > 0) {
         const checkReq = new sql.Request(transaction);
@@ -48,9 +60,12 @@ async function create({
 }) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
+        await transaction.begin();
+        isTransactionActive = true;
+
         const bookReq = new sql.Request(transaction);
         const result = await bookReq
             .input("title", sql.NVarChar(255), title)
@@ -69,14 +84,17 @@ async function create({
 
         const createdBook = result.recordset[0];
 
-        if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+        if (categoryIds !== null && categoryIds !== undefined) {
             await syncBookCategories(transaction, createdBook.id, categoryIds);
         }
 
         await transaction.commit();
+        isTransactionActive = false;
         return createdBook;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
 }
@@ -126,7 +144,7 @@ async function findAll({
 
     if (categoryId) {
         request.input("categoryId", sql.Int, Number(categoryId));
-        conditions.push("b.id IN (SELECT book_id FROM dbo.book_categories WHERE category_id = @categoryId)");
+        conditions.push("b.id IN (SELECT bc.book_id FROM dbo.book_categories bc INNER JOIN dbo.categories c ON bc.category_id = c.id WHERE bc.category_id = @categoryId AND c.isDelete = 0)");
     }
 
     if (minPrice !== null && minPrice !== undefined) {
@@ -178,9 +196,12 @@ async function findAll({
 async function update(id, fields = {}, categoryIds = null) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
+        await transaction.begin();
+        isTransactionActive = true;
+
         const bookReq = new sql.Request(transaction);
         bookReq.input("id", sql.Int, id);
 
@@ -230,32 +251,37 @@ async function update(id, fields = {}, categoryIds = null) {
             const updateQuery = `UPDATE dbo.books 
                                  SET ${setClauses.join(", ")} 
                                  OUTPUT ${insertedBookColumns} 
-                                 WHERE id = @id`;
+                                 WHERE id = @id AND isDelete = 0`;
             const result = await bookReq.query(updateQuery);
             updatedBook = result.recordset[0];
             if (!updatedBook) {
                 await transaction.rollback();
+                isTransactionActive = false;
                 return null;
             }
         } else {
             const checkReq = new sql.Request(transaction);
             checkReq.input("id", sql.Int, id);
-            const checkResult = await checkReq.query(`SELECT TOP 1 ${bookColumns} FROM dbo.books WHERE id = @id`);
+            const checkResult = await checkReq.query(`SELECT TOP 1 ${bookColumns} FROM dbo.books WHERE id = @id AND isDelete = 0`);
             updatedBook = checkResult.recordset[0];
             if (!updatedBook) {
                 await transaction.rollback();
+                isTransactionActive = false;
                 return null;
             }
         }
 
-        if (Array.isArray(categoryIds)) {
+        if (categoryIds !== null && categoryIds !== undefined) {
             await syncBookCategories(transaction, id, categoryIds);
         }
 
         await transaction.commit();
+        isTransactionActive = false;
         return updatedBook;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
 }
@@ -285,22 +311,29 @@ async function restore(id) {
 async function setCategories(bookId, categoryIds = []) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
+        await transaction.begin();
+        isTransactionActive = true;
+
         const checkReq = new sql.Request(transaction);
         checkReq.input("id", sql.Int, bookId);
-        const checkResult = await checkReq.query("SELECT TOP 1 id FROM dbo.books WHERE id = @id");
+        const checkResult = await checkReq.query("SELECT TOP 1 id FROM dbo.books WHERE id = @id AND isDelete = 0");
         if (!checkResult.recordset[0]) {
             await transaction.rollback();
+            isTransactionActive = false;
             return false;
         }
 
         await syncBookCategories(transaction, bookId, categoryIds);
         await transaction.commit();
+        isTransactionActive = false;
         return true;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
 }

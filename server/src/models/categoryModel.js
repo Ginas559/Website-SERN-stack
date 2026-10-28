@@ -31,9 +31,23 @@ async function findByName(name, { includeDeleted = false } = {}) {
 }
 
 async function create({ name, description = null, image = null }) {
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    if (!trimmedName) {
+        const error = new Error("Tên thể loại không được để trống.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const existingCategory = await findByName(trimmedName, { includeDeleted: false });
+    if (existingCategory) {
+        const error = new Error("Tên thể loại đã tồn tại.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const pool = await connectDB();
     const result = await pool.request()
-        .input("name", sql.NVarChar(255), name)
+        .input("name", sql.NVarChar(255), trimmedName)
         .input("description", sql.NVarChar(sql.MAX), description)
         .input("image", sql.VarChar(255), image)
         .query(`INSERT INTO dbo.categories (name, description, image) OUTPUT ${insertedCategoryColumns} VALUES (@name, @description, @image)`);
@@ -42,6 +56,28 @@ async function create({ name, description = null, image = null }) {
 
 async function update(id, fields = {}) {
     const pool = await connectDB();
+
+    if (fields.name !== undefined) {
+        const trimmedName = typeof fields.name === "string" ? fields.name.trim() : "";
+        if (!trimmedName) {
+            const error = new Error("Tên thể loại không được để trống.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const duplicateCheck = await pool.request()
+            .input("name", sql.NVarChar(255), trimmedName)
+            .input("id", sql.Int, id)
+            .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
+
+        if (duplicateCheck.recordset[0]) {
+            const error = new Error("Tên thể loại đã tồn tại.");
+            error.statusCode = 400;
+            throw error;
+        }
+        fields.name = trimmedName;
+    }
+
     const request = pool.request();
     request.input("id", sql.Int, id);
 
