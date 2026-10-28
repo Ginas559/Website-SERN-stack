@@ -12,46 +12,65 @@ async function findAll({ includeDeleted = false } = {}) {
     return result.recordset;
 }
 
-async function findById(id) {
+async function findById(id, { includeDeleted = false } = {}) {
     const pool = await connectDB();
+    const condition = includeDeleted ? "WHERE id = @id" : "WHERE id = @id AND isDelete = 0";
     const result = await pool.request()
         .input("id", sql.Int, id)
-        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories WHERE id = @id`);
+        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories ${condition}`);
     return result.recordset[0] || null;
 }
 
-async function findByName(name) {
+async function findByName(name, { includeDeleted = false } = {}) {
     const pool = await connectDB();
+    const condition = includeDeleted ? "WHERE name = @name" : "WHERE name = @name AND isDelete = 0";
     const result = await pool.request()
-        .input("name", sql.VarChar(255), name)
-        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories WHERE name = @name`);
+        .input("name", sql.NVarChar(255), name)
+        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories ${condition}`);
     return result.recordset[0] || null;
 }
 
 async function create({ name, description = null, image = null }) {
     const pool = await connectDB();
     const result = await pool.request()
-        .input("name", sql.VarChar(255), name)
-        .input("description", sql.VarChar(255), description)
+        .input("name", sql.NVarChar(255), name)
+        .input("description", sql.NVarChar(sql.MAX), description)
         .input("image", sql.VarChar(255), image)
         .query(`INSERT INTO dbo.categories (name, description, image) OUTPUT ${insertedCategoryColumns} VALUES (@name, @description, @image)`);
     return result.recordset[0];
 }
 
-async function update(id, { name, description, image }) {
+async function update(id, fields = {}) {
     const pool = await connectDB();
-    const result = await pool.request()
-        .input("id", sql.Int, id)
-        .input("name", sql.VarChar(255), name)
-        .input("description", sql.VarChar(255), description)
-        .input("image", sql.VarChar(255), image)
-        .query(`UPDATE dbo.categories 
-                SET name = COALESCE(@name, name), 
-                    description = COALESCE(@description, description), 
-                    image = COALESCE(@image, image), 
-                    updatedAt = GETDATE() 
-                OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+    const request = pool.request();
+    request.input("id", sql.Int, id);
+
+    const setClauses = [];
+
+    if (fields.name !== undefined) {
+        request.input("name", sql.NVarChar(255), fields.name);
+        setClauses.push("name = @name");
+    }
+    if (fields.description !== undefined) {
+        request.input("description", sql.NVarChar(sql.MAX), fields.description);
+        setClauses.push("description = @description");
+    }
+    if (fields.image !== undefined) {
+        request.input("image", sql.VarChar(255), fields.image);
+        setClauses.push("image = @image");
+    }
+
+    if (setClauses.length === 0) {
+        return await findById(id, { includeDeleted: true });
+    }
+
+    setClauses.push("updatedAt = GETDATE()");
+
+    const query = `UPDATE dbo.categories 
+                   SET ${setClauses.join(", ")} 
+                   OUTPUT ${insertedCategoryColumns} 
+                   WHERE id = @id`;
+    const result = await request.query(query);
     return result.recordset[0] || null;
 }
 
