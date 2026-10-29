@@ -15,8 +15,9 @@
 }
 
 .books-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 2.2rem;
+    font-weight: 800;
     color: #e7b26a;
     margin: 0;
 }
@@ -249,7 +250,7 @@
 }
 
 .detail-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 2rem;
     margin: 0 0 10px;
     color: #20201f;
@@ -348,7 +349,7 @@
 }
 
 .related-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 1.6rem;
     color: #e7b26a;
     margin-bottom: 20px;
@@ -364,7 +365,7 @@
 }
 
 .empty-state h3 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     color: #e7b26a;
     font-size: 1.4rem;
     margin-bottom: 8px;
@@ -388,7 +389,7 @@
 }
 
 .app-brand {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 1.5rem;
     font-weight: 700;
     color: #e7b26a;

@@ -23,7 +23,7 @@ async function findById(id) {
 async function findByName(name) {
     const pool = await connectDB();
     const result = await pool.request()
-        .input("name", sql.VarChar(255), name)
+        .input("name", sql.NVarChar(255), name)
         .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories WHERE name = @name`);
     return result.recordset[0] || null;
 }
@@ -31,8 +31,8 @@ async function findByName(name) {
 async function create({ name, description = null, image = null }) {
     const pool = await connectDB();
     const result = await pool.request()
-        .input("name", sql.VarChar(255), name)
-        .input("description", sql.VarChar(255), description)
+        .input("name", sql.NVarChar(255), name)
+        .input("description", sql.NVarChar(sql.MAX), description)
         .input("image", sql.VarChar(255), image)
         .query(`INSERT INTO dbo.categories (name, description, image) OUTPUT ${insertedCategoryColumns} VALUES (@name, @description, @image)`);
     return result.recordset[0];
@@ -42,8 +42,8 @@ async function update(id, { name, description, image }) {
     const pool = await connectDB();
     const result = await pool.request()
         .input("id", sql.Int, id)
-        .input("name", sql.VarChar(255), name)
-        .input("description", sql.VarChar(255), description)
+        .input("name", sql.NVarChar(255), name)
+        .input("description", sql.NVarChar(sql.MAX), description)
         .input("image", sql.VarChar(255), image)
         .query(`UPDATE dbo.categories 
                 SET name = COALESCE(@name, name), 

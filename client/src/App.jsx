@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import './App.css'
 import './components/BooksPage.css'
 import BookList from './components/BookList'
 import BookDetail from './components/BookDetail'
 import AdminDashboard from './components/AdminDashboard'
+import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -20,15 +22,19 @@ async function request(path, options = {}) {
 }
 
 function App() {
+  const dispatch = useDispatch()
+  const {
+    books,
+    total,
+    totalPages,
+    selectedBook,
+    loading: booksLoading,
+  } = useSelector((state) => state.books)
+
   const [activeTab, setActiveTab] = useState('books')
-  const [books, setBooks] = useState([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
-  const [selectedBook, setSelectedBook] = useState(null)
-  const [booksLoading, setBooksLoading] = useState(false)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
@@ -47,43 +53,28 @@ function App() {
     setError('')
   }
 
-  useEffect(() => {
+  const loadBooks = useCallback(() => {
     if (activeTab !== 'books' || selectedBookId) return
-    let isMounted = true
-    const query = new URLSearchParams()
-    query.set('page', String(page))
-    query.set('limit', '8')
-    if (filters.search) query.set('search', filters.search)
-    if (filters.categoryId) query.set('categoryId', filters.categoryId)
-    if (filters.minPrice) query.set('minPrice', filters.minPrice)
-    if (filters.maxPrice) query.set('maxPrice', filters.maxPrice)
-    if (filters.sort) query.set('sort', filters.sort)
+    const query = {
+      page,
+      limit: 8,
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
+      ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
+      ...(filters.sort ? { sort: filters.sort } : {}),
+    }
+    dispatch(fetchBooks(query))
+  }, [activeTab, page, filters, selectedBookId, dispatch])
 
-    request(`/books?${query.toString()}`)
-      .then((data) => {
-        if (isMounted && data) {
-          setBooks(data.books || [])
-          setTotal(data.total || 0)
-          setTotalPages(data.totalPages || 1)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (isMounted) setBooksLoading(false)
-      })
-    return () => { isMounted = false }
-  }, [activeTab, page, filters, selectedBookId])
+  useEffect(() => {
+    loadBooks()
+  }, [loadBooks])
 
   useEffect(() => {
     if (!selectedBookId) return
-    let isMounted = true
-    request(`/books/${selectedBookId}`)
-      .then((data) => {
-        if (isMounted) setSelectedBook(data)
-      })
-      .catch(() => {})
-    return () => { isMounted = false }
-  }, [selectedBookId])
+    dispatch(fetchBookById(selectedBookId))
+  }, [selectedBookId, dispatch])
 
   async function submit(event) {
     event.preventDefault()
@@ -148,7 +139,7 @@ function App() {
       <header className="app-navbar">
         <div 
           className="app-brand" 
-          onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+          onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
         >
           SERN BOOKSTORE
         </div>
@@ -156,7 +147,7 @@ function App() {
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+            onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
             Cửa hàng sách
           </button>
@@ -164,7 +155,7 @@ function App() {
             <button 
               type="button" 
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); setSelectedBook(null); }}
+              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
             >
               Quản trị
             </button>
@@ -180,12 +171,12 @@ function App() {
       </header>
 
       {activeTab === 'admin' && isAdmin ? (
-        <AdminDashboard request={request} />
+        <AdminDashboard />
       ) : activeTab === 'books' ? (
         selectedBookId && selectedBook ? (
           <BookDetail 
             book={selectedBook} 
-            onBack={() => { setSelectedBookId(null); setSelectedBook(null); }} 
+            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); }} 
             onSelectBook={(id) => setSelectedBookId(id)}
           />
         ) : (
@@ -196,9 +187,9 @@ function App() {
             totalPages={totalPages}
             filters={filters}
             loading={booksLoading}
-            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); setBooksLoading(true); }}
-            onPageChange={(nextPage) => { setPage(nextPage); setBooksLoading(true); }}
-            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); setBooksLoading(true); }}
+            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); }}
+            onPageChange={(nextPage) => setPage(nextPage)}
+            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); }}
             onSelectBook={(id) => setSelectedBookId(id)}
           />
         )
