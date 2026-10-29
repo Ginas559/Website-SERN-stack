@@ -55,6 +55,11 @@ async function create({ name, description = null, image = null }) {
 }
 
 async function update(id, fields = {}) {
+    const existing = await findById(id, { includeDeleted: false });
+    if (!existing) {
+        return null;
+    }
+
     const pool = await connectDB();
 
     if (fields.name !== undefined) {
@@ -97,7 +102,7 @@ async function update(id, fields = {}) {
     }
 
     if (setClauses.length === 0) {
-        return await findById(id, { includeDeleted: true });
+        return existing;
     }
 
     setClauses.push("updatedAt = GETDATE()");
@@ -105,7 +110,7 @@ async function update(id, fields = {}) {
     const query = `UPDATE dbo.categories 
                    SET ${setClauses.join(", ")} 
                    OUTPUT ${insertedCategoryColumns} 
-                   WHERE id = @id`;
+                   WHERE id = @id AND isDelete = 0`;
     const result = await request.query(query);
     return result.recordset[0] || null;
 }
@@ -122,7 +127,26 @@ async function softDelete(id) {
 }
 
 async function restore(id) {
+    const existing = await findById(id, { includeDeleted: true });
+    if (!existing) {
+        return null;
+    }
+    if (!existing.isDelete) {
+        return existing;
+    }
+
     const pool = await connectDB();
+    const duplicateCheck = await pool.request()
+        .input("name", sql.NVarChar(255), existing.name)
+        .input("id", sql.Int, id)
+        .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
+
+    if (duplicateCheck.recordset[0]) {
+        const error = new Error("Tên thể loại đã tồn tại.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const result = await pool.request()
         .input("id", sql.Int, id)
         .query(`UPDATE dbo.categories 
