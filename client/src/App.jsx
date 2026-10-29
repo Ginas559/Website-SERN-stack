@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import './App.css'
 import './components/BooksPage.css'
 import BookList from './components/BookList'
 import BookDetail from './components/BookDetail'
 import AdminDashboard from './components/AdminDashboard'
+import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -20,19 +22,20 @@ async function request(path, options = {}) {
 }
 
 function App() {
+  const dispatch = useDispatch()
+  const {
+    books,
+    total,
+    totalPages,
+    selectedBook,
+    loading: booksLoading,
+    error: booksError,
+  } = useSelector((state) => state.books)
+
   const [activeTab, setActiveTab] = useState('books')
-  const [books, setBooks] = useState([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [filters, setFilters] = useState({ search: '', minPrice: '', maxPrice: '', sort: 'newest' })
+  const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
-  const [selectedBook, setSelectedBook] = useState(null)
-  const [booksLoading, setBooksLoading] = useState(true)
-  const [booksError, setBooksError] = useState('')
-  const [booksRetry, setBooksRetry] = useState(0)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState('')
   const [detailRetry, setDetailRetry] = useState(0)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
@@ -52,57 +55,27 @@ function App() {
     setError('')
   }
 
-  useEffect(() => {
+  const loadBooks = useCallback(() => {
     if (activeTab !== 'books' || selectedBookId) return
-    const controller = new AbortController()
-    const query = new URLSearchParams()
-    query.set('page', String(page))
-    query.set('limit', '8')
-    if (filters.search) query.set('search', filters.search)
-    if (filters.minPrice) query.set('minPrice', filters.minPrice)
-    if (filters.maxPrice) query.set('maxPrice', filters.maxPrice)
-    if (filters.sort) query.set('sort', filters.sort)
-
-    request(`/books?${query.toString()}`, { signal: controller.signal })
-      .then((data) => {
-        if (!data || !Array.isArray(data.books) || typeof data.total !== 'number' || typeof data.totalPages !== 'number') {
-          throw new Error('Dữ liệu danh sách sách không hợp lệ.')
-        }
-        setBooks(data.books)
-        setTotal(data.total)
-        setTotalPages(data.totalPages)
-      })
-      .catch((requestError) => {
-        if (requestError.name !== 'AbortError') {
-          setBooksError(requestError.message)
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setBooksLoading(false)
-      })
-    return () => controller.abort()
-  }, [activeTab, page, filters, selectedBookId, booksRetry])
+    dispatch(fetchBooks({
+      page,
+      limit: 8,
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
+      ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
+      ...(filters.sort ? { sort: filters.sort } : {}),
+    }))
+  }, [activeTab, page, filters, selectedBookId, dispatch])
 
   useEffect(() => {
-    if (activeTab !== 'books' || !selectedBookId) return
-    const controller = new AbortController()
-    request(`/books/${selectedBookId}`, { signal: controller.signal })
-      .then((data) => {
-        if (!data || typeof data !== 'object' || Array.isArray(data) || data.id === undefined || data.id === null) {
-          throw new Error('Dữ liệu thông tin sách không hợp lệ.')
-        }
-        setSelectedBook(data)
-      })
-      .catch((requestError) => {
-        if (requestError.name !== 'AbortError') {
-          setDetailError(requestError.message)
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setDetailLoading(false)
-      })
-    return () => controller.abort()
-  }, [activeTab, selectedBookId, detailRetry])
+    loadBooks()
+  }, [loadBooks])
+
+  useEffect(() => {
+    if (!selectedBookId) return
+    dispatch(fetchBookById(selectedBookId))
+  }, [selectedBookId, detailRetry, dispatch])
 
   async function submit(event) {
     event.preventDefault()
@@ -161,34 +134,22 @@ function App() {
   }
 
   const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
+  const clearSelectedBook = () => {
+    setSelectedBookId(null)
+    dispatch(setSelectedBook(null))
+  }
 
   return (
     <div>
       <header className="app-navbar">
-        <button
-          type="button"
-          className="app-brand"
-          onClick={() => {
-            setActiveTab('books')
-            setSelectedBookId(null)
-            setSelectedBook(null)
-            setBooksLoading(true)
-            setBooksError('')
-          }}
-        >
+        <button type="button" className="app-brand" onClick={() => { setActiveTab('books'); clearSelectedBook() }}>
           SERN BOOKSTORE
         </button>
         <nav className="app-nav-links">
           <button
             type="button"
             className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('books')
-              setSelectedBookId(null)
-              setSelectedBook(null)
-              setBooksLoading(true)
-              setBooksError('')
-            }}
+            onClick={() => { setActiveTab('books'); clearSelectedBook() }}
           >
             Cửa hàng sách
           </button>
@@ -196,21 +157,15 @@ function App() {
             <button
               type="button"
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); setSelectedBook(null); }}
+              onClick={() => { setActiveTab('admin'); clearSelectedBook() }}
             >
               Quản trị
             </button>
           )}
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('account')
-              setSelectedBookId(null)
-              setSelectedBook(null)
-              setDetailLoading(false)
-              setDetailError('')
-            }}
+            onClick={() => { setActiveTab('account'); clearSelectedBook() }}
           >
             {user ? user.fullName : 'Tài khoản'}
           </button>
@@ -218,32 +173,18 @@ function App() {
       </header>
 
       {activeTab === 'admin' && isAdmin ? (
-        <AdminDashboard request={request} />
+        <AdminDashboard />
       ) : activeTab === 'books' ? (
         selectedBookId ? (
           <BookDetail
             book={selectedBook}
-            loading={detailLoading}
-            error={detailError}
-            onRetry={() => {
-              setDetailLoading(true)
-              setDetailError('')
-              setDetailRetry((retry) => retry + 1)
-            }}
-            onBack={() => {
-              setSelectedBookId(null)
-              setSelectedBook(null)
-              setBooks([])
-              setTotal(0)
-              setTotalPages(1)
-              setBooksLoading(true)
-              setBooksError('')
-            }}
+            loading={booksLoading && !selectedBook}
+            error={selectedBook ? '' : booksError || ''}
+            onRetry={() => setDetailRetry((retry) => retry + 1)}
+            onBack={clearSelectedBook}
             onSelectBook={(id) => {
-              setDetailLoading(true)
-              setDetailError('')
+              dispatch(setSelectedBook(null))
               setSelectedBookId(id)
-              setSelectedBook(null)
             }}
           />
         ) : (
@@ -254,38 +195,17 @@ function App() {
             totalPages={totalPages}
             filters={filters}
             loading={booksLoading}
-            error={booksError}
-            onRetry={() => {
-              setBooksLoading(true)
-              setBooksError('')
-              setBooks([])
-              setBooksRetry((retry) => retry + 1)
-            }}
-            onFilterChange={(nextFilters) => {
-              setBooksLoading(true)
-              setBooksError('')
-              setBooks([])
-              setFilters(nextFilters)
-              setPage(1)
-            }}
-            onPageChange={(nextPage) => {
-              setBooksLoading(true)
-              setBooksError('')
-              setBooks([])
-              setPage(nextPage)
-            }}
+            error={booksError || ''}
+            onRetry={loadBooks}
+            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1) }}
+            onPageChange={(nextPage) => setPage(nextPage)}
             onResetFilters={() => {
-              setBooksLoading(true)
-              setBooksError('')
-              setBooks([])
-              setFilters({ search: '', minPrice: '', maxPrice: '', sort: 'newest' })
+              setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
               setPage(1)
             }}
             onSelectBook={(id) => {
-              setDetailLoading(true)
-              setDetailError('')
+              dispatch(setSelectedBook(null))
               setSelectedBookId(id)
-              setSelectedBook(null)
             }}
           />
         )

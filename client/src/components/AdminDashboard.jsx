@@ -1,24 +1,42 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import {
+  fetchAdminBooks,
+  createBook,
+  updateBook,
+  updateBookStatus,
+} from '../store/slices/bookSlice'
+import {
+  fetchCategories,
+  createCategory,
+  updateCategory,
+  updateCategoryStatus,
+} from '../store/slices/categorySlice'
 import AdminBookTable from './AdminBookTable'
 import AdminBookModal from './AdminBookModal'
 import AdminCategoryTable from './AdminCategoryTable'
 import AdminCategoryModal from './AdminCategoryModal'
 import './AdminDashboard.css'
 
-function AdminDashboard({ request }) {
-  const [adminTab, setAdminTab] = useState('books')
+function AdminDashboard() {
+  const dispatch = useDispatch()
+  const {
+    adminBooks: books,
+    adminTotal: bookTotal,
+    adminTotalPages: bookTotalPages,
+    loading: booksLoading,
+  } = useSelector((state) => state.books)
+  const {
+    categories,
+    loading: categoriesLoading,
+  } = useSelector((state) => state.categories)
 
-  const [books, setBooks] = useState([])
-  const [bookTotal, setBookTotal] = useState(0)
+  const [adminTab, setAdminTab] = useState('books')
   const [bookPage, setBookPage] = useState(1)
-  const [bookTotalPages, setBookTotalPages] = useState(1)
   const [bookSearch, setBookSearch] = useState('')
   const [bookStatusFilter, setBookStatusFilter] = useState('all')
-  const [booksLoading, setBooksLoading] = useState(false)
 
-  const [categories, setCategories] = useState([])
   const [categorySearch, setCategorySearch] = useState('')
-  const [categoriesLoading, setCategoriesLoading] = useState(false)
 
   const [bookModalOpen, setBookModalOpen] = useState(false)
   const [bookModalMode, setBookModalMode] = useState('create')
@@ -37,142 +55,93 @@ function AdminDashboard({ request }) {
     }, 3500)
   }, [])
 
-  const fetchBooks = useCallback(() => {
-    let isMounted = true
-    const query = new URLSearchParams()
-    query.set('page', String(bookPage))
-    query.set('limit', '10')
-    if (bookSearch.trim()) query.set('search', bookSearch.trim())
-    if (bookStatusFilter === '0' || bookStatusFilter === '1') {
-      query.set('isDelete', bookStatusFilter)
+  const fetchBooksData = useCallback(() => {
+    const query = {
+      page: bookPage,
+      limit: 10,
+      ...(bookSearch.trim() ? { search: bookSearch.trim() } : {}),
+      ...(bookStatusFilter === '0' || bookStatusFilter === '1' ? { isDelete: bookStatusFilter } : {}),
     }
-
-    request(`/admin/books?${query.toString()}`)
-      .then((data) => {
-        if (isMounted && data) {
-          setBooks(data.books || [])
-          setBookTotal(data.total || 0)
-          setBookTotalPages(data.totalPages || 1)
-        }
-      })
+    dispatch(fetchAdminBooks(query))
+      .unwrap()
       .catch((err) => {
-        if (isMounted) showToast(err.message || 'Không thể tải sách.', 'error')
+        showToast(err || 'Không thể tải sách.', 'error')
       })
-      .finally(() => {
-        if (isMounted) setBooksLoading(false)
-      })
+  }, [bookPage, bookSearch, bookStatusFilter, dispatch, showToast])
 
-    return () => { isMounted = false }
-  }, [bookPage, bookSearch, bookStatusFilter, request, showToast])
-
-  const fetchCategories = useCallback(() => {
-    let isMounted = true
-    request('/admin/categories')
-      .then((data) => {
-        if (isMounted && data) {
-          setCategories(Array.isArray(data) ? data : [])
-        }
-      })
+  const fetchCategoriesData = useCallback(() => {
+    dispatch(fetchCategories())
+      .unwrap()
       .catch((err) => {
-        if (isMounted) showToast(err.message || 'Không thể tải thể loại.', 'error')
+        showToast(err || 'Không thể tải thể loại.', 'error')
       })
-      .finally(() => {
-        if (isMounted) setCategoriesLoading(false)
-      })
-
-    return () => { isMounted = false }
-  }, [request, showToast])
+  }, [dispatch, showToast])
 
   useEffect(() => {
-    return fetchBooks()
-  }, [fetchBooks])
+    fetchBooksData()
+  }, [fetchBooksData])
 
   useEffect(() => {
-    return fetchCategories()
-  }, [fetchCategories])
+    fetchCategoriesData()
+  }, [fetchCategoriesData])
 
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
     setBookPage(1)
-    setBooksLoading(true)
   }
 
   const handleBookStatusChange = (value) => {
     setBookStatusFilter(value)
     setBookPage(1)
-    setBooksLoading(true)
   }
 
   const handleBookPageChange = (nextPage) => {
     setBookPage(nextPage)
-    setBooksLoading(true)
   }
 
   const handleSaveBook = async (payload, bookId) => {
     if (bookId) {
-      await request(`/admin/books/${bookId}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      })
+      await dispatch(updateBook({ id: bookId, data: payload })).unwrap()
       showToast('Cập nhật ấn phẩm thành công!')
     } else {
-      await request('/admin/books', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
+      await dispatch(createBook(payload)).unwrap()
       showToast('Thêm ấn phẩm mới thành công!')
     }
-    setBooksLoading(true)
-    fetchBooks()
-    fetchCategories()
+    fetchBooksData()
+    fetchCategoriesData()
   }
 
   const handleToggleBookStatus = async (book) => {
     const nextStatus = book.isDelete ? 0 : 1
     try {
-      await request(`/admin/books/${book.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isDelete: nextStatus }),
-      })
+      await dispatch(updateBookStatus({ id: book.id, isDelete: nextStatus })).unwrap()
       showToast(nextStatus === 1 ? 'Đã ẩn ấn phẩm khỏi cửa hàng.' : 'Đã khôi phục ấn phẩm mở bán.')
-      setBooksLoading(true)
-      fetchBooks()
-      fetchCategories()
+      fetchBooksData()
+      fetchCategoriesData()
     } catch (err) {
-      showToast(err.message || 'Lỗi khi cập nhật trạng thái sách.', 'error')
+      showToast(err.message || err || 'Lỗi khi cập nhật trạng thái sách.', 'error')
     }
   }
 
   const handleSaveCategory = async (payload, categoryId) => {
     if (categoryId) {
-      await request(`/admin/categories/${categoryId}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      })
+      await dispatch(updateCategory({ id: categoryId, data: payload })).unwrap()
       showToast('Cập nhật thể loại thành công!')
     } else {
-      await request('/admin/categories', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
+      await dispatch(createCategory(payload)).unwrap()
       showToast('Thêm thể loại mới thành công!')
     }
-    setCategoriesLoading(true)
-    fetchCategories()
+    fetchCategoriesData()
   }
 
   const handleToggleCategoryStatus = async (category) => {
     const nextStatus = category.isDelete ? 0 : 1
     try {
-      await request(`/admin/categories/${category.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isDelete: nextStatus }),
-      })
+      await dispatch(updateCategoryStatus({ id: category.id, isDelete: nextStatus })).unwrap()
       showToast(nextStatus === 1 ? 'Đã ẩn thể loại.' : 'Đã khôi phục thể loại.')
-      setCategoriesLoading(true)
-      fetchCategories()
+      fetchCategoriesData()
     } catch (err) {
-      showToast(err.message || 'Lỗi khi cập nhật trạng thái thể loại.', 'error')
+      showToast(err.message || err || 'Lỗi khi cập nhật trạng thái thể loại.', 'error')
     }
   }
 

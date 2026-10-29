@@ -58,7 +58,6 @@ async function update(id, fields = {}) {
     }
 
     const pool = await connectDB();
-
     if (fields.name !== undefined) {
         const trimmedName = typeof fields.name === "string" ? fields.name.trim() : "";
         if (!trimmedName) {
