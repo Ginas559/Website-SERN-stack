@@ -3,6 +3,7 @@ import './App.css'
 import './components/BooksPage.css'
 import BookList from './components/BookList'
 import BookDetail from './components/BookDetail'
+import AdminDashboard from './components/AdminDashboard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -155,8 +156,11 @@ function App() {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
+    setActiveTab('books')
     setMessage('Bạn đã đăng xuất.')
   }
+
+  const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
 
   return (
     <div>
@@ -188,6 +192,15 @@ function App() {
           >
             Cửa hàng sách
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); setSelectedBook(null); }}
+            >
+              Quản trị
+            </button>
+          )}
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
@@ -204,7 +217,9 @@ function App() {
         </nav>
       </header>
 
-      {activeTab === 'books' ? (
+      {activeTab === 'admin' && isAdmin ? (
+        <AdminDashboard request={request} />
+      ) : activeTab === 'books' ? (
         selectedBookId ? (
           <BookDetail
             book={selectedBook}
