@@ -202,6 +202,67 @@ async function getClientBookDetail(id, relatedLimit = 4) {
     };
 }
 
+async function getAdminBooks(options = {}) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+
+    let isDelete = null;
+    if (options.isDelete !== undefined && options.isDelete !== null && options.isDelete !== "") {
+        const parsedIsDelete = Number(options.isDelete);
+        if (parsedIsDelete === 0 || parsedIsDelete === 1) {
+            isDelete = parsedIsDelete;
+        } else {
+            throw new AppError("Trạng thái isDelete không hợp lệ.", 400);
+        }
+    }
+
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (options.minPrice !== undefined && options.minPrice !== null && options.minPrice !== "") {
+        minPrice = Number(options.minPrice);
+        if (Number.isNaN(minPrice) || minPrice < 0) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+    }
+
+    if (options.maxPrice !== undefined && options.maxPrice !== null && options.maxPrice !== "") {
+        maxPrice = Number(options.maxPrice);
+        if (Number.isNaN(maxPrice) || maxPrice < 0) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+    }
+
+    if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+        throw new AppError("Giá tối thiểu không được lớn hơn giá tối đa.", 400);
+    }
+
+    let categoryId = null;
+    if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
+        categoryId = Number(options.categoryId);
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+            throw new AppError("ID thể loại không hợp lệ.", 400);
+        }
+    }
+
+    const allowedSorts = ["newest", "oldest", "price_asc", "price_desc", "discount"];
+    const sort = allowedSorts.includes(options.sort) ? options.sort : "newest";
+
+    const search = typeof options.search === "string" ? options.search.trim() : "";
+
+    return await bookModel.findAll({
+        page,
+        limit,
+        search,
+        categoryId,
+        minPrice,
+        maxPrice,
+        sort,
+        includeDeleted: true,
+        isDelete,
+    });
+}
+
 module.exports = {
     createBook,
     updateBook,
@@ -209,4 +270,5 @@ module.exports = {
     getBookById,
     getClientBooks,
     getClientBookDetail,
+    getAdminBooks,
 };

@@ -84,6 +84,7 @@ async function findAll({
     maxPrice = null,
     sort = "newest",
     includeDeleted = false,
+    isDelete = null,
 } = {}) {
     const pool = await connectDB();
     const request = pool.request();
@@ -91,6 +92,9 @@ async function findAll({
 
     if (!includeDeleted) {
         conditions.push("b.isDelete = 0");
+    } else if (isDelete !== null && isDelete !== undefined) {
+        request.input("isDelete", sql.Int, Number(isDelete));
+        conditions.push("b.isDelete = @isDelete");
     }
 
     if (search && search.trim()) {
@@ -145,12 +149,40 @@ async function findAll({
     const dataResult = await request.query(dataQuery);
     const books = dataResult.recordset;
 
+    if (books.length > 0) {
+        const bookIds = books.map((b) => b.id);
+        const catReq = pool.request();
+        const catCondition = includeDeleted ? "" : "AND c.isDelete = 0";
+        const catResult = await catReq.query(`SELECT bc.book_id, c.id, c.name, c.description, c.image 
+                                              FROM dbo.categories c 
+                                              INNER JOIN dbo.book_categories bc ON c.id = bc.category_id 
+                                              WHERE bc.book_id IN (${bookIds.join(",")}) ${catCondition}`);
+        const catMap = {};
+        for (const row of catResult.recordset) {
+            if (!catMap[row.book_id]) {
+                catMap[row.book_id] = [];
+            }
+            catMap[row.book_id].push({
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                image: row.image,
+            });
+        }
+        for (const b of books) {
+            b.categories = catMap[b.id] || [];
+        }
+    }
+
+    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
+    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+
     return {
         books,
         total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / limit) || 1,
+        page: sanitizedPage,
+        limit: sanitizedLimit,
+        totalPages: Math.ceil(total / sanitizedLimit) || 1,
     };
 }
 
