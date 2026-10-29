@@ -22,10 +22,10 @@ async function create({
     try {
         const bookReq = new sql.Request(transaction);
         const result = await bookReq
-            .input("title", sql.VarChar(255), title)
-            .input("author", sql.VarChar(255), author)
+            .input("title", sql.NVarChar(255), title)
+            .input("author", sql.NVarChar(255), author)
             .input("price", sql.Int, price)
-            .input("description", sql.VarChar(255), description)
+            .input("description", sql.NVarChar(sql.MAX), description)
             .input("image", sql.VarChar(255), image)
             .input("publication_date", sql.DateTime, publication_date)
             .input("quantity", sql.Int, quantity)
@@ -100,7 +100,7 @@ async function findAll({
 
     if (categoryId) {
         request.input("categoryId", sql.Int, Number(categoryId));
-        conditions.push("b.id IN (SELECT book_id FROM dbo.book_categories WHERE category_id = @categoryId)");
+        conditions.push("b.id IN (SELECT bc.book_id FROM dbo.book_categories bc INNER JOIN dbo.categories c ON bc.category_id = c.id WHERE bc.category_id = @categoryId AND c.isDelete = 0)");
     }
 
     if (minPrice !== null && minPrice !== undefined) {
@@ -116,9 +116,17 @@ async function findAll({
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     let orderBy = "b.id DESC";
-    if (sort === "price_asc") orderBy = "b.price ASC";
-    else if (sort === "price_desc") orderBy = "b.price DESC";
-    else if (sort === "discount") orderBy = "b.discount DESC";
+    if (sort === "price_asc") {
+        orderBy = "b.price ASC, b.id DESC";
+    } else if (sort === "price_desc") {
+        orderBy = "b.price DESC, b.id DESC";
+    } else if (sort === "discount") {
+        orderBy = "b.discount DESC, b.id DESC";
+    } else if (sort === "oldest") {
+        orderBy = "b.publication_date ASC, b.id ASC";
+    } else if (sort === "newest") {
+        orderBy = "b.publication_date DESC, b.id DESC";
+    }
 
     const countQuery = `SELECT COUNT(DISTINCT b.id) AS total FROM dbo.books b ${whereClause}`;
     const countResult = await request.query(countQuery);
@@ -154,10 +162,10 @@ async function update(id, fields = {}, categoryIds = null) {
     try {
         const bookReq = new sql.Request(transaction);
         bookReq.input("id", sql.Int, id);
-        bookReq.input("title", sql.VarChar(255), fields.title);
-        bookReq.input("author", sql.VarChar(255), fields.author);
+        bookReq.input("title", sql.NVarChar(255), fields.title);
+        bookReq.input("author", sql.NVarChar(255), fields.author);
         bookReq.input("price", sql.Int, fields.price);
-        bookReq.input("description", sql.VarChar(255), fields.description);
+        bookReq.input("description", sql.NVarChar(sql.MAX), fields.description);
         bookReq.input("image", sql.VarChar(255), fields.image);
         bookReq.input("publication_date", sql.DateTime, fields.publication_date);
         bookReq.input("quantity", sql.Int, fields.quantity);
