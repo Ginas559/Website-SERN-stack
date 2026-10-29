@@ -96,9 +96,8 @@ async function updateBook(id, updateData) {
     if (updateData.quantity !== undefined) payload.quantity = Number(updateData.quantity);
     if (updateData.discount !== undefined) payload.discount = Number(updateData.discount);
     if (updateData.purchase_price !== undefined) payload.purchase_price = Number(updateData.purchase_price);
-    if (updateData.categoryIds !== undefined) payload.categoryIds = updateData.categoryIds;
 
-    await bookModel.update(bookId, payload);
+    await bookModel.update(bookId, payload, updateData.categoryIds);
     return await bookModel.findById(bookId);
 }
 
