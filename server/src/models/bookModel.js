@@ -169,9 +169,17 @@ async function findAllWithColumns(columns, {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     let orderBy = "b.id DESC";
-    if (sort === "price_asc") orderBy = "b.price ASC";
-    else if (sort === "price_desc") orderBy = "b.price DESC";
-    else if (sort === "discount") orderBy = "b.discount DESC";
+    if (sort === "price_asc") {
+        orderBy = "b.price ASC, b.id DESC";
+    } else if (sort === "price_desc") {
+        orderBy = "b.price DESC, b.id DESC";
+    } else if (sort === "discount") {
+        orderBy = "b.discount DESC, b.id DESC";
+    } else if (sort === "oldest") {
+        orderBy = "b.publication_date ASC, b.id ASC";
+    } else if (sort === "newest") {
+        orderBy = "b.publication_date DESC, b.id DESC";
+    }
 
     const countQuery = `SELECT COUNT(DISTINCT b.id) AS total FROM dbo.books b ${whereClause}`;
     const countResult = await request.query(countQuery);
