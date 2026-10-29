@@ -250,6 +250,34 @@ async function setCategories(bookId, categoryIds = []) {
     }
 }
 
+async function findRelatedBooks(bookId, categoryIds = [], limit = 4) {
+    if (!Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+    const validIds = categoryIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (validIds.length === 0) return [];
+
+    const safeLimit = Number.isInteger(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 20) : 4;
+    const pool = await connectDB();
+    const request = pool.request();
+    request.input("bookId", sql.Int, Number(bookId));
+    request.input("limit", sql.Int, safeLimit);
+
+    const cols = bookColumns.split(", ").map((col) => `b.${col}`).join(", ");
+    const query = `SELECT TOP (@limit) ${cols} 
+                   FROM dbo.books b 
+                   WHERE b.id != @bookId 
+                     AND b.isDelete = 0 
+                     AND b.id IN (
+                         SELECT bc.book_id 
+                         FROM dbo.book_categories bc 
+                         INNER JOIN dbo.categories c ON bc.category_id = c.id 
+                         WHERE bc.category_id IN (${validIds.join(",")}) 
+                           AND c.isDelete = 0
+                     ) 
+                   ORDER BY b.id DESC`;
+    const result = await request.query(query);
+    return result.recordset;
+}
+
 module.exports = {
     create,
     findById,
@@ -258,4 +286,5 @@ module.exports = {
     softDelete,
     restore,
     setCategories,
+    findRelatedBooks,
 };

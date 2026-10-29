@@ -135,9 +135,39 @@ async function getBookById(id) {
     return book;
 }
 
+async function getClientBooks(options = {}) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+    return await bookModel.findAll({
+        ...options,
+        page,
+        limit,
+        includeDeleted: false,
+    });
+}
+
+async function getClientBookDetail(id, relatedLimit = 4) {
+    const bookId = Number(id);
+    if (!bookId || !Number.isInteger(bookId) || bookId <= 0) {
+        throw new AppError("ID sách không hợp lệ.", 400);
+    }
+    const book = await bookModel.findById(bookId);
+    if (!book || book.isDelete) {
+        throw new AppError("Không tìm thấy ấn phẩm sách yêu cầu.", 404);
+    }
+    const categoryIds = (book.categories || []).map((cat) => cat.id);
+    const relatedBooks = await bookModel.findRelatedBooks(bookId, categoryIds, relatedLimit);
+    return {
+        ...book,
+        relatedBooks,
+    };
+}
+
 module.exports = {
     createBook,
     updateBook,
     changeBookStatus,
     getBookById,
+    getClientBooks,
+    getClientBookDetail,
 };
