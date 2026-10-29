@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
+import './components/BooksPage.css'
+import BookList from './components/BookList'
+import BookDetail from './components/BookDetail'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -16,6 +19,16 @@ async function request(path, options = {}) {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState('books')
+  const [books, setBooks] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
+  const [selectedBookId, setSelectedBookId] = useState(null)
+  const [selectedBook, setSelectedBook] = useState(null)
+  const [booksLoading, setBooksLoading] = useState(false)
+
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
     username: '', fullName: '', email: '', phone: '', address: '',
@@ -32,6 +45,44 @@ function App() {
     setMessage('')
     setError('')
   }
+
+  useEffect(() => {
+    if (activeTab !== 'books' || selectedBookId) return
+    let isMounted = true
+    const query = new URLSearchParams()
+    query.set('page', String(page))
+    query.set('limit', '8')
+    if (filters.search) query.set('search', filters.search)
+    if (filters.categoryId) query.set('categoryId', filters.categoryId)
+    if (filters.minPrice) query.set('minPrice', filters.minPrice)
+    if (filters.maxPrice) query.set('maxPrice', filters.maxPrice)
+    if (filters.sort) query.set('sort', filters.sort)
+
+    request(`/books?${query.toString()}`)
+      .then((data) => {
+        if (isMounted && data) {
+          setBooks(data.books || [])
+          setTotal(data.total || 0)
+          setTotalPages(data.totalPages || 1)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setBooksLoading(false)
+      })
+    return () => { isMounted = false }
+  }, [activeTab, page, filters, selectedBookId])
+
+  useEffect(() => {
+    if (!selectedBookId) return
+    let isMounted = true
+    request(`/books/${selectedBookId}`)
+      .then((data) => {
+        if (isMounted) setSelectedBook(data)
+      })
+      .catch(() => {})
+    return () => { isMounted = false }
+  }, [selectedBookId])
 
   async function submit(event) {
     event.preventDefault()
@@ -88,61 +139,107 @@ function App() {
     setMessage('Bạn đã đăng xuất.')
   }
 
-  if (user) {
-    return (
-      <main className="page">
-        <section className="card welcome">
-          <span className="eyebrow">SERN BOOKSTORE</span>
-          <h1>Xin chào, {user.fullName}</h1>
-          <p>Bạn đang đăng nhập với vai trò <strong>{user.role || (user.isAdmin ? 'Admin' : 'Customer')}</strong>.</p>
-          <button onClick={() => changeMode('change')}>Đổi mật khẩu</button>
-          <button className="secondary" onClick={logout}>Đăng xuất</button>
-          {mode === 'change' && (
-            <form onSubmit={submit}>
-              <label>Mật khẩu hiện tại<input type="password" name="currentPassword" value={form.currentPassword} onChange={update} required /></label>
-              <label>Mật khẩu mới<input type="password" name="newPassword" value={form.newPassword} onChange={update} required minLength="8" /></label>
-              <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>
-              <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</button>
-            </form>
-          )}
-          {message && <p className="success">{message}</p>}
-          {error && <p className="error">{error}</p>}
-        </section>
-      </main>
-    )
-  }
-
   return (
-    <main className="page">
-      <section className="intro">
-        <span className="eyebrow">SERN BOOKSTORE</span>
-        <h1>Mở cánh cửa<br /><em>tri thức.</em></h1>
-        <p>Hệ thống bán sách trực tuyến sử dụng SQL Server, Express, React và Node.js.</p>
-      </section>
-      <section className="card auth-card">
-        <div className="tabs">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Đăng nhập</button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>Đăng ký</button>
+    <div>
+      <header className="app-navbar">
+        <div 
+          className="app-brand" 
+          onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+        >
+          SERN BOOKSTORE
         </div>
-        <h2>{mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Quên mật khẩu' : mode === 'reset' ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại'}</h2>
-        <p className="muted">{mode === 'login' ? 'Đăng nhập để tiếp tục mua sắm.' : 'Nhập thông tin để tiếp tục.'}</p>
-        <form onSubmit={submit}>
-          {mode === 'register' && <label>Họ và tên<input name="fullName" value={form.fullName} onChange={update} required minLength="2" /></label>}
-          {mode === 'register' && <label>Username<input name="username" value={form.username} onChange={update} required minLength="3" /></label>}
-          {mode === 'register' && <label>Số điện thoại<input name="phone" value={form.phone} onChange={update} required /></label>}
-          {mode === 'register' && <label>Địa chỉ<input name="address" value={form.address} onChange={update} required minLength="2" /></label>}
-          {mode === 'reset' && !resetToken && <label>Mã đặt lại mật khẩu<input name="token" value={form.token} onChange={update} required autoComplete="off" /></label>}
-          {mode !== 'reset' && <label>Email<input type="email" name="email" value={form.email} onChange={update} required /></label>}
-          {mode !== 'forgot' && <label>Mật khẩu<input type="password" name="password" value={form.password} onChange={update} required minLength="8" /></label>}
-          {(mode === 'register' || mode === 'reset') && <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>}
-          <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Gửi yêu cầu' : mode === 'reset' ? 'Đổi mật khẩu' : 'Đăng nhập'}</button>
-        </form>
-        {mode === 'login' && <button className="link" onClick={() => changeMode('forgot')}>Quên mật khẩu?</button>}
-        {(mode === 'forgot' || mode === 'reset') && <button className="link" onClick={() => changeMode('login')}>Quay lại đăng nhập</button>}
-        {message && <p className="success">{message}</p>}
-        {error && <p className="error">{error}</p>}
-      </section>
-    </main>
+        <nav className="app-nav-links">
+          <button 
+            type="button" 
+            className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+          >
+            Cửa hàng sách
+          </button>
+          <button 
+            type="button" 
+            className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            {user ? user.fullName : 'Tài khoản'}
+          </button>
+        </nav>
+      </header>
+
+      {activeTab === 'books' ? (
+        selectedBookId && selectedBook ? (
+          <BookDetail 
+            book={selectedBook} 
+            onBack={() => { setSelectedBookId(null); setSelectedBook(null); }} 
+            onSelectBook={(id) => setSelectedBookId(id)}
+          />
+        ) : (
+          <BookList 
+            books={books}
+            total={total}
+            page={page}
+            totalPages={totalPages}
+            filters={filters}
+            loading={booksLoading}
+            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); setBooksLoading(true); }}
+            onPageChange={(nextPage) => { setPage(nextPage); setBooksLoading(true); }}
+            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); setBooksLoading(true); }}
+            onSelectBook={(id) => setSelectedBookId(id)}
+          />
+        )
+      ) : user ? (
+        <main className="page">
+          <section className="card welcome">
+            <span className="eyebrow">SERN BOOKSTORE</span>
+            <h1>Xin chào, {user.fullName}</h1>
+            <p>Bạn đang đăng nhập với vai trò <strong>{user.role || (user.isAdmin ? 'Admin' : 'Customer')}</strong>.</p>
+            <button onClick={() => changeMode('change')}>Đổi mật khẩu</button>
+            <button className="secondary" onClick={logout}>Đăng xuất</button>
+            {mode === 'change' && (
+              <form onSubmit={submit}>
+                <label>Mật khẩu hiện tại<input type="password" name="currentPassword" value={form.currentPassword} onChange={update} required /></label>
+                <label>Mật khẩu mới<input type="password" name="newPassword" value={form.newPassword} onChange={update} required minLength="8" /></label>
+                <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>
+                <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</button>
+              </form>
+            )}
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </main>
+      ) : (
+        <main className="page">
+          <section className="intro">
+            <span className="eyebrow">SERN BOOKSTORE</span>
+            <h1>Mở cánh cửa<br /><em>tri thức.</em></h1>
+            <p>Hệ thống bán sách trực tuyến sử dụng SQL Server, Express, React và Node.js.</p>
+          </section>
+          <section className="card auth-card">
+            <div className="tabs">
+              <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Đăng nhập</button>
+              <button className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>Đăng ký</button>
+            </div>
+            <h2>{mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Quên mật khẩu' : mode === 'reset' ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại'}</h2>
+            <p className="muted">{mode === 'login' ? 'Đăng nhập để tiếp tục mua sắm.' : 'Nhập thông tin để tiếp tục.'}</p>
+            <form onSubmit={submit}>
+              {mode === 'register' && <label>Họ và tên<input name="fullName" value={form.fullName} onChange={update} required minLength="2" /></label>}
+              {mode === 'register' && <label>Username<input name="username" value={form.username} onChange={update} required minLength="3" /></label>}
+              {mode === 'register' && <label>Số điện thoại<input name="phone" value={form.phone} onChange={update} required /></label>}
+              {mode === 'register' && <label>Địa chỉ<input name="address" value={form.address} onChange={update} required minLength="2" /></label>}
+              {mode === 'reset' && !resetToken && <label>Mã đặt lại mật khẩu<input name="token" value={form.token} onChange={update} required autoComplete="off" /></label>}
+              {mode !== 'reset' && <label>Email<input type="email" name="email" value={form.email} onChange={update} required /></label>}
+              {mode !== 'forgot' && <label>Mật khẩu<input type="password" name="password" value={form.password} onChange={update} required minLength="8" /></label>}
+              {(mode === 'register' || mode === 'reset') && <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>}
+              <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Gửi yêu cầu' : mode === 'reset' ? 'Đổi mật khẩu' : 'Đăng nhập'}</button>
+            </form>
+            {mode === 'login' && <button className="link" onClick={() => changeMode('forgot')}>Quên mật khẩu?</button>}
+            {(mode === 'forgot' || mode === 'reset') && <button className="link" onClick={() => changeMode('login')}>Quay lại đăng nhập</button>}
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </main>
+      )}
+    </div>
   )
 }
 
