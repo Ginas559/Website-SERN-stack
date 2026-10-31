@@ -49,6 +49,7 @@ const initialState = {
   categories: [],
   loading: false,
   error: null,
+  requestId: null,
 }
 
 const categorySlice = createSlice({
@@ -61,19 +62,24 @@ const categorySlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchCategories.pending, (state) => {
+      .addCase(fetchCategories.pending, (state, action) => {
         state.loading = true
         state.error = null
+        state.requestId = action.meta.requestId
       })
       .addCase(fetchCategories.fulfilled, (state, action) => {
+        if (state.requestId !== action.meta.requestId) return
         state.loading = false
+        state.requestId = null
         state.categories = Array.isArray(action.payload)
           ? action.payload
           : action.payload?.categories || []
       })
       .addCase(fetchCategories.rejected, (state, action) => {
+        if (state.requestId !== action.meta.requestId) return
         state.loading = false
         state.error = action.payload
+        state.requestId = null
       })
       .addCase(createCategory.fulfilled, (state, action) => {
         state.categories.unshift(action.payload)

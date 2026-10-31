@@ -78,8 +78,15 @@ const initialState = {
   limit: 10,
   totalPages: 1,
   adminTotalPages: 1,
-  loading: false,
-  error: null,
+  clientBooksLoading: false,
+  clientBooksError: null,
+  clientBooksRequestId: null,
+  bookDetailLoading: false,
+  bookDetailError: null,
+  bookDetailRequestId: null,
+  adminBooksLoading: false,
+  adminBooksError: null,
+  adminBooksRequestId: null,
 }
 
 const bookSlice = createSlice({
@@ -88,19 +95,24 @@ const bookSlice = createSlice({
   reducers: {
     setSelectedBook: (state, action) => {
       state.selectedBook = action.payload
-    },
-    clearBookError: (state) => {
-      state.error = null
+      if (action.payload === null) {
+        state.bookDetailLoading = false
+        state.bookDetailError = null
+        state.bookDetailRequestId = null
+      }
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchBooks.pending, (state) => {
-        state.loading = true
-        state.error = null
+      .addCase(fetchBooks.pending, (state, action) => {
+        state.clientBooksLoading = true
+        state.clientBooksError = null
+        state.clientBooksRequestId = action.meta.requestId
       })
       .addCase(fetchBooks.fulfilled, (state, action) => {
-        state.loading = false
+        if (state.clientBooksRequestId !== action.meta.requestId) return
+        state.clientBooksLoading = false
+        state.clientBooksRequestId = null
         if (action.payload?.books) {
           state.books = action.payload.books
           state.total = action.payload.total || action.payload.books.length
@@ -113,27 +125,37 @@ const bookSlice = createSlice({
         }
       })
       .addCase(fetchBooks.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload
+        if (state.clientBooksRequestId !== action.meta.requestId) return
+        state.clientBooksLoading = false
+        state.clientBooksError = action.payload
+        state.clientBooksRequestId = null
       })
-      .addCase(fetchBookById.pending, (state) => {
-        state.loading = true
-        state.error = null
+      .addCase(fetchBookById.pending, (state, action) => {
+        state.bookDetailLoading = true
+        state.bookDetailError = null
+        state.bookDetailRequestId = action.meta.requestId
       })
       .addCase(fetchBookById.fulfilled, (state, action) => {
-        state.loading = false
+        if (state.bookDetailRequestId !== action.meta.requestId) return
+        state.bookDetailLoading = false
+        state.bookDetailRequestId = null
         state.selectedBook = action.payload
       })
       .addCase(fetchBookById.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload
+        if (state.bookDetailRequestId !== action.meta.requestId) return
+        state.bookDetailLoading = false
+        state.bookDetailError = action.payload
+        state.bookDetailRequestId = null
       })
-      .addCase(fetchAdminBooks.pending, (state) => {
-        state.loading = true
-        state.error = null
+      .addCase(fetchAdminBooks.pending, (state, action) => {
+        state.adminBooksLoading = true
+        state.adminBooksError = null
+        state.adminBooksRequestId = action.meta.requestId
       })
       .addCase(fetchAdminBooks.fulfilled, (state, action) => {
-        state.loading = false
+        if (state.adminBooksRequestId !== action.meta.requestId) return
+        state.adminBooksLoading = false
+        state.adminBooksRequestId = null
         if (action.payload?.books) {
           state.adminBooks = action.payload.books
           state.adminTotal = action.payload.total || action.payload.books.length
@@ -145,8 +167,10 @@ const bookSlice = createSlice({
         }
       })
       .addCase(fetchAdminBooks.rejected, (state, action) => {
-        state.loading = false
-        state.error = action.payload
+        if (state.adminBooksRequestId !== action.meta.requestId) return
+        state.adminBooksLoading = false
+        state.adminBooksError = action.payload
+        state.adminBooksRequestId = null
       })
       .addCase(createBook.fulfilled, (state, action) => {
         state.adminBooks.unshift(action.payload)
@@ -170,5 +194,5 @@ const bookSlice = createSlice({
   },
 })
 
-export const { setSelectedBook, clearBookError } = bookSlice.actions
+export const { setSelectedBook } = bookSlice.actions
 export default bookSlice.reducer

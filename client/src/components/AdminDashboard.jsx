@@ -24,7 +24,7 @@ function AdminDashboard() {
     adminBooks: books,
     adminTotal: bookTotal,
     adminTotalPages: bookTotalPages,
-    loading: booksLoading,
+    adminBooksLoading: booksLoading,
   } = useSelector((state) => state.books)
   const {
     categories,

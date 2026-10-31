@@ -13,7 +13,7 @@ if (resetToken) window.history.replaceState({}, document.title, `${window.locati
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
-  const accessToken = localStorage.getItem('accessToken')
+  const accessToken = sessionStorage.getItem('accessToken')
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`
   const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: 'include' })
   const data = response.status === 204 ? null : await response.json()
@@ -28,15 +28,16 @@ function App() {
     total,
     totalPages,
     selectedBook,
-    loading: booksLoading,
-    error: booksError,
+    clientBooksLoading,
+    clientBooksError,
+    bookDetailLoading,
+    bookDetailError,
   } = useSelector((state) => state.books)
 
   const [activeTab, setActiveTab] = useState('books')
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
-  const [detailRetry, setDetailRetry] = useState(0)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
@@ -75,7 +76,7 @@ function App() {
   useEffect(() => {
     if (!selectedBookId) return
     dispatch(fetchBookById(selectedBookId))
-  }, [selectedBookId, detailRetry, dispatch])
+  }, [selectedBookId, dispatch])
 
   async function submit(event) {
     event.preventDefault()
@@ -100,7 +101,7 @@ function App() {
       if (mode === 'forgot') {
         setMessage(data.message)
       } else if (mode === 'reset' || mode === 'change') {
-        localStorage.removeItem('accessToken')
+        sessionStorage.removeItem('accessToken')
         localStorage.removeItem('user')
         setUser(null)
         setMode('login')
@@ -113,7 +114,7 @@ function App() {
         setMessage(data.message || 'Đăng ký thành công.')
       } else {
         setUser(data.user)
-        localStorage.setItem('accessToken', data.accessToken)
+        sessionStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('user', JSON.stringify(data.user))
         setMessage('Đăng nhập thành công.')
       }
@@ -126,7 +127,7 @@ function App() {
 
   function logout() {
     request('/auth/logout', { method: 'POST' }).catch(() => {})
-    localStorage.removeItem('accessToken')
+    sessionStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
     setActiveTab('books')
@@ -178,9 +179,9 @@ function App() {
         selectedBookId ? (
           <BookDetail
             book={selectedBook}
-            loading={booksLoading && !selectedBook}
-            error={selectedBook ? '' : booksError || ''}
-            onRetry={() => setDetailRetry((retry) => retry + 1)}
+            loading={bookDetailLoading}
+            error={bookDetailError || ''}
+            onRetry={() => dispatch(fetchBookById(selectedBookId))}
             onBack={clearSelectedBook}
             onSelectBook={(id) => {
               dispatch(setSelectedBook(null))
@@ -194,8 +195,8 @@ function App() {
             page={page}
             totalPages={totalPages}
             filters={filters}
-            loading={booksLoading}
-            error={booksError || ''}
+            loading={clientBooksLoading}
+            error={clientBooksError || ''}
             onRetry={loadBooks}
             onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1) }}
             onPageChange={(nextPage) => setPage(nextPage)}
