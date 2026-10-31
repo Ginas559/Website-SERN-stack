@@ -293,7 +293,7 @@ async function softDelete(id) {
         .query(`UPDATE dbo.books 
                 SET isDelete = 1, updatedAt = GETDATE() 
                 OUTPUT ${insertedBookColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 
@@ -304,7 +304,7 @@ async function restore(id) {
         .query(`UPDATE dbo.books 
                 SET isDelete = 0, updatedAt = GETDATE() 
                 OUTPUT ${insertedBookColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 1`);
     return result.recordset[0] || null;
 }
 
