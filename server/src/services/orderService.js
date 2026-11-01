@@ -325,10 +325,107 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null } =
     }
 }
 
+function parseOrderJsonFields(order) {
+    if (!order) return null;
+    let ghnInfo = order.ghn_info;
+    let ghnResponse = order.ghn_response;
+
+    if (typeof ghnInfo === "string") {
+        try {
+            ghnInfo = JSON.parse(ghnInfo);
+        } catch {
+            ghnInfo = {};
+        }
+    }
+
+    if (typeof ghnResponse === "string") {
+        try {
+            ghnResponse = JSON.parse(ghnResponse);
+        } catch {
+            ghnResponse = {};
+        }
+    }
+
+    return {
+        ...order,
+        ghn_info: ghnInfo || null,
+        ghn_response: ghnResponse || null
+    };
+}
+
+async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {}) {
+    if (!userId) {
+        throw new AppError("Người dùng không hợp lệ.", 401);
+    }
+
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
+
+    let parsedStatus = null;
+    if (status !== null && status !== undefined && status !== "") {
+        parsedStatus = Number(status);
+        if (![0, 1, 2, 3, 4].includes(parsedStatus)) {
+            throw new AppError("Mã trạng thái đơn hàng không hợp lệ.", 400);
+        }
+    }
+
+    const result = await orderModel.findByUserId(userId, {
+        page: safePage,
+        limit: safeLimit,
+        status: parsedStatus
+    });
+
+    const orderIds = result.orders.map((o) => o.id);
+    const allItems = await orderItemModel.findByOrderIds(orderIds);
+
+    const itemsByOrderId = new Map();
+    for (const item of allItems) {
+        if (!itemsByOrderId.has(item.order_id)) {
+            itemsByOrderId.set(item.order_id, []);
+        }
+        itemsByOrderId.get(item.order_id).push(item);
+    }
+
+    const enrichedOrders = result.orders.map((order) => {
+        const enriched = parseOrderJsonFields(order);
+        return {
+            ...enriched,
+            items: itemsByOrderId.get(order.id) || []
+        };
+    });
+
+    return {
+        orders: enrichedOrders,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages
+    };
+}
+
+async function getOrderDetails(orderId, userId, { isAdmin = false } = {}) {
+    if (!orderId) {
+        throw new AppError("Mã đơn hàng không hợp lệ.", 400);
+    }
+
+    const order = await orderModel.findById(orderId, { includeItems: true });
+    if (!order) {
+        throw new AppError("Không tìm thấy đơn hàng.", 404);
+    }
+
+    if (!isAdmin && order.user_id !== userId) {
+        throw new AppError("Bạn không có quyền truy cập thông tin đơn hàng này.", 403);
+    }
+
+    return parseOrderJsonFields(order);
+}
+
 module.exports = {
     createOrderFromCart,
     cancelOrder,
     updateOrderStatus,
+    getUserOrders,
+    getOrderDetails,
     calculateItemPrice,
     calculateShippingFee,
     calculateDiscountValue,
