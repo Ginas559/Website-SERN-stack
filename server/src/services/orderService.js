@@ -501,6 +501,144 @@ async function getAllOrdersForAdmin(filters = {}) {
     };
 }
 
+async function reorder(orderId, userId) {
+    if (!orderId) {
+        throw new AppError("Mã đơn hàng không hợp lệ.", 400);
+    }
+    if (!userId) {
+        throw new AppError("Người dùng không hợp lệ.", 401);
+    }
+
+    const order = await orderModel.findById(orderId, { includeItems: true });
+    if (!order) {
+        throw new AppError("Không tìm thấy đơn hàng.", 404);
+    }
+
+    if (order.user_id !== userId) {
+        throw new AppError("Bạn không có quyền mua lại đơn hàng này.", 403);
+    }
+
+    const orderItems = order.items && order.items.length > 0
+        ? order.items
+        : await orderItemModel.findByOrderId(orderId);
+
+    if (!orderItems || orderItems.length === 0) {
+        throw new AppError("Đơn hàng không có sản phẩm nào để mua lại.", 400);
+    }
+
+    const cart = await cartModel.getOrCreateCart(userId);
+    const existingCartDetails = await cartModel.getCartDetails(cart.id);
+    const existingCartMap = new Map();
+    for (const d of existingCartDetails) {
+        existingCartMap.set(Number(d.book_id), d);
+    }
+
+    const pool = await connectDB();
+    const warnings = [];
+    const itemsToAdd = [];
+
+    for (const item of orderItems) {
+        const bookId = Number(item.book_id);
+        const book = await bookModel.findById(bookId);
+
+        if (!book || book.isDelete === 1) {
+            warnings.push(`Ấn phẩm "${item.title || bookId}" đã ngừng kinh doanh, không thể thêm vào giỏ hàng.`);
+            continue;
+        }
+
+        const currentStock = Math.max(0, Number(book.quantity) || 0);
+        if (currentStock <= 0) {
+            warnings.push(`Ấn phẩm "${book.title}" tạm thời hết hàng, không thể thêm vào giỏ hàng.`);
+            continue;
+        }
+
+        const existingItem = existingCartMap.get(bookId);
+        const existingQty = existingItem ? Number(existingItem.quantity) || 0 : 0;
+        const requestedQty = Number(item.quantity) || 1;
+
+        let finalQty = existingQty + requestedQty;
+        if (finalQty > currentStock) {
+            finalQty = currentStock;
+            warnings.push(`Ấn phẩm "${book.title}" chỉ còn ${currentStock} cuốn trong kho, đã tự động điều chỉnh số lượng.`);
+        }
+
+        if (finalQty <= existingQty) {
+            warnings.push(`Số lượng ấn phẩm "${book.title}" trong giỏ đã đạt mức tối đa hiện có (${currentStock} cuốn).`);
+            continue;
+        }
+
+        const unitPrice = calculateItemPrice(book.price, book.discount);
+        const lineTotal = unitPrice * finalQty;
+
+        itemsToAdd.push({
+            bookId,
+            quantity: finalQty,
+            total: lineTotal,
+            isExisting: Boolean(existingItem)
+        });
+    }
+
+    if (itemsToAdd.length === 0) {
+        throw new AppError(
+            warnings.length > 0
+                ? warnings.join(" ")
+                : "Không thể thêm sản phẩm nào từ đơn hàng này vào giỏ hàng.",
+            400
+        );
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+        for (const item of itemsToAdd) {
+            const req = new sql.Request(transaction);
+            req
+                .input("cart_id", sql.Char(36), cart.id)
+                .input("book_id", sql.Int, item.bookId)
+                .input("quantity", sql.Int, item.quantity)
+                .input("total", sql.Int, item.total);
+
+            if (item.isExisting) {
+                await req.query(`UPDATE dbo.cart_details
+                                 SET quantity = @quantity, total = @total, updatedAt = GETDATE()
+                                 WHERE cart_id = @cart_id AND book_id = @book_id`);
+            } else {
+                await req.query(`INSERT INTO dbo.cart_details (cart_id, book_id, quantity, total, createdAt, updatedAt)
+                                 VALUES (@cart_id, @book_id, @quantity, @total, GETDATE(), GETDATE())`);
+            }
+        }
+
+        const syncReq = new sql.Request(transaction);
+        await syncReq
+            .input("cart_id", sql.Char(36), cart.id)
+            .query(`UPDATE dbo.carts
+                    SET total = ISNULL((SELECT SUM(total) FROM dbo.cart_details WHERE cart_id = @cart_id), 0),
+                        total_quantity = ISNULL((SELECT SUM(quantity) FROM dbo.cart_details WHERE cart_id = @cart_id), 0),
+                        updatedAt = GETDATE()
+                    WHERE id = @cart_id`);
+
+        await transaction.commit();
+
+        const updatedDetails = await cartModel.getCartDetails(cart.id);
+        const updatedCart = await cartModel.findByUserId(userId);
+
+        return {
+            cart: updatedCart,
+            items: updatedDetails,
+            addedCount: itemsToAdd.length,
+            warnings
+        };
+    } catch (error) {
+        try {
+            await transaction.rollback();
+        } catch {
+            return;
+        }
+        orderModel.handleOrderWriteError(error);
+    }
+}
+
 module.exports = {
     createOrderFromCart,
     cancelOrder,
@@ -508,6 +646,7 @@ module.exports = {
     getUserOrders,
     getOrderDetails,
     getAllOrdersForAdmin,
+    reorder,
     calculateItemPrice,
     calculateShippingFee,
     calculateDiscountValue,
