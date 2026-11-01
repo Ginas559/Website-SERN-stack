@@ -4,6 +4,14 @@ import BookCard from "./BookCard";
 function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
     const [quantity, setQuantity] = useState(1);
     const [addedNotice, setAddedNotice] = useState(false);
+    const [isFavorite, setIsFavorite] = useState(() => {
+        try {
+            const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
+            return current.some((it) => (it.bookId || it.id) === book.id);
+        } catch {
+            return false;
+        }
+    });
 
     if (!book) return null;
 
@@ -52,6 +60,35 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
         }
         setAddedNotice(true);
         setTimeout(() => setAddedNotice(false), 2500);
+    };
+
+    const handleToggleFavorite = () => {
+        const nextState = !isFavorite;
+        setIsFavorite(nextState);
+        try {
+            const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
+            if (nextState) {
+                if (!current.some((it) => (it.bookId || it.id) === book.id)) {
+                    current.push({
+                        id: book.id,
+                        bookId: book.id,
+                        title: book.title,
+                        author: book.author,
+                        price: originalPrice,
+                        discount,
+                        stock: stockCount,
+                        image: book.image
+                    });
+                }
+            } else {
+                const filtered = current.filter((it) => (it.bookId || it.id) !== book.id);
+                localStorage.setItem('guestWishlist', JSON.stringify(filtered));
+                return;
+            }
+            localStorage.setItem('guestWishlist', JSON.stringify(current));
+        } catch {
+            return;
+        }
     };
 
     return (
@@ -106,53 +143,77 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
                         ) : null}
                     </div>
 
-                    {inStock ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "16px 0" }}>
-                            <div style={{ display: "inline-flex", border: "1px solid #d9d0c2", borderRadius: "8px", background: "#ffffff", overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "16px 0", flexWrap: "wrap" }}>
+                        {inStock ? (
+                            <>
+                                <div style={{ display: "inline-flex", border: "1px solid #d9d0c2", borderRadius: "8px", background: "#ffffff", overflow: "hidden" }}>
+                                    <button
+                                        type="button"
+                                        disabled={quantity <= 1}
+                                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                        style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
+                                    >
+                                        −
+                                    </button>
+                                    <input
+                                        type="number"
+                                        value={quantity}
+                                        min="1"
+                                        max={stockCount}
+                                        onKeyDown={(e) => { if (['e', 'E', '+', '-', '.', ','].includes(e.key)) e.preventDefault(); }}
+                                        onChange={(e) => setQuantity(Math.max(1, Math.min(stockCount, parseInt(e.target.value, 10) || 1)))}
+                                        style={{ width: "46px", textAlign: "center", border: "none", borderLeft: "1px solid #d9d0c2", borderRight: "1px solid #d9d0c2", fontWeight: "700", color: "#20201f" }}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={quantity >= stockCount}
+                                        onClick={() => setQuantity(Math.min(stockCount, quantity + 1))}
+                                        style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
+                                    >
+                                        +
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
-                                    disabled={quantity <= 1}
-                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                    style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
+                                    onClick={handleAdd}
+                                    style={{
+                                        padding: "10px 22px",
+                                        background: "#c77736",
+                                        color: "#fff",
+                                        border: "none",
+                                        borderRadius: "8px",
+                                        fontWeight: "700",
+                                        cursor: "pointer",
+                                        transition: "background 0.2s"
+                                    }}
                                 >
-                                    −
+                                    🛒 Thêm vào giỏ hàng
                                 </button>
-                                <input
-                                    type="number"
-                                    value={quantity}
-                                    min="1"
-                                    max={stockCount}
-                                    onKeyDown={(e) => { if (['e', 'E', '+', '-', '.', ','].includes(e.key)) e.preventDefault(); }}
-                                    onChange={(e) => setQuantity(Math.max(1, Math.min(stockCount, parseInt(e.target.value, 10) || 1)))}
-                                    style={{ width: "46px", textAlign: "center", border: "none", borderLeft: "1px solid #d9d0c2", borderRight: "1px solid #d9d0c2", fontWeight: "700", color: "#20201f" }}
-                                />
-                                <button
-                                    type="button"
-                                    disabled={quantity >= stockCount}
-                                    onClick={() => setQuantity(Math.min(stockCount, quantity + 1))}
-                                    style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
-                                >
-                                    +
-                                </button>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleAdd}
-                                style={{
-                                    padding: "10px 22px",
-                                    background: "#c77736",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "8px",
-                                    fontWeight: "700",
-                                    cursor: "pointer",
-                                    transition: "background 0.2s"
-                                }}
-                            >
-                                🛒 Thêm vào giỏ hàng
-                            </button>
-                        </div>
-                    ) : null}
+                            </>
+                        ) : null}
+
+                        <button
+                            type="button"
+                            onClick={handleToggleFavorite}
+                            style={{
+                                padding: "10px 18px",
+                                background: isFavorite ? "#fbf0ea" : "#ffffff",
+                                color: isFavorite ? "#b33b32" : "#20201f",
+                                border: isFavorite ? "1px solid #e28a83" : "1px solid #d9d0c2",
+                                borderRadius: "8px",
+                                fontWeight: "700",
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px"
+                            }}
+                            title={isFavorite ? "Bỏ thích" : "Thêm vào yêu thích"}
+                        >
+                            <span>{isFavorite ? "❤️" : "🤍"}</span>
+                            <span>{isFavorite ? "Đã thích" : "Yêu thích"}</span>
+                        </button>
+                    </div>
 
                     {addedNotice ? (
                         <div style={{ color: "#2e7d32", fontWeight: "600", marginBottom: "12px" }}>

@@ -6,6 +6,7 @@ import BookList from './components/BookList'
 import BookDetail from './components/BookDetail'
 import AdminDashboard from './components/AdminDashboard'
 import CartPage from './components/CartPage'
+import WishlistPage from './components/WishlistPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -159,6 +160,13 @@ function App() {
           >
             🛒 Giỏ hàng
           </button>
+          <button 
+            type="button" 
+            className={`nav-btn ${activeTab === 'wishlist' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('wishlist'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+          >
+            ❤️ Yêu thích
+          </button>
           {isAdmin && (
             <button 
               type="button" 
@@ -182,6 +190,11 @@ function App() {
         <AdminDashboard />
       ) : activeTab === 'cart' ? (
         <CartPage onContinueShopping={() => setActiveTab('books')} />
+      ) : activeTab === 'wishlist' ? (
+        <WishlistPage 
+          onContinueShopping={() => setActiveTab('books')} 
+          onSelectBook={(id) => { setSelectedBookId(id); setActiveTab('books'); }}
+        />
       ) : activeTab === 'books' ? (
         selectedBookId && selectedBook ? (
           <BookDetail 

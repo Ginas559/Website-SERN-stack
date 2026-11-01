@@ -241,11 +241,6 @@ function CartPage({
                         Giỏ hàng mua sắm 
                         {items.length > 0 && <span className="cart-items-counter">({items.length} đầu sách)</span>}
                     </h1>
-                    <div className="cart-breadcrumbs">
-                        <span className="crumb-link" onClick={onContinueShopping}>Trang chủ</span>
-                        <span className="crumb-sep">/</span>
-                        <span className="crumb-current">Giỏ hàng</span>
-                    </div>
                 </div>
 
                 {toast && (

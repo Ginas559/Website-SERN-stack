@@ -33,12 +33,7 @@ function BookList({
     return (
         <div className="books-container">
             <div className="books-header">
-                <div>
-                    <h1 className="books-title">Không Gian Sách Trực Tuyến</h1>
-                    <div style={{ color: "#b9b0a7", fontSize: "0.95rem", marginTop: "4px" }}>
-                        Khám phá kho tàng tri thức với hàng ngàn đầu sách chọn lọc
-                    </div>
-                </div>
+                <h1 className="books-title">Cửa Hàng Sách</h1>
                 <div style={{ color: "#e7b26a", fontWeight: "700" }}>
                     Tìm thấy: {total} cuốn sách
                 </div>
