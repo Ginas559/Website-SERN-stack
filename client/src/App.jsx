@@ -5,6 +5,7 @@ import './components/BooksPage.css'
 import BookList from './components/BookList'
 import BookDetail from './components/BookDetail'
 import AdminDashboard from './components/AdminDashboard'
+import CartPage from './components/CartPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -140,6 +141,36 @@ function App() {
     dispatch(setSelectedBook(null))
   }
 
+  async function addToCart(book, quantity) {
+    if (user) {
+      await request('/cart/items', {
+        method: 'POST',
+        body: JSON.stringify({ bookId: book.id, quantity }),
+      })
+      return
+    }
+
+    const current = JSON.parse(localStorage.getItem('guestCart') || '[]')
+    const existingIndex = current.findIndex((item) => (item.bookId || item.id) === book.id)
+    if (existingIndex >= 0) {
+      const existing = current[existingIndex]
+      existing.quantity = Math.min(Number(book.quantity) || existing.quantity, existing.quantity + quantity)
+    } else {
+      current.push({
+        id: book.id,
+        bookId: book.id,
+        title: book.title,
+        author: book.author,
+        price: book.price,
+        discount: book.discount,
+        quantity,
+        stock: Number(book.quantity) || 0,
+        image: book.image,
+      })
+    }
+    localStorage.setItem('guestCart', JSON.stringify(current))
+  }
+
   return (
     <div>
       <header className="app-navbar">
@@ -153,6 +184,13 @@ function App() {
             onClick={() => { setActiveTab('books'); clearSelectedBook() }}
           >
             Cửa hàng sách
+          </button>
+          <button
+            type="button"
+            className={`nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('cart'); clearSelectedBook() }}
+          >
+            Giỏ hàng
           </button>
           {isAdmin && (
             <button
@@ -175,6 +213,8 @@ function App() {
 
       {activeTab === 'admin' && isAdmin ? (
         <AdminDashboard />
+      ) : activeTab === 'cart' ? (
+        <CartPage onContinueShopping={() => setActiveTab('books')} />
       ) : activeTab === 'books' ? (
         selectedBookId ? (
           <BookDetail
@@ -183,6 +223,7 @@ function App() {
             error={bookDetailError || ''}
             onRetry={() => dispatch(fetchBookById(selectedBookId))}
             onBack={clearSelectedBook}
+            onAddToCart={addToCart}
             onSelectBook={(id) => {
               dispatch(setSelectedBook(null))
               setSelectedBookId(id)

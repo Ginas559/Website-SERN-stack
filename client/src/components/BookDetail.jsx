@@ -1,6 +1,10 @@
+import { useState } from "react";
 import BookCard from "./BookCard";
 
-function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook }) {
+function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook, onAddToCart }) {
+    const [quantity, setQuantity] = useState(1);
+    const [addedNotice, setAddedNotice] = useState("");
+
     if (loading) {
         return (
             <div className="books-container">
@@ -48,6 +52,20 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
     const pubDate = book.publication_date
         ? new Date(book.publication_date).toLocaleDateString("vi-VN")
         : null;
+    const stockCount = Number(book.quantity) || 0;
+    const inStock = stockCount > 0;
+
+    async function handleAddToCart() {
+        if (!inStock) return;
+        try {
+            if (onAddToCart) {
+                await onAddToCart(book, quantity);
+            }
+            setAddedNotice(`Đã thêm ${quantity} cuốn vào giỏ hàng.`);
+        } catch (cartError) {
+            setAddedNotice(cartError.message);
+        }
+    }
 
     return (
         <div className="books-container">
@@ -81,6 +99,11 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
 
                 <div>
                     <div className="detail-badge-group">
+                        {inStock ? (
+                            <span className="detail-badge-stock">Còn hàng ({stockCount} cuốn)</span>
+                        ) : (
+                            <span className="detail-badge-out">Tạm hết hàng</span>
+                        )}
                         {Array.isArray(book.categories) ? book.categories.map((c) => (
                             <span key={c.id} className="detail-badge">{c.name}</span>
                         )) : null}
@@ -95,6 +118,26 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                             <span className="detail-old-price">{formatPrice(originalPrice)}</span>
                         ) : null}
                     </div>
+
+                    {inStock ? (
+                        <div className="detail-cart-actions">
+                            <div className="detail-quantity">
+                                <button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>-</button>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    min="1"
+                                    max={stockCount}
+                                    onChange={(event) => setQuantity(Math.max(1, Math.min(stockCount, Number(event.target.value) || 1)))}
+                                />
+                                <button type="button" disabled={quantity >= stockCount} onClick={() => setQuantity((value) => Math.min(stockCount, value + 1))}>+</button>
+                            </div>
+                            <button type="button" className="detail-add-cart" onClick={handleAddToCart}>
+                                Thêm vào giỏ hàng
+                            </button>
+                        </div>
+                    ) : null}
+                    {addedNotice ? <div className="detail-cart-notice">{addedNotice}</div> : null}
 
                     {pubDate ? (
                         <div className="detail-publication-date">
