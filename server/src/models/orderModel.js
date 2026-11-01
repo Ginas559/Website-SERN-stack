@@ -138,11 +138,129 @@ async function updateStatus(id, nextStatus, expectedCurrentStatus = null, transa
     return updated;
 }
 
+async function findAllForAdmin({
+    page = 1,
+    limit = 10,
+    search = null,
+    status = null,
+    paymentMethod = null,
+    fromDate = null,
+    toDate = null,
+    sortBy = "createdAt",
+    sortOrder = "DESC"
+} = {}) {
+    const pool = await connectDB();
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
+    const offset = (safePage - 1) * safeLimit;
+
+    const conditions = [];
+    const countReq = pool.request();
+    const listReq = pool.request();
+
+    if (search && typeof search === "string" && search.trim() !== "") {
+        const cleanSearch = `%${search.trim()}%`;
+        conditions.push(`(
+            o.id LIKE @search 
+            OR u.full_name LIKE @search 
+            OR u.email LIKE @search 
+            OR u.phone_number LIKE @search 
+            OR o.ghn_code LIKE @search 
+            OR o.ghn_info LIKE @search
+        )`);
+        countReq.input("search", sql.NVarChar(255), cleanSearch);
+        listReq.input("search", sql.NVarChar(255), cleanSearch);
+    }
+
+    if (status !== null && status !== undefined && status !== "") {
+        conditions.push("o.status = @status");
+        countReq.input("status", sql.Int, Number(status));
+        listReq.input("status", sql.Int, Number(status));
+    }
+
+    if (paymentMethod && typeof paymentMethod === "string" && paymentMethod.trim() !== "") {
+        conditions.push("o.payment_method = @paymentMethod");
+        countReq.input("paymentMethod", sql.VarChar(50), paymentMethod.trim().toUpperCase());
+        listReq.input("paymentMethod", sql.VarChar(50), paymentMethod.trim().toUpperCase());
+    }
+
+    if (fromDate) {
+        conditions.push("o.createdAt >= @fromDate");
+        countReq.input("fromDate", sql.DateTime, new Date(fromDate));
+        listReq.input("fromDate", sql.DateTime, new Date(fromDate));
+    }
+
+    if (toDate) {
+        conditions.push("o.createdAt <= @toDate");
+        countReq.input("toDate", sql.DateTime, new Date(toDate));
+        listReq.input("toDate", sql.DateTime, new Date(toDate));
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const allowedSortFields = {
+        createdAt: "o.createdAt",
+        total: "o.total",
+        total_quantity: "o.total_quantity",
+        status: "o.status"
+    };
+    const orderCol = allowedSortFields[sortBy] || "o.createdAt";
+    const dir = String(sortOrder).toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+    const countQuery = `
+        SELECT COUNT(*) AS total 
+        FROM dbo.orders o
+        LEFT JOIN dbo.Users u ON o.user_id = u.id
+        ${whereClause}
+    `;
+    const countResult = await countReq.query(countQuery);
+    const total = countResult.recordset[0].total;
+
+    listReq.input("offset", sql.Int, offset);
+    listReq.input("limit", sql.Int, safeLimit);
+
+    const listQuery = `
+        SELECT 
+            o.id,
+            o.user_id,
+            o.total,
+            o.total_quantity,
+            o.status,
+            o.pay_url,
+            o.discount,
+            o.payment_method,
+            o.ghn_info,
+            o.ghn_response,
+            o.ghn_code,
+            o.ghn_fee,
+            o.createdAt,
+            o.updatedAt,
+            u.full_name AS customer_name,
+            u.email AS customer_email,
+            u.phone_number AS customer_phone
+        FROM dbo.orders o
+        LEFT JOIN dbo.Users u ON o.user_id = u.id
+        ${whereClause}
+        ORDER BY ${orderCol} ${dir}
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `;
+    const listResult = await listReq.query(listQuery);
+
+    return {
+        orders: listResult.recordset,
+        total,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(total / safeLimit)
+    };
+}
+
 module.exports = {
     create,
     createWithItems,
     findById,
     findByUserId,
+    findAllForAdmin,
     updateStatus,
     handleOrderWriteError
 };

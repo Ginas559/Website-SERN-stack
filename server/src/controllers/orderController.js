@@ -35,11 +35,24 @@ async function cancelOrder(req, res, next) {
 async function updateStatus(req, res, next) {
     try {
         const result = await orderService.updateOrderStatus(req.params.id, req.body.status, {
-            currentStatus: req.body.currentStatus
+            currentStatus: req.body.currentStatus,
+            note: req.body.note
         });
         return res.status(200).json({
             status: "success",
             message: "Cập nhật trạng thái đơn hàng thành công.",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function getAllOrdersForAdmin(req, res, next) {
+    try {
+        const result = await orderService.getAllOrdersForAdmin(req.query);
+        return res.status(200).json({
+            status: "success",
             data: result
         });
     } catch (error) {
@@ -80,6 +93,7 @@ module.exports = {
     cancelOrder,
     updateStatus,
     getUserOrders,
-    getOrderDetails
+    getOrderDetails,
+    getAllOrdersForAdmin
 };
 
