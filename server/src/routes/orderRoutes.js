@@ -6,6 +6,9 @@ const { protect, restrictTo } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+router.get("/vnpay/return", controller.handleVNPayReturn);
+router.get("/vnpay/ipn", controller.handleVNPayIPN);
+
 router.use(protect);
 
 router.get(
@@ -158,6 +161,23 @@ router.post(
     ],
     validate,
     controller.reorder
+);
+
+router.post(
+    "/:id/payment-url",
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail(),
+        body("returnUrl")
+            .optional()
+            .isURL({ require_tld: false })
+            .withMessage("returnUrl không hợp lệ.")
+            .bail()
+    ],
+    validate,
+    controller.createPaymentUrl
 );
 
 router.patch(

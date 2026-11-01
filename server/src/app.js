@@ -28,6 +28,7 @@ app.use("/api/admin/orders", (req, res, next) => {
 app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/payment", orderRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);
 module.exports = app;

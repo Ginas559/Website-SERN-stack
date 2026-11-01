@@ -102,6 +102,49 @@ async function reorder(req, res, next) {
     }
 }
 
+async function createPaymentUrl(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const isAdmin = Boolean(req.user.isAdmin);
+        const ipAddr = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1";
+        const result = await orderService.createPaymentUrlForOrder(req.params.id, userId, {
+            ipAddr,
+            returnUrl: req.body.returnUrl,
+            isAdmin
+        });
+        return res.status(200).json({
+            status: "success",
+            message: "Tạo URL thanh toán VNPAY thành công.",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function handleVNPayReturn(req, res, next) {
+    try {
+        const result = await orderService.processPaymentReturn(req.query);
+        const statusCode = result.isSuccess ? 200 : 400;
+        return res.status(statusCode).json({
+            status: result.isSuccess ? "success" : "fail",
+            message: result.message,
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function handleVNPayIPN(req, res, next) {
+    try {
+        const result = await orderService.processPaymentIPN(req.query);
+        return res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     createOrder,
     cancelOrder,
@@ -109,6 +152,9 @@ module.exports = {
     getUserOrders,
     getOrderDetails,
     getAllOrdersForAdmin,
-    reorder
+    reorder,
+    createPaymentUrl,
+    handleVNPayReturn,
+    handleVNPayIPN
 };
 
