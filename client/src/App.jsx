@@ -9,6 +9,7 @@ import CartPage from './components/CartPage'
 import WishlistPage from './components/WishlistPage'
 import CheckoutPage from './components/CheckoutPage'
 import PaymentResult from './components/PaymentResult'
+import OrderHistoryPage from './components/OrderHistoryPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
@@ -210,6 +211,15 @@ function App() {
           >
             ❤️ Yêu thích {wishlistBadgeCount > 0 ? `(${wishlistBadgeCount})` : ''}
           </button>
+          {user && (
+            <button 
+              type="button" 
+              className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('orders'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+            >
+              📦 Đơn mua
+            </button>
+          )}
           {isAdmin && (
             <button 
               type="button" 
@@ -268,6 +278,11 @@ function App() {
               return
             }
           }}
+        />
+      ) : activeTab === 'orders' ? (
+        <OrderHistoryPage 
+          onContinueShopping={() => setActiveTab('books')}
+          onGoToCart={() => setActiveTab('cart')}
         />
       ) : activeTab === 'cart' ? (
         <CartPage 
