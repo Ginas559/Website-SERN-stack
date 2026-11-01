@@ -1,4 +1,5 @@
 const { sql, connectDB } = require("../config/connectDB");
+const AppError = require("../utils/AppError");
 
 const categoryColumns = "id, name, description, image, createdAt, updatedAt, isDelete";
 const insertedCategoryColumns = "INSERTED.id, INSERTED.name, INSERTED.description, INSERTED.image, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete";
@@ -33,16 +34,12 @@ async function findByName(name, { includeDeleted = false } = {}) {
 async function create({ name, description = null, image = null }) {
     const trimmedName = typeof name === "string" ? name.trim() : "";
     if (!trimmedName) {
-        const error = new Error("Tên thể loại không được để trống.");
-        error.statusCode = 400;
-        throw error;
+        throw new AppError("Tên thể loại không được để trống.", 400);
     }
 
     const existingCategory = await findByName(trimmedName, { includeDeleted: false });
     if (existingCategory) {
-        const error = new Error("Tên thể loại đã tồn tại.");
-        error.statusCode = 400;
-        throw error;
+        throw new AppError("Tên thể loại đã tồn tại.", 409);
     }
 
     const pool = await connectDB();
@@ -65,9 +62,7 @@ async function update(id, fields = {}) {
     if (fields.name !== undefined) {
         const trimmedName = typeof fields.name === "string" ? fields.name.trim() : "";
         if (!trimmedName) {
-            const error = new Error("Tên thể loại không được để trống.");
-            error.statusCode = 400;
-            throw error;
+            throw new AppError("Tên thể loại không được để trống.", 400);
         }
 
         const duplicateCheck = await pool.request()
@@ -76,9 +71,7 @@ async function update(id, fields = {}) {
             .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
 
         if (duplicateCheck.recordset[0]) {
-            const error = new Error("Tên thể loại đã tồn tại.");
-            error.statusCode = 400;
-            throw error;
+            throw new AppError("Tên thể loại đã tồn tại.", 409);
         }
         fields.name = trimmedName;
     }
@@ -122,7 +115,7 @@ async function softDelete(id) {
         .query(`UPDATE dbo.categories 
                 SET isDelete = 1, updatedAt = GETDATE() 
                 OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 
@@ -142,9 +135,7 @@ async function restore(id) {
         .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
 
     if (duplicateCheck.recordset[0]) {
-        const error = new Error("Tên thể loại đã tồn tại.");
-        error.statusCode = 400;
-        throw error;
+        throw new AppError("Tên thể loại đã tồn tại.", 409);
     }
 
     const result = await pool.request()
@@ -152,7 +143,7 @@ async function restore(id) {
         .query(`UPDATE dbo.categories 
                 SET isDelete = 0, updatedAt = GETDATE() 
                 OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 1`);
     return result.recordset[0] || null;
 }
 
