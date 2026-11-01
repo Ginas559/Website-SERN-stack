@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap');
 
 .page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 8vw; align-items: center; max-width: 1120px; margin: auto; padding: 48px; }
 .intro { color: #f3eadb; }
 .eyebrow { letter-spacing: .18em; font-size: .72rem; font-weight: 700; color: #e7b26a; }
 h1 { font-size: clamp(3rem, 6vw, 5.8rem); line-height: .95; margin: 24px 0; }
-h1 em { color: #e7b26a; font-family: 'Playfair Display', serif; font-weight: 600; }
+h1 em { color: #e7b26a; font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; }
 .intro p { max-width: 390px; color: #b9b0a7; line-height: 1.7; }
 .card { background: #fffaf1; color: #20201f; border-radius: 24px; padding: 40px; box-shadow: 0 24px 60px #0004; }
 .auth-card { max-width: 400px; width: calc(100% - 80px); }
