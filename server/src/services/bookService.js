@@ -190,7 +190,7 @@ async function getBookById(id) {
 async function getClientBooks(options = {}) {
     const page = Math.max(1, parseInt(options.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
-    return await bookModel.findAll({
+    return await bookModel.findAllClient({
         ...options,
         page,
         limit,
@@ -203,7 +203,7 @@ async function getClientBookDetail(id, relatedLimit = 4) {
     if (!bookId || !Number.isInteger(bookId) || bookId <= 0) {
         throw new AppError("ID sách không hợp lệ.", 400);
     }
-    const book = await bookModel.findById(bookId);
+    const book = await bookModel.findByIdClient(bookId);
     if (!book || book.isDelete) {
         throw new AppError("Không tìm thấy ấn phẩm sách yêu cầu.", 404);
     }
