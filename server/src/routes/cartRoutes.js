@@ -8,6 +8,8 @@ const router = express.Router();
 
 router.use(protect);
 
+router.get("/", controller.getCart);
+
 router.post(
     "/items",
     [
@@ -40,5 +42,19 @@ router.put(
     validate,
     controller.updateItem
 );
+
+router.delete(
+    "/items/:bookId",
+    [
+        param("bookId")
+            .isInt({ min: 1 })
+            .withMessage("ID sách không hợp lệ.")
+            .bail(),
+    ],
+    validate,
+    controller.removeItem
+);
+
+router.delete("/", controller.clearCart);
 
 module.exports = router;

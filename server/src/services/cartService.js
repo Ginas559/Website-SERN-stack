@@ -28,7 +28,7 @@ function calculateUnitPrice(price, discount = 0) {
 }
 
 function handleCartWriteError(error) {
-    if (error && (error.number === 2601 || error.number === 2627)) {
+    if (error && (error.number === 2601 || error.number === 2627 || error.number === 1205)) {
         throw new AppError("Trạng thái giỏ hàng đã thay đổi, vui lòng thử lại.", 409, error);
     }
     throw error;
@@ -153,9 +153,42 @@ async function updateItemQuantity(userId, bookId, quantity) {
     return await getCart(userId);
 }
 
+async function removeItem(userId, bookId) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+    const validBookId = validateBookId(bookId);
+
+    const cart = await cartModel.getOrCreateCart(userId);
+    const existing = await cartModel.findDetail(cart.id, validBookId);
+    if (!existing) {
+        throw new AppError("Sách không có trong giỏ hàng.", 404);
+    }
+
+    try {
+        await cartModel.removeItemAndSync(cart.id, validBookId);
+    } catch (error) {
+        handleCartWriteError(error);
+    }
+
+    return await getCart(userId);
+}
+
+async function clearCart(userId) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+
+    const cart = await cartModel.getOrCreateCart(userId);
+    try {
+        await cartModel.clearCartAndSync(cart.id);
+    } catch (error) {
+        handleCartWriteError(error);
+    }
+
+    return await getCart(userId);
+}
+
 module.exports = {
     getCart,
     addItem,
     updateItemQuantity,
+    removeItem,
+    clearCart,
 };
-
