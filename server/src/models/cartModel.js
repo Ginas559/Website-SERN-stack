@@ -49,7 +49,7 @@ async function getCartDetails(cartId) {
                     b.quantity AS stock_quantity,
                     b.isDelete AS book_is_deleted
                 FROM dbo.cart_details cd
-                INNER JOIN dbo.books b ON cd.book_id = b.id
+                LEFT JOIN dbo.books b ON cd.book_id = b.id
                 WHERE cd.cart_id = @cart_id
                 ORDER BY cd.createdAt DESC`);
     return result.recordset;

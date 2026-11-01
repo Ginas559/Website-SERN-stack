@@ -25,10 +25,28 @@ async function clearCart(req, res) {
     res.json(cart);
 }
 
+async function getSummary(req, res) {
+    const summary = await cartService.calculateCartSummary(req.user.id);
+    res.json(summary);
+}
+
+async function validateCart(req, res) {
+    const result = await cartService.validateCart(req.user.id);
+    res.json(result);
+}
+
+async function syncCart(req, res) {
+    const result = await cartService.syncCart(req.user.id);
+    res.json(result);
+}
+
 module.exports = {
     getCart,
     addItem,
     updateItem,
     removeItem,
     clearCart,
+    getSummary,
+    validateCart,
+    syncCart,
 };
