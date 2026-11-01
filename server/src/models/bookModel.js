@@ -1,6 +1,7 @@
 const { sql, connectDB } = require("../config/connectDB");
 
 const bookColumns = "id, title, author, price, description, image, publication_date, createdAt, updatedAt, isDelete, quantity, discount, purchase_price";
+const publicBookColumns = "id, title, author, price, description, image, publication_date, discount";
 const insertedBookColumns = "INSERTED.id, INSERTED.title, INSERTED.author, INSERTED.price, INSERTED.description, INSERTED.image, INSERTED.publication_date, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.quantity, INSERTED.discount, INSERTED.purchase_price";
 
 async function syncBookCategories(transaction, bookId, categoryIds) {
@@ -99,12 +100,12 @@ async function create({
     }
 }
 
-async function findById(id, { includeDeleted = false } = {}) {
+async function findByIdWithColumns(id, columns, { includeDeleted = false } = {}) {
     const pool = await connectDB();
     const condition = includeDeleted ? "WHERE id = @id" : "WHERE id = @id AND isDelete = 0";
     const result = await pool.request()
         .input("id", sql.Int, id)
-        .query(`SELECT TOP 1 ${bookColumns} FROM dbo.books ${condition}`);
+        .query(`SELECT TOP 1 ${columns} FROM dbo.books ${condition}`);
 
     const book = result.recordset[0];
     if (!book) return null;
@@ -119,7 +120,15 @@ async function findById(id, { includeDeleted = false } = {}) {
     return book;
 }
 
-async function findAll({
+async function findById(id, options = {}) {
+    return await findByIdWithColumns(id, bookColumns, options);
+}
+
+async function findByIdClient(id) {
+    return await findByIdWithColumns(id, publicBookColumns);
+}
+
+async function findAllWithColumns(columns, {
     page = 1,
     limit = 10,
     search = "",
@@ -175,7 +184,7 @@ async function findAll({
     request.input("offset", sql.Int, offset);
     request.input("limit", sql.Int, sanitizedLimit);
 
-    const dataQuery = `SELECT ${bookColumns.split(", ").map((col) => `b.${col}`).join(", ")} 
+    const dataQuery = `SELECT ${columns.split(", ").map((col) => `b.${col}`).join(", ")}
                        FROM dbo.books b 
                        ${whereClause} 
                        ORDER BY ${orderBy} 
@@ -191,6 +200,14 @@ async function findAll({
         limit: sanitizedLimit,
         totalPages: Math.ceil(total / sanitizedLimit) || 1,
     };
+}
+
+async function findAll(options = {}) {
+    return await findAllWithColumns(bookColumns, options);
+}
+
+async function findAllClient(options = {}) {
+    return await findAllWithColumns(publicBookColumns, options);
 }
 
 async function update(id, fields = {}, categoryIds = null) {
@@ -338,12 +355,43 @@ async function setCategories(bookId, categoryIds = []) {
     }
 }
 
+async function findRelatedBooks(bookId, categoryIds = [], limit = 4) {
+    if (!Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+    const validIds = categoryIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (validIds.length === 0) return [];
+
+    const safeLimit = Number.isInteger(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 20) : 4;
+    const pool = await connectDB();
+    const request = pool.request();
+    request.input("bookId", sql.Int, Number(bookId));
+    request.input("limit", sql.Int, safeLimit);
+
+    const cols = publicBookColumns.split(", ").map((col) => `b.${col}`).join(", ");
+    const query = `SELECT TOP (@limit) ${cols} 
+                   FROM dbo.books b 
+                   WHERE b.id != @bookId 
+                     AND b.isDelete = 0 
+                     AND b.id IN (
+                         SELECT bc.book_id 
+                         FROM dbo.book_categories bc 
+                         INNER JOIN dbo.categories c ON bc.category_id = c.id 
+                         WHERE bc.category_id IN (${validIds.join(",")}) 
+                           AND c.isDelete = 0
+                     ) 
+                   ORDER BY b.id DESC`;
+    const result = await request.query(query);
+    return result.recordset;
+}
+
 module.exports = {
     create,
     findById,
+    findByIdClient,
     findAll,
+    findAllClient,
     update,
     softDelete,
     restore,
     setCategories,
+    findRelatedBooks,
 };
