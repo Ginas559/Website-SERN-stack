@@ -594,6 +594,23 @@
     background-color: #d69f54;
 }
 
+.checkout-modal-btn-secondary {
+    flex: 1;
+    background-color: transparent;
+    color: #e7b26a;
+    border: 1px solid #e7b26a;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkout-modal-btn-secondary:hover {
+    background-color: rgba(231, 178, 106, 0.1);
+}
+
 @keyframes scaleIn {
     from {
         opacity: 0;
