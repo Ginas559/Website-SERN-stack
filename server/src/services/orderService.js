@@ -1,8 +1,10 @@
+const { v4: uuidv4 } = require("uuid");
 const { sql, connectDB } = require("../config/connectDB");
 const orderModel = require("../models/orderModel");
 const orderItemModel = require("../models/orderItemModel");
 const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
+const paymentService = require("./paymentService");
 const AppError = require("../utils/AppError");
 
 function calculateItemPrice(price, discount = 0) {
@@ -141,17 +143,28 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         couponCode: orderPayload.couponCode ? String(orderPayload.couponCode).trim().toUpperCase() : null
     };
 
+    const orderId = uuidv4();
+    let payUrl = null;
+    if (paymentMethod === "VNPAY") {
+        payUrl = paymentService.generatePaymentUrl({ id: orderId, total: finalTotal }, {
+            ipAddr: orderPayload.ipAddr,
+            returnUrl: orderPayload.returnUrl
+        });
+    }
+
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
         const createdOrder = await orderModel.create({
+            id: orderId,
             userId,
             total: finalTotal,
             totalQuantity,
             status: 0,
             paymentMethod,
+            payUrl,
             ghnFee: shippingFee,
             discount: orderPayload.discountId ? Number(orderPayload.discountId) : null,
             ghnInfo
@@ -647,6 +660,11 @@ module.exports = {
     getOrderDetails,
     getAllOrdersForAdmin,
     reorder,
+    createPaymentUrlForOrder: paymentService.createPaymentUrlForOrder,
+    processPaymentReturn: paymentService.processPaymentReturn,
+    processPaymentIPN: paymentService.processPaymentIPN,
+    generatePaymentUrl: paymentService.generatePaymentUrl,
+    verifyPaymentSignature: paymentService.verifyPaymentSignature,
     calculateItemPrice,
     calculateShippingFee,
     calculateDiscountValue,

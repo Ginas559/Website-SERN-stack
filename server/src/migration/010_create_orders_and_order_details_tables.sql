@@ -8,7 +8,7 @@ BEGIN
         updatedAt DATETIME NOT NULL CONSTRAINT DF_orders_updatedAt DEFAULT (GETDATE()),
         user_id CHAR(36) NULL,
         status INT NOT NULL CONSTRAINT DF_orders_status DEFAULT (0),
-        pay_url VARCHAR(255) NULL,
+        pay_url VARCHAR(1000) NULL,
         discount INT NULL,
         payment_method VARCHAR(50) NOT NULL CONSTRAINT DF_orders_payment_method DEFAULT ('COD'),
         ghn_info NVARCHAR(MAX) NULL,

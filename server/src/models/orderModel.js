@@ -29,7 +29,7 @@ async function create(orderData, transaction = null) {
             .input("total", sql.Int, Math.max(0, Number(orderData.total) || 0))
             .input("total_quantity", sql.Int, Math.max(0, Number(orderData.totalQuantity || orderData.total_quantity) || 0))
             .input("status", sql.Int, Number.isInteger(orderData.status) ? orderData.status : 0)
-            .input("pay_url", sql.VarChar(255), orderData.payUrl || orderData.pay_url || null)
+            .input("pay_url", sql.VarChar(1000), orderData.payUrl || orderData.pay_url || null)
             .input("discount", sql.Int, orderData.discount !== undefined && orderData.discount !== null ? Number(orderData.discount) : null)
             .input("payment_method", sql.VarChar(50), orderData.paymentMethod || orderData.payment_method || "COD")
             .input("ghn_info", sql.NVarChar(sql.MAX), typeof orderData.ghnInfo === "object" ? JSON.stringify(orderData.ghnInfo) : (orderData.ghnInfo || null))
@@ -136,6 +136,69 @@ async function updateStatus(id, nextStatus, expectedCurrentStatus = null, transa
         throw new AppError("Trạng thái đơn hàng đã thay đổi hoặc không tìm thấy đơn hàng, vui lòng thử lại.", 409);
     }
     return updated;
+}
+
+async function updatePaymentUrl(id, payUrl, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const result = await new sql.Request(executor)
+        .input("id", sql.Char(36), id)
+        .input("pay_url", sql.VarChar(1000), payUrl)
+        .query(`UPDATE dbo.orders SET pay_url = @pay_url, updatedAt = GETDATE()
+                OUTPUT ${insertedOrderColumns} WHERE id = @id`);
+    const updated = result.recordset[0];
+    if (!updated) {
+        throw new AppError("Không tìm thấy đơn hàng để cập nhật URL thanh toán.", 404);
+    }
+    return updated;
+}
+
+async function updatePaymentSuccess(id, { ghnResponse = null, ghnInfo = null } = {}, transaction = null) {
+    const current = await findById(id, { includeItems: false });
+    if (!current) {
+        throw new AppError("Không tìm thấy đơn hàng để cập nhật thanh toán.", 404);
+    }
+    if (Number(current.status) === 1) {
+        return current;
+    }
+    if (Number(current.status) !== 0) {
+        throw new AppError("Đơn hàng không ở trạng thái chờ thanh toán.", 409);
+    }
+
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor)
+        .input("id", sql.Char(36), id)
+        .input("ghn_response", sql.NVarChar(sql.MAX), typeof ghnResponse === "object" ? JSON.stringify(ghnResponse) : ghnResponse)
+        .input("ghn_info", sql.NVarChar(sql.MAX), typeof ghnInfo === "object" ? JSON.stringify(ghnInfo) : ghnInfo);
+
+    const result = await req.query(`UPDATE dbo.orders 
+                                    SET status = 1,
+                                        ghn_response = ISNULL(@ghn_response, ghn_response),
+                                        ghn_info = ISNULL(@ghn_info, ghn_info),
+                                        updatedAt = GETDATE()
+                                    OUTPUT ${insertedOrderColumns} 
+                                    WHERE id = @id AND status = 0`);
+    const updated = result.recordset[0];
+    if (!updated) {
+        throw new AppError("Trạng thái đơn hàng đã thay đổi hoặc không tìm thấy đơn hàng, vui lòng thử lại.", 409);
+    }
+    return updated;
+}
+
+async function recordPaymentFailure(id, { ghnResponse = null } = {}, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor)
+        .input("id", sql.Char(36), id)
+        .input("ghn_response", sql.NVarChar(sql.MAX), typeof ghnResponse === "object" ? JSON.stringify(ghnResponse) : ghnResponse);
+
+    const result = await req.query(`UPDATE dbo.orders 
+                                    SET ghn_response = ISNULL(@ghn_response, ghn_response),
+                                        updatedAt = GETDATE()
+                                    OUTPUT ${insertedOrderColumns} 
+                                    WHERE id = @id`);
+    return result.recordset[0] || null;
 }
 
 async function findAllForAdmin({
@@ -262,5 +325,8 @@ module.exports = {
     findByUserId,
     findAllForAdmin,
     updateStatus,
+    updatePaymentUrl,
+    updatePaymentSuccess,
+    recordPaymentFailure,
     handleOrderWriteError
 };
