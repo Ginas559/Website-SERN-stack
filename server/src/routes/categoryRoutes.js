@@ -22,9 +22,29 @@ router.get(
 router.post(
     "/",
     [
-        body("name").trim().notEmpty().withMessage("Tên thể loại không được để trống."),
-        body("description").optional().trim(),
-        body("image").optional().trim(),
+        body("name")
+            .isString()
+            .withMessage("Tên thể loại phải là chuỗi.")
+            .bail()
+            .trim()
+            .notEmpty()
+            .withMessage("Tên thể loại không được để trống.")
+            .isLength({ max: 255 })
+            .withMessage("Tên thể loại không được vượt quá 255 ký tự."),
+        body("description")
+            .optional({ values: "null" })
+            .isString()
+            .withMessage("Mô tả thể loại phải là chuỗi.")
+            .bail()
+            .trim(),
+        body("image")
+            .optional({ values: "null" })
+            .isString()
+            .withMessage("Ảnh thể loại phải là chuỗi.")
+            .bail()
+            .trim()
+            .isLength({ max: 255 })
+            .withMessage("Ảnh thể loại không được vượt quá 255 ký tự."),
     ],
     validate,
     controller.create
@@ -34,9 +54,30 @@ router.put(
     "/:id",
     [
         param("id").isInt({ min: 1 }).withMessage("ID thể loại không hợp lệ."),
-        body("name").optional().trim().notEmpty().withMessage("Tên thể loại không được để trống."),
-        body("description").optional().trim(),
-        body("image").optional().trim(),
+        body("name")
+            .optional()
+            .isString()
+            .withMessage("Tên thể loại phải là chuỗi.")
+            .bail()
+            .trim()
+            .notEmpty()
+            .withMessage("Tên thể loại không được để trống.")
+            .isLength({ max: 255 })
+            .withMessage("Tên thể loại không được vượt quá 255 ký tự."),
+        body("description")
+            .optional({ values: "null" })
+            .isString()
+            .withMessage("Mô tả thể loại phải là chuỗi.")
+            .bail()
+            .trim(),
+        body("image")
+            .optional({ values: "null" })
+            .isString()
+            .withMessage("Ảnh thể loại phải là chuỗi.")
+            .bail()
+            .trim()
+            .isLength({ max: 255 })
+            .withMessage("Ảnh thể loại không được vượt quá 255 ký tự."),
     ],
     validate,
     controller.update
