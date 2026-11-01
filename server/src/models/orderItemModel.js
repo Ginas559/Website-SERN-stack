@@ -105,10 +105,39 @@ async function deleteByOrderId(orderId, transaction = null) {
     return result.rowsAffected[0];
 }
 
+async function findByOrderIds(orderIds = []) {
+    if (!Array.isArray(orderIds) || orderIds.length === 0) return [];
+    const pool = await connectDB();
+    const req = pool.request();
+    const paramNames = orderIds.map((id, index) => {
+        const pName = `orderId_${index}`;
+        req.input(pName, sql.Char(36), id);
+        return `@${pName}`;
+    });
+    const result = await req.query(`SELECT 
+                                        od.order_id,
+                                        od.book_id,
+                                        od.quantity,
+                                        od.total,
+                                        od.createdAt,
+                                        od.updatedAt,
+                                        b.title,
+                                        b.author,
+                                        b.price,
+                                        b.image,
+                                        b.discount AS book_discount
+                                    FROM dbo.order_details od
+                                    LEFT JOIN dbo.books b ON od.book_id = b.id
+                                    WHERE od.order_id IN (${paramNames.join(",")})
+                                    ORDER BY od.createdAt ASC`);
+    return result.recordset;
+}
+
 module.exports = {
     create,
     createMany,
     findByOrderId,
+    findByOrderIds,
     findByOrderIdAndBookId,
     deleteByOrderId,
     handleOrderItemWriteError

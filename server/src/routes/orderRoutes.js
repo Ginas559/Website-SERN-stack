@@ -1,5 +1,5 @@
 const express = require("express");
-const { body, param } = require("express-validator");
+const { body, param, query } = require("express-validator");
 const controller = require("../controllers/orderController");
 const validate = require("../middleware/validateMiddleware");
 const { protect, restrictTo } = require("../middleware/authMiddleware");
@@ -7,6 +7,29 @@ const { protect, restrictTo } = require("../middleware/authMiddleware");
 const router = express.Router();
 
 router.use(protect);
+
+router.get(
+    "/",
+    [
+        query("page")
+            .optional()
+            .isInt({ min: 1 })
+            .withMessage("Số trang phải là số nguyên lớn hơn hoặc bằng 1.")
+            .bail(),
+        query("limit")
+            .optional()
+            .isInt({ min: 1, max: 100 })
+            .withMessage("Số bản ghi mỗi trang phải từ 1 đến 100.")
+            .bail(),
+        query("status")
+            .optional()
+            .isInt({ min: 0, max: 4 })
+            .withMessage("Trạng thái đơn hàng không hợp lệ.")
+            .bail()
+    ],
+    validate,
+    controller.getUserOrders
+);
 
 router.post(
     "/",
@@ -56,6 +79,18 @@ router.post(
     ],
     validate,
     controller.createOrder
+);
+
+router.get(
+    "/:id",
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail()
+    ],
+    validate,
+    controller.getOrderDetails
 );
 
 router.patch(

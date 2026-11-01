@@ -47,9 +47,39 @@ async function updateStatus(req, res, next) {
     }
 }
 
+async function getUserOrders(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const { page, limit, status } = req.query;
+        const result = await orderService.getUserOrders(userId, { page, limit, status });
+        return res.status(200).json({
+            status: "success",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+async function getOrderDetails(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const isAdmin = Boolean(req.user.isAdmin);
+        const result = await orderService.getOrderDetails(req.params.id, userId, { isAdmin });
+        return res.status(200).json({
+            status: "success",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     createOrder,
     cancelOrder,
-    updateStatus
+    updateStatus,
+    getUserOrders,
+    getOrderDetails
 };
 
