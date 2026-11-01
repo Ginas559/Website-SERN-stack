@@ -88,12 +88,27 @@ async function getOrderDetails(req, res, next) {
     }
 }
 
+async function reorder(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const result = await orderService.reorder(req.params.id, userId);
+        return res.status(200).json({
+            status: "success",
+            message: "Đã thêm các sản phẩm từ đơn hàng cũ vào giỏ hàng.",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     createOrder,
     cancelOrder,
     updateStatus,
     getUserOrders,
     getOrderDetails,
-    getAllOrdersForAdmin
+    getAllOrdersForAdmin,
+    reorder
 };
 

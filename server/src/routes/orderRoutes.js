@@ -148,6 +148,18 @@ router.get(
     controller.getOrderDetails
 );
 
+router.post(
+    "/:id/reorder",
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail()
+    ],
+    validate,
+    controller.reorder
+);
+
 router.patch(
     "/:id/cancel",
     [
