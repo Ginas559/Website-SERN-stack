@@ -110,17 +110,18 @@ async function findByUserId(userId, { page = 1, limit = 10, status = null } = {}
     return { orders: listRes.recordset, total, page: safePage, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) };
 }
 
-async function updateStatus(id, nextStatus, expectedCurrentStatus = null) {
+async function updateStatus(id, nextStatus, expectedCurrentStatus = null, transaction = null) {
     const safeNext = Number(nextStatus);
     if (expectedCurrentStatus !== null && expectedCurrentStatus !== undefined && Number(expectedCurrentStatus) === safeNext) {
         return await findById(id, { includeItems: false });
     }
 
     const pool = await connectDB();
+    const executor = transaction || pool;
     let query = `UPDATE dbo.orders SET status = @nextStatus, updatedAt = GETDATE()
                  OUTPUT ${insertedOrderColumns} WHERE id = @id`;
 
-    const req = pool.request()
+    const req = new sql.Request(executor)
         .input("id", sql.Char(36), id)
         .input("nextStatus", sql.Int, Number(nextStatus));
 

@@ -2,6 +2,7 @@ const { sql, connectDB } = require("../config/connectDB");
 const orderModel = require("../models/orderModel");
 const orderItemModel = require("../models/orderItemModel");
 const cartModel = require("../models/cartModel");
+const bookModel = require("../models/bookModel");
 const AppError = require("../utils/AppError");
 
 function calculateItemPrice(price, discount = 0) {
@@ -158,6 +159,10 @@ async function createOrderFromCart(userId, orderPayload = {}) {
 
         const createdDetails = await orderItemModel.createMany(createdOrder.id, orderItems, transaction);
 
+        for (const item of orderItems) {
+            await bookModel.deductStock(item.bookId, item.quantity, transaction);
+        }
+
         for (const item of targetItems) {
             const delReq = new sql.Request(transaction);
             await delReq
@@ -192,8 +197,138 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     }
 }
 
+async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } = {}) {
+    if (!orderId) {
+        throw new AppError("Mã đơn hàng không hợp lệ.", 400);
+    }
+
+    const order = await orderModel.findById(orderId, { includeItems: true });
+    if (!order) {
+        throw new AppError("Không tìm thấy đơn hàng.", 404);
+    }
+
+    if (!isAdmin && order.user_id !== userId) {
+        throw new AppError("Bạn không có quyền hủy đơn hàng này.", 403);
+    }
+
+    if (order.status === 4) {
+        return order;
+    }
+
+    if (order.status === 3) {
+        throw new AppError("Đơn hàng đã được giao thành công, không thể hủy.", 400);
+    }
+
+    if (order.status === 2 && !isAdmin) {
+        throw new AppError("Đơn hàng đang trên đường giao, khách hàng không thể tự hủy.", 400);
+    }
+
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+        const updatedOrder = await orderModel.updateStatus(orderId, 4, order.status, transaction);
+
+        let ghnInfoObj = {};
+        try {
+            ghnInfoObj = typeof updatedOrder.ghn_info === "string" ? JSON.parse(updatedOrder.ghn_info) : (updatedOrder.ghn_info || {});
+        } catch {
+            ghnInfoObj = {};
+        }
+
+        ghnInfoObj.cancelReason = reason || (isAdmin ? "Quản trị viên hủy đơn hàng" : "Khách hàng yêu cầu hủy đơn");
+        ghnInfoObj.cancelledAt = new Date().toISOString();
+        ghnInfoObj.cancelledBy = isAdmin ? "ADMIN" : "CUSTOMER";
+
+        const updateInfoReq = new sql.Request(transaction);
+        await updateInfoReq
+            .input("id", sql.Char(36), orderId)
+            .input("ghn_info", sql.NVarChar(sql.MAX), JSON.stringify(ghnInfoObj))
+            .query("UPDATE dbo.orders SET ghn_info = @ghn_info WHERE id = @id");
+
+        const orderItems = order.items && order.items.length > 0
+            ? order.items
+            : await orderItemModel.findByOrderId(orderId);
+
+        for (const item of orderItems) {
+            await bookModel.restoreStock(item.book_id, item.quantity, transaction);
+        }
+
+        await transaction.commit();
+
+        return {
+            ...updatedOrder,
+            status: 4,
+            ghn_info: ghnInfoObj,
+            items: orderItems
+        };
+    } catch (error) {
+        try {
+            await transaction.rollback();
+        } catch {
+            return;
+        }
+        orderModel.handleOrderWriteError(error);
+    }
+}
+
+async function updateOrderStatus(orderId, nextStatus, { currentStatus = null } = {}) {
+    if (!orderId) {
+        throw new AppError("Mã đơn hàng không hợp lệ.", 400);
+    }
+
+    const safeNext = Number(nextStatus);
+    if (![0, 1, 2, 3, 4].includes(safeNext)) {
+        throw new AppError("Mã trạng thái đơn hàng không hợp lệ (0: Chờ xử lý, 1: Đã xác nhận, 2: Đang giao, 3: Đã giao, 4: Đã hủy).", 400);
+    }
+
+    const order = await orderModel.findById(orderId, { includeItems: true });
+    if (!order) {
+        throw new AppError("Không tìm thấy đơn hàng.", 404);
+    }
+
+    if (order.status === safeNext) {
+        return order;
+    }
+
+    if (safeNext === 4) {
+        return await cancelOrder(orderId, null, { isAdmin: true });
+    }
+
+    if (order.status === 4) {
+        throw new AppError("Đơn hàng đã bị hủy, không thể cập nhật trạng thái khác.", 400);
+    }
+
+    if (order.status === 3) {
+        throw new AppError("Đơn hàng đã hoàn thành, không thể thay đổi trạng thái.", 400);
+    }
+
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+        const updated = await orderModel.updateStatus(orderId, safeNext, currentStatus !== null ? Number(currentStatus) : order.status, transaction);
+        await transaction.commit();
+        return {
+            ...updated,
+            items: order.items
+        };
+    } catch (error) {
+        try {
+            await transaction.rollback();
+        } catch {
+            return;
+        }
+        orderModel.handleOrderWriteError(error);
+    }
+}
+
 module.exports = {
     createOrderFromCart,
+    cancelOrder,
+    updateOrderStatus,
     calculateItemPrice,
     calculateShippingFee,
     calculateDiscountValue,

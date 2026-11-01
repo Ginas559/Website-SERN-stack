@@ -1,8 +1,8 @@
 const express = require("express");
-const { body } = require("express-validator");
+const { body, param } = require("express-validator");
 const controller = require("../controllers/orderController");
 const validate = require("../middleware/validateMiddleware");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, restrictTo } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
@@ -56,6 +56,49 @@ router.post(
     ],
     validate,
     controller.createOrder
+);
+
+router.patch(
+    "/:id/cancel",
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail(),
+        body("reason")
+            .optional()
+            .trim()
+            .isLength({ max: 255 })
+            .withMessage("Lý do hủy đơn không được vượt quá 255 ký tự.")
+            .bail()
+    ],
+    validate,
+    controller.cancelOrder
+);
+
+router.patch(
+    "/:id/status",
+    restrictTo("Admin"),
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail(),
+        body("status")
+            .notEmpty()
+            .withMessage("Trạng thái đơn hàng không được để trống.")
+            .bail()
+            .isInt({ min: 0, max: 4 })
+            .withMessage("Trạng thái đơn hàng phải là số nguyên từ 0 đến 4.")
+            .bail(),
+        body("currentStatus")
+            .optional()
+            .isInt({ min: 0, max: 4 })
+            .withMessage("Trạng thái hiện tại phải là số nguyên từ 0 đến 4.")
+            .bail()
+    ],
+    validate,
+    controller.updateStatus
 );
 
 module.exports = router;

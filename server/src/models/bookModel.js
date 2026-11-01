@@ -1,4 +1,5 @@
 const { sql, connectDB } = require("../config/connectDB");
+const AppError = require("../utils/AppError");
 
 const bookColumns = "id, title, author, price, description, image, publication_date, createdAt, updatedAt, isDelete, quantity, discount, purchase_price";
 const insertedBookColumns = "INSERTED.id, INSERTED.title, INSERTED.author, INSERTED.price, INSERTED.description, INSERTED.image, INSERTED.publication_date, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.quantity, INSERTED.discount, INSERTED.purchase_price";
@@ -338,6 +339,46 @@ async function setCategories(bookId, categoryIds = []) {
     }
 }
 
+async function deductStock(bookId, quantity, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor);
+    const result = await req
+        .input("id", sql.Int, Number(bookId))
+        .input("quantity", sql.Int, Number(quantity))
+        .query(`UPDATE dbo.books 
+                SET quantity = quantity - @quantity, updatedAt = GETDATE() 
+                OUTPUT ${insertedBookColumns} 
+                WHERE id = @id AND isDelete = 0 AND quantity >= @quantity`);
+
+    const updated = result.recordset[0];
+    if (!updated) {
+        const checkReq = new sql.Request(executor);
+        checkReq.input("id", sql.Int, Number(bookId));
+        const checkResult = await checkReq.query("SELECT id, title, quantity, isDelete FROM dbo.books WHERE id = @id");
+        const book = checkResult.recordset[0];
+        if (!book || book.isDelete === 1) {
+            throw new AppError("Sách không tồn tại hoặc đã ngừng kinh doanh.", 404);
+        }
+        throw new AppError(`Ấn phẩm "${book.title}" không đủ số lượng tồn kho (chỉ còn ${book.quantity} cuốn).`, 409);
+    }
+    return updated;
+}
+
+async function restoreStock(bookId, quantity, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor);
+    const result = await req
+        .input("id", sql.Int, Number(bookId))
+        .input("quantity", sql.Int, Math.max(0, Number(quantity) || 0))
+        .query(`UPDATE dbo.books 
+                SET quantity = quantity + @quantity, updatedAt = GETDATE() 
+                OUTPUT ${insertedBookColumns} 
+                WHERE id = @id AND isDelete = 0`);
+    return result.recordset[0] || null;
+}
+
 module.exports = {
     create,
     findById,
@@ -346,4 +387,6 @@ module.exports = {
     softDelete,
     restore,
     setCategories,
+    deductStock,
+    restoreStock,
 };
