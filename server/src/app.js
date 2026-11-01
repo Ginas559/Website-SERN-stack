@@ -23,6 +23,10 @@ app.use("/api/users", webRoutes);
 app.use("/api/admin/books", bookRoutes);
 app.use("/api/admin/categories", categoryRoutes);
 app.use("/api/books", clientBookRoutes);
+app.use("/api/admin/orders", (req, res, next) => {
+    req.url = `/admin${req.url === "/" ? "" : req.url}`;
+    orderRoutes(req, res, next);
+});
 app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);

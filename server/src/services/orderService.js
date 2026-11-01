@@ -273,7 +273,7 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
     }
 }
 
-async function updateOrderStatus(orderId, nextStatus, { currentStatus = null } = {}) {
+async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, note = null } = {}) {
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -289,11 +289,11 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null } =
     }
 
     if (order.status === safeNext) {
-        return order;
+        return parseOrderJsonFields(order);
     }
 
     if (safeNext === 4) {
-        return await cancelOrder(orderId, null, { isAdmin: true });
+        return await cancelOrder(orderId, null, { isAdmin: true, reason: note });
     }
 
     if (order.status === 4) {
@@ -310,9 +310,29 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null } =
 
     try {
         const updated = await orderModel.updateStatus(orderId, safeNext, currentStatus !== null ? Number(currentStatus) : order.status, transaction);
+
+        let ghnInfoObj = {};
+        try {
+            ghnInfoObj = typeof updated.ghn_info === "string" ? JSON.parse(updated.ghn_info) : (updated.ghn_info || {});
+        } catch {
+            ghnInfoObj = {};
+        }
+
+        if (note && typeof note === "string") {
+            ghnInfoObj.adminNote = note.trim();
+        }
+        ghnInfoObj.statusUpdatedAt = new Date().toISOString();
+
+        const noteReq = new sql.Request(transaction);
+        await noteReq
+            .input("id", sql.Char(36), orderId)
+            .input("ghn_info", sql.NVarChar(sql.MAX), JSON.stringify(ghnInfoObj))
+            .query("UPDATE dbo.orders SET ghn_info = @ghn_info WHERE id = @id");
+
         await transaction.commit();
         return {
             ...updated,
+            ghn_info: ghnInfoObj,
             items: order.items
         };
     } catch (error) {
@@ -420,12 +440,74 @@ async function getOrderDetails(orderId, userId, { isAdmin = false } = {}) {
     return parseOrderJsonFields(order);
 }
 
+async function getAllOrdersForAdmin(filters = {}) {
+    const safePage = Math.max(1, Number(filters.page) || 1);
+    const safeLimit = Math.max(1, Math.min(100, Number(filters.limit) || 10));
+
+    let parsedStatus = null;
+    if (filters.status !== null && filters.status !== undefined && filters.status !== "") {
+        parsedStatus = Number(filters.status);
+        if (![0, 1, 2, 3, 4].includes(parsedStatus)) {
+            throw new AppError("Mã trạng thái đơn hàng không hợp lệ.", 400);
+        }
+    }
+
+    let parsedPaymentMethod = null;
+    if (filters.paymentMethod && typeof filters.paymentMethod === "string") {
+        const cleanPm = filters.paymentMethod.trim().toUpperCase();
+        if (!["COD", "VNPAY", "BANK"].includes(cleanPm)) {
+            throw new AppError("Phương thức thanh toán không hợp lệ.", 400);
+        }
+        parsedPaymentMethod = cleanPm;
+    }
+
+    const result = await orderModel.findAllForAdmin({
+        page: safePage,
+        limit: safeLimit,
+        search: filters.search || null,
+        status: parsedStatus,
+        paymentMethod: parsedPaymentMethod,
+        fromDate: filters.fromDate || null,
+        toDate: filters.toDate || null,
+        sortBy: filters.sortBy || "createdAt",
+        sortOrder: filters.sortOrder || "DESC"
+    });
+
+    const orderIds = result.orders.map((o) => o.id);
+    const allItems = await orderItemModel.findByOrderIds(orderIds);
+
+    const itemsByOrderId = new Map();
+    for (const item of allItems) {
+        if (!itemsByOrderId.has(item.order_id)) {
+            itemsByOrderId.set(item.order_id, []);
+        }
+        itemsByOrderId.get(item.order_id).push(item);
+    }
+
+    const enrichedOrders = result.orders.map((order) => {
+        const enriched = parseOrderJsonFields(order);
+        return {
+            ...enriched,
+            items: itemsByOrderId.get(order.id) || []
+        };
+    });
+
+    return {
+        orders: enrichedOrders,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages
+    };
+}
+
 module.exports = {
     createOrderFromCart,
     cancelOrder,
     updateOrderStatus,
     getUserOrders,
     getOrderDetails,
+    getAllOrdersForAdmin,
     calculateItemPrice,
     calculateShippingFee,
     calculateDiscountValue,

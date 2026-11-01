@@ -82,6 +82,61 @@ router.post(
 );
 
 router.get(
+    "/admin",
+    restrictTo("Admin"),
+    [
+        query("page")
+            .optional()
+            .isInt({ min: 1 })
+            .withMessage("Số trang phải là số nguyên lớn hơn hoặc bằng 1.")
+            .bail(),
+        query("limit")
+            .optional()
+            .isInt({ min: 1, max: 100 })
+            .withMessage("Số bản ghi mỗi trang phải từ 1 đến 100.")
+            .bail(),
+        query("search")
+            .optional()
+            .trim()
+            .isLength({ max: 100 })
+            .withMessage("Từ khóa tìm kiếm không được vượt quá 100 ký tự.")
+            .bail(),
+        query("status")
+            .optional()
+            .isInt({ min: 0, max: 4 })
+            .withMessage("Trạng thái đơn hàng không hợp lệ.")
+            .bail(),
+        query("paymentMethod")
+            .optional()
+            .isIn(["COD", "VNPAY", "BANK"])
+            .withMessage("Phương thức thanh toán không hợp lệ.")
+            .bail(),
+        query("sortBy")
+            .optional()
+            .isIn(["createdAt", "total", "total_quantity", "status"])
+            .withMessage("Trường sắp xếp không hợp lệ.")
+            .bail(),
+        query("sortOrder")
+            .optional()
+            .isIn(["ASC", "DESC", "asc", "desc"])
+            .withMessage("Chiều sắp xếp không hợp lệ.")
+            .bail(),
+        query("fromDate")
+            .optional()
+            .isISO8601()
+            .withMessage("Ngày bắt đầu không đúng định dạng.")
+            .bail(),
+        query("toDate")
+            .optional()
+            .isISO8601()
+            .withMessage("Ngày kết thúc không đúng định dạng.")
+            .bail()
+    ],
+    validate,
+    controller.getAllOrdersForAdmin
+);
+
+router.get(
     "/:id",
     [
         param("id")
@@ -130,6 +185,12 @@ router.patch(
             .optional()
             .isInt({ min: 0, max: 4 })
             .withMessage("Trạng thái hiện tại phải là số nguyên từ 0 đến 4.")
+            .bail(),
+        body("note")
+            .optional()
+            .trim()
+            .isLength({ max: 255 })
+            .withMessage("Ghi chú không được vượt quá 255 ký tự.")
             .bail()
     ],
     validate,
