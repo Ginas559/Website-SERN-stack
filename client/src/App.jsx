@@ -7,6 +7,7 @@ import BookDetail from './components/BookDetail'
 import AdminDashboard from './components/AdminDashboard'
 import CartPage from './components/CartPage'
 import WishlistPage from './components/WishlistPage'
+import CheckoutPage from './components/CheckoutPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
@@ -39,6 +40,7 @@ function App() {
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
+  const [checkoutData, setCheckoutData] = useState({ items: [], total: 0 })
   const cartState = useSelector((state) => state.cart)
   const wishlistState = useSelector((state) => state.wishlist)
 
@@ -223,8 +225,29 @@ function App() {
 
       {activeTab === 'admin' && isAdmin ? (
         <AdminDashboard />
+      ) : activeTab === 'checkout' ? (
+        <CheckoutPage 
+          checkoutItems={checkoutData.items}
+          currentUser={user}
+          onBackToCart={() => setActiveTab('cart')}
+          onContinueShopping={() => { setActiveTab('books'); setSelectedBookId(null); }}
+          onOrderCompleted={() => {
+            dispatch(clearCartState())
+            try {
+              localStorage.removeItem('guestCart')
+            } catch {
+              return
+            }
+          }}
+        />
       ) : activeTab === 'cart' ? (
-        <CartPage onContinueShopping={() => setActiveTab('books')} />
+        <CartPage 
+          onContinueShopping={() => setActiveTab('books')} 
+          onCheckout={(items, total) => {
+            setCheckoutData({ items, total })
+            setActiveTab('checkout')
+          }}
+        />
       ) : activeTab === 'wishlist' ? (
         <WishlistPage 
           onContinueShopping={() => setActiveTab('books')} 
