@@ -8,6 +8,7 @@ const bookRoutes = require("./routes/bookRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const clientBookRoutes = require("./routes/clientBookRoutes");
 const cartRoutes = require("./routes/cartRoutes");
+const wishlistRoutes = require("./routes/wishlistRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -22,6 +23,7 @@ app.use("/api/admin/books", bookRoutes);
 app.use("/api/admin/categories", categoryRoutes);
 app.use("/api/books", clientBookRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);
 module.exports = app;
