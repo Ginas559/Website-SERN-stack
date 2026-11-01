@@ -9,6 +9,9 @@ const router = express.Router();
 router.use(protect);
 
 router.get("/", controller.getCart);
+router.get("/summary", controller.getSummary);
+router.get("/validate", controller.validateCart);
+router.post("/sync", controller.syncCart);
 
 router.post(
     "/items",

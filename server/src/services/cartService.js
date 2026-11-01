@@ -22,9 +22,10 @@ function validateQuantity(quantity, max = 1000) {
 }
 
 function calculateUnitPrice(price, discount = 0) {
-    const rate = Number(discount) || 0;
-    if (rate <= 0) return price;
-    return Math.round(price * (1 - rate / 100));
+    const rawPrice = Math.max(0, Number(price) || 0);
+    const rate = Math.max(0, Math.min(100, Number(discount) || 0));
+    if (rate <= 0) return rawPrice;
+    return Math.round(rawPrice * (1 - rate / 100));
 }
 
 function handleCartWriteError(error) {
@@ -47,7 +48,7 @@ async function getCart(userId) {
         discount: item.discount,
         unitPrice: calculateUnitPrice(item.price, item.discount),
         image: item.image,
-        stockQuantity: item.stock_quantity,
+        stockQuantity: Math.max(0, Number(item.stock_quantity) || 0),
         isDeleted: item.book_is_deleted === 1,
         quantity: item.quantity,
         total: item.total,
@@ -185,10 +186,200 @@ async function clearCart(userId) {
     return await getCart(userId);
 }
 
+async function calculateCartSummary(userId) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+    const cart = await cartModel.getOrCreateCart(userId);
+    const details = await cartModel.getCartDetails(cart.id);
+
+    let subtotal = 0;
+    let discountTotal = 0;
+    let finalTotal = 0;
+    let totalQuantity = 0;
+
+    for (const item of details) {
+        if (!item.title || item.book_is_deleted === null) continue;
+        const originalPrice = Math.max(0, Number(item.price) || 0);
+        const discountRate = Math.max(0, Math.min(100, Number(item.discount) || 0));
+        const unitPrice = calculateUnitPrice(originalPrice, discountRate);
+        const quantity = Math.max(0, Number(item.quantity) || 0);
+
+        subtotal += originalPrice * quantity;
+        discountTotal += (originalPrice - unitPrice) * quantity;
+        finalTotal += unitPrice * quantity;
+        totalQuantity += quantity;
+    }
+
+    if (finalTotal > 2000000000) {
+        throw new AppError("Tổng giá trị giỏ hàng vượt quá giới hạn xử lý tối đa của hệ thống.", 400);
+    }
+
+    return {
+        cartId: cart.id,
+        userId,
+        subtotal,
+        discountTotal,
+        finalTotal,
+        totalQuantity,
+        itemCount: details.length,
+    };
+}
+
+async function validateCart(userId) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+    const cart = await cartModel.getOrCreateCart(userId);
+    const details = await cartModel.getCartDetails(cart.id);
+
+    if (details.length === 0) {
+        return {
+            cartId: cart.id,
+            userId,
+            isValid: false,
+            message: "Giỏ hàng hiện đang trống.",
+            summary: {
+                subtotal: 0,
+                discountTotal: 0,
+                finalTotal: 0,
+                totalQuantity: 0,
+                itemCount: 0,
+            },
+            items: [],
+        };
+    }
+
+    let isAllValid = true;
+    let subtotal = 0;
+    let discountTotal = 0;
+    let finalTotal = 0;
+    let totalQuantity = 0;
+
+    const validatedItems = details.map((item) => {
+        const isNotFound = !item.title || item.book_is_deleted === null;
+        const originalPrice = isNotFound ? 0 : Math.max(0, Number(item.price) || 0);
+        const discountRate = isNotFound ? 0 : Math.max(0, Math.min(100, Number(item.discount) || 0));
+        const currentUnitPrice = calculateUnitPrice(originalPrice, discountRate);
+        const quantity = Math.max(0, Number(item.quantity) || 0);
+        const currentTotal = currentUnitPrice * quantity;
+        const stockQuantity = isNotFound ? 0 : Math.max(0, Number(item.stock_quantity) || 0);
+        const isDeleted = item.book_is_deleted === 1;
+
+        let status = "VALID";
+        let message = "Hợp lệ.";
+        let itemValid = true;
+
+        if (isNotFound) {
+            status = "NOT_FOUND";
+            message = "Sách không còn tồn tại trên hệ thống.";
+            itemValid = false;
+        } else if (isDeleted) {
+            status = "DISCONTINUED";
+            message = "Sách này đã ngừng kinh doanh.";
+            itemValid = false;
+        } else if (stockQuantity <= 0) {
+            status = "OUT_OF_STOCK";
+            message = "Sách này hiện đã hết hàng trong kho.";
+            itemValid = false;
+        } else if (quantity > stockQuantity) {
+            status = "EXCEED_STOCK";
+            message = `Số lượng yêu cầu (${quantity}) vượt quá tồn kho hiện tại (còn ${stockQuantity} cuốn).`;
+            itemValid = false;
+        }
+
+        const priceChanged = !isNotFound && item.total !== currentTotal;
+        if (priceChanged && itemValid) {
+            status = "PRICE_CHANGED";
+            message = "Đơn giá hoặc mức chiết khấu của sách đã thay đổi. Vui lòng đồng bộ lại giỏ hàng trước khi thanh toán.";
+            itemValid = false;
+        }
+
+        if (!itemValid) {
+            isAllValid = false;
+        }
+
+        subtotal += originalPrice * quantity;
+        discountTotal += (originalPrice - currentUnitPrice) * quantity;
+        finalTotal += currentTotal;
+        totalQuantity += quantity;
+
+        return {
+            bookId: item.book_id,
+            title: item.title || "Sách không tồn tại",
+            author: item.author || "",
+            image: item.image || null,
+            quantity,
+            stockQuantity,
+            originalPrice,
+            discount: discountRate,
+            unitPrice: currentUnitPrice,
+            total: currentTotal,
+            priceChanged,
+            status,
+            message,
+            isValid: itemValid,
+        };
+    });
+
+    if (finalTotal > 2000000000) {
+        throw new AppError("Tổng giá trị giỏ hàng vượt quá giới hạn xử lý tối đa của hệ thống.", 400);
+    }
+
+    return {
+        cartId: cart.id,
+        userId,
+        isValid: isAllValid,
+        message: isAllValid ? "Toàn bộ giỏ hàng hợp lệ để thanh toán." : "Một số sản phẩm trong giỏ hàng không đủ điều kiện thanh toán.",
+        summary: {
+            subtotal,
+            discountTotal,
+            finalTotal,
+            totalQuantity,
+            itemCount: details.length,
+        },
+        items: validatedItems,
+    };
+}
+
+async function syncCart(userId) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+    const cart = await cartModel.getOrCreateCart(userId);
+    const details = await cartModel.getCartDetails(cart.id);
+
+    for (const item of details) {
+        if (!item.title || item.book_is_deleted === null) {
+            try {
+                await cartModel.removeItemAndSync(cart.id, item.book_id);
+            } catch (error) {
+                handleCartWriteError(error);
+            }
+            continue;
+        }
+
+        const unitPrice = calculateUnitPrice(item.price, item.discount);
+        const expectedTotal = unitPrice * item.quantity;
+        if (item.total !== expectedTotal) {
+            try {
+                await cartModel.saveItemAndSync({
+                    cartId: cart.id,
+                    bookId: item.book_id,
+                    quantity: item.quantity,
+                    total: expectedTotal,
+                });
+            } catch (error) {
+                handleCartWriteError(error);
+            }
+        }
+    }
+
+    await cartModel.syncTotals(cart.id);
+    return await validateCart(userId);
+}
+
 module.exports = {
     getCart,
     addItem,
     updateItemQuantity,
     removeItem,
     clearCart,
+    calculateCartSummary,
+    validateCart,
+    syncCart,
 };
