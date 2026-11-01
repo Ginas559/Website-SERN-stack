@@ -8,6 +8,8 @@ import AdminDashboard from './components/AdminDashboard'
 import CartPage from './components/CartPage'
 import WishlistPage from './components/WishlistPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
+import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
+import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -30,16 +32,15 @@ function App() {
     total,
     totalPages,
     selectedBook,
-    clientBooksLoading,
-    clientBooksError,
-    bookDetailLoading,
-    bookDetailError,
+    loading: booksLoading,
   } = useSelector((state) => state.books)
 
   const [activeTab, setActiveTab] = useState('books')
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
+  const cartState = useSelector((state) => state.cart)
+  const wishlistState = useSelector((state) => state.wishlist)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
@@ -60,7 +61,7 @@ function App() {
 
   const loadBooks = useCallback(() => {
     if (activeTab !== 'books' || selectedBookId) return
-    dispatch(fetchBooks({
+    const query = {
       page,
       limit: 8,
       ...(filters.search ? { search: filters.search } : {}),
@@ -68,7 +69,8 @@ function App() {
       ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
       ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
       ...(filters.sort ? { sort: filters.sort } : {}),
-    }))
+    }
+    dispatch(fetchBooks(query))
   }, [activeTab, page, filters, selectedBookId, dispatch])
 
   useEffect(() => {
@@ -79,6 +81,13 @@ function App() {
     if (!selectedBookId) return
     dispatch(fetchBookById(selectedBookId))
   }, [selectedBookId, dispatch])
+
+  useEffect(() => {
+    if (sessionStorage.getItem('accessToken')) {
+      dispatch(fetchCart())
+      dispatch(fetchWishlist())
+    }
+  }, [dispatch])
 
   async function submit(event) {
     event.preventDefault()
@@ -118,6 +127,8 @@ function App() {
         setUser(data.user)
         sessionStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('user', JSON.stringify(data.user))
+        dispatch(syncGuestCart())
+        dispatch(syncGuestWishlist())
         setMessage('Đăng nhập thành công.')
       }
     } catch (submitError) {
@@ -132,87 +143,78 @@ function App() {
     sessionStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
+    dispatch(clearCartState())
+    dispatch(clearWishlistState())
     setActiveTab('books')
     setMessage('Bạn đã đăng xuất.')
   }
 
+  const guestCartCount = (() => {
+    try {
+      const g = JSON.parse(localStorage.getItem('guestCart') || '[]')
+      return Array.isArray(g) ? g.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0) : 0
+    } catch {
+      return 0
+    }
+  })()
+
+  const guestWishlistCount = (() => {
+    try {
+      const g = JSON.parse(localStorage.getItem('guestWishlist') || '[]')
+      return Array.isArray(g) ? g.length : 0
+    } catch {
+      return 0
+    }
+  })()
+
+  const cartBadgeCount = user ? (cartState.totalQuantity || cartState.items.length) : guestCartCount
+  const wishlistBadgeCount = user ? (wishlistState.totalItems || wishlistState.items.length) : guestWishlistCount
   const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
-  const clearSelectedBook = () => {
-    setSelectedBookId(null)
-    dispatch(setSelectedBook(null))
-  }
-
-  async function addToCart(book, quantity) {
-    if (user) {
-      await request('/cart/items', {
-        method: 'POST',
-        body: JSON.stringify({ bookId: book.id, quantity }),
-      })
-      return
-    }
-
-    const current = JSON.parse(localStorage.getItem('guestCart') || '[]')
-    const existingIndex = current.findIndex((item) => (item.bookId || item.id) === book.id)
-    if (existingIndex >= 0) {
-      const existing = current[existingIndex]
-      existing.quantity = Math.min(Number(book.quantity) || existing.quantity, existing.quantity + quantity)
-    } else {
-      current.push({
-        id: book.id,
-        bookId: book.id,
-        title: book.title,
-        author: book.author,
-        price: book.price,
-        discount: book.discount,
-        quantity,
-        stock: Number(book.quantity) || 0,
-        image: book.image,
-      })
-    }
-    localStorage.setItem('guestCart', JSON.stringify(current))
-  }
 
   return (
     <div>
       <header className="app-navbar">
-        <button type="button" className="app-brand" onClick={() => { setActiveTab('books'); clearSelectedBook() }}>
+        <div 
+          className="app-brand" 
+          onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+        >
           SERN BOOKSTORE
-        </button>
+        </div>
         <nav className="app-nav-links">
-          <button
-            type="button"
+          <button 
+            type="button" 
             className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('books'); clearSelectedBook() }}
+            onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
             Cửa hàng sách
           </button>
-          <button
-            type="button"
+          <button 
+            type="button" 
             className={`nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('cart'); clearSelectedBook() }}
+            onClick={() => { setActiveTab('cart'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
-            Giỏ hàng
+            🛒 Giỏ hàng {cartBadgeCount > 0 ? `(${cartBadgeCount})` : ''}
           </button>
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'wishlist' ? 'active' : ''}`}
             onClick={() => { setActiveTab('wishlist'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
-            ❤️ Yêu thích
+            ❤️ Yêu thích {wishlistBadgeCount > 0 ? `(${wishlistBadgeCount})` : ''}
           </button>
           {isAdmin && (
-            <button
-              type="button"
+            <button 
+              type="button" 
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('admin'); clearSelectedBook() }}
+              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
             >
               Quản trị
             </button>
           )}
-          <button
-            type="button"
+          <button 
+            type="button" 
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('account'); clearSelectedBook() }}
+            onClick={() => setActiveTab('account')}
           >
             {user ? user.fullName : 'Tài khoản'}
           </button>
@@ -229,39 +231,24 @@ function App() {
           onSelectBook={(id) => { setSelectedBookId(id); setActiveTab('books'); }}
         />
       ) : activeTab === 'books' ? (
-        selectedBookId ? (
-          <BookDetail
-            book={selectedBook}
-            loading={bookDetailLoading}
-            error={bookDetailError || ''}
-            onRetry={() => dispatch(fetchBookById(selectedBookId))}
-            onBack={clearSelectedBook}
-            onAddToCart={addToCart}
-            onSelectBook={(id) => {
-              dispatch(setSelectedBook(null))
-              setSelectedBookId(id)
-            }}
+        selectedBookId && selectedBook ? (
+          <BookDetail 
+            book={selectedBook} 
+            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); }} 
+            onSelectBook={(id) => setSelectedBookId(id)}
           />
         ) : (
-          <BookList
+          <BookList 
             books={books}
             total={total}
             page={page}
             totalPages={totalPages}
             filters={filters}
-            loading={clientBooksLoading}
-            error={clientBooksError || ''}
-            onRetry={loadBooks}
-            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1) }}
+            loading={booksLoading}
+            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); }}
             onPageChange={(nextPage) => setPage(nextPage)}
-            onResetFilters={() => {
-              setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
-              setPage(1)
-            }}
-            onSelectBook={(id) => {
-              dispatch(setSelectedBook(null))
-              setSelectedBookId(id)
-            }}
+            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); }}
+            onSelectBook={(id) => setSelectedBookId(id)}
           />
         )
       ) : user ? (

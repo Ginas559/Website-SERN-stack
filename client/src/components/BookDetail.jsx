@@ -1,10 +1,22 @@
 import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
+import { addToCart } from "../store/slices/cartSlice";
+import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
 
 function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook, onAddToCart }) {
+    const dispatch = useDispatch();
+    const reduxWishlist = useSelector((state) => state.wishlist);
+    const isAuthenticated = Boolean(sessionStorage.getItem('accessToken'));
+
     const [quantity, setQuantity] = useState(1);
-    const [addedNotice, setAddedNotice] = useState("");
-    const [isFavorite, setIsFavorite] = useState(() => {
+    const [addedNotice, setAddedNotice] = useState(false);
+
+    const isFavoriteRedux = isAuthenticated && book && Array.isArray(reduxWishlist.items)
+        ? reduxWishlist.items.some((it) => (it.bookId || it.id) === book.id)
+        : null;
+
+    const [isFavoriteLocal, setIsFavoriteLocal] = useState(() => {
         if (!book) return false;
         try {
             const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
@@ -13,6 +25,8 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
             return false;
         }
     });
+
+    const isFavorite = isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal;
 
     if (loading) {
         return (
@@ -31,54 +45,80 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                 <div className="empty-state error-state" role="alert">
                     <h3>Không thể tải thông tin sách</h3>
                     <p>{error}</p>
-                    <button type="button" className="filter-btn-reset" onClick={onRetry}>
-                        Thử lại
-                    </button>
+                    {onRetry ? (
+                        <button type="button" className="filter-btn-reset" onClick={onRetry}>
+                            Thử lại
+                        </button>
+                    ) : null}
                 </div>
             </div>
         );
     }
 
-    if (!book) {
-        return (
-            <div className="books-container">
-                <div className="empty-state" aria-live="polite">
-                    <h3>Đang tải thông tin sách...</h3>
-                    <p>Vui lòng đợi trong giây lát</p>
-                </div>
-            </div>
-        );
-    }
+    if (!book) return null;
 
     const discount = Number(book.discount) || 0;
     const originalPrice = Number(book.price) || 0;
-    const finalPrice = discount > 0
-        ? Math.round(originalPrice * (100 - discount) / 100)
+    const finalPrice = discount > 0 
+        ? Math.round(originalPrice * (100 - discount) / 100) 
         : originalPrice;
 
     const formatPrice = (val) => Number(val).toLocaleString("vi-VN") + " đ";
 
-    const pubDate = book.publication_date
+    const pubDate = book.publication_date 
         ? new Date(book.publication_date).toLocaleDateString("vi-VN")
         : null;
+
     const stockCount = Number(book.quantity) || 0;
     const inStock = stockCount > 0;
 
-    async function handleAddToCart() {
+    const handleAdd = () => {
         if (!inStock) return;
-        try {
-            if (onAddToCart) {
-                await onAddToCart(book, quantity);
+        if (onAddToCart) {
+            onAddToCart(book, quantity);
+        } else if (isAuthenticated) {
+            dispatch(addToCart({ bookId: book.id, quantity }));
+        } else {
+            try {
+                const current = JSON.parse(localStorage.getItem("guestCart") || "[]");
+                const existingIndex = current.findIndex((item) => (item.bookId || item.id) === book.id);
+                if (existingIndex >= 0) {
+                    current[existingIndex].quantity = Math.min(stockCount, current[existingIndex].quantity + quantity);
+                } else {
+                    current.push({
+                        id: book.id,
+                        bookId: book.id,
+                        title: book.title,
+                        author: book.author,
+                        price: originalPrice,
+                        discount,
+                        quantity,
+                        stock: stockCount,
+                        image: book.image
+                    });
+                }
+                localStorage.setItem("guestCart", JSON.stringify(current));
+            } catch {
+                return;
             }
-            setAddedNotice(`Đã thêm ${quantity} cuốn vào giỏ hàng.`);
-        } catch (cartError) {
-            setAddedNotice(cartError.message);
         }
-    }
+        setAddedNotice(true);
+        setTimeout(() => setAddedNotice(false), 2500);
+    };
 
     const handleToggleFavorite = () => {
         const nextState = !isFavorite;
-        setIsFavorite(nextState);
+        setIsFavoriteLocal(nextState);
+
+        if (isAuthenticated) {
+            if (nextState) {
+                dispatch(addToWishlist(book.id));
+            } else {
+                dispatch(removeFromWishlist(book.id));
+            }
+            return;
+        }
+
         try {
             const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
             if (nextState) {
@@ -114,9 +154,9 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
             <div className="book-detail-card">
                 <div className="detail-cover-wrap">
                     {book.image ? (
-                        <img
-                            src={book.image}
-                            alt={book.title}
+                        <img 
+                            src={book.image} 
+                            alt={book.title} 
                             className="detail-cover"
                             onError={(e) => {
                                 e.target.style.display = "none";
@@ -124,8 +164,8 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                             }}
                         />
                     ) : null}
-                    <div
-                        className="book-cover-placeholder"
+                    <div 
+                        className="book-cover-placeholder" 
                         style={{ display: book.image ? "none" : "flex", fontSize: "4rem" }}
                     >
                         📚
@@ -189,7 +229,7 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={handleAddToCart}
+                                    onClick={handleAdd}
                                     style={{
                                         padding: "10px 22px",
                                         background: "#c77736",
@@ -231,12 +271,12 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
 
                     {addedNotice ? (
                         <div style={{ color: "#2e7d32", fontWeight: "600", marginBottom: "12px" }}>
-                            {addedNotice}
+                            ✓ Đã thêm {quantity} cuốn vào giỏ hàng thành công!
                         </div>
                     ) : null}
 
                     {pubDate ? (
-                        <div className="detail-publication-date">
+                        <div style={{ marginBottom: "14px", color: "#83796e", fontSize: "0.9rem" }}>
                             Ngày xuất bản: {pubDate}
                         </div>
                     ) : null}
@@ -252,9 +292,9 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                     <h2 className="related-title">Sách cùng thể loại gợi ý</h2>
                     <div className="books-grid">
                         {book.relatedBooks.map((relBook) => (
-                            <BookCard
-                                key={relBook.id}
-                                book={relBook}
+                            <BookCard 
+                                key={relBook.id} 
+                                book={relBook} 
                                 onSelectBook={onSelectBook}
                             />
                         ))}
