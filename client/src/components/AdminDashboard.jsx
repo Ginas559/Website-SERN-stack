@@ -16,6 +16,8 @@ import AdminBookTable from './AdminBookTable'
 import AdminBookModal from './AdminBookModal'
 import AdminCategoryTable from './AdminCategoryTable'
 import AdminCategoryModal from './AdminCategoryModal'
+import AdminOrderTable from './AdminOrderTable'
+import orderService from '../services/orderService'
 import './AdminDashboard.css'
 
 function AdminDashboard() {
@@ -37,6 +39,16 @@ function AdminDashboard() {
   const [bookStatusFilter, setBookStatusFilter] = useState('all')
 
   const [categorySearch, setCategorySearch] = useState('')
+
+  const [adminOrders, setAdminOrders] = useState([])
+  const [orderTotal, setOrderTotal] = useState(0)
+  const [orderPage, setOrderPage] = useState(1)
+  const [orderTotalPages, setOrderTotalPages] = useState(1)
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all')
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState('all')
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [orderRefreshTrigger, setOrderRefreshTrigger] = useState(0)
 
   const [bookModalOpen, setBookModalOpen] = useState(false)
   const [bookModalMode, setBookModalMode] = useState('create')
@@ -84,6 +96,33 @@ function AdminDashboard() {
   useEffect(() => {
     fetchCategoriesData()
   }, [fetchCategoriesData])
+
+  useEffect(() => {
+    if (adminTab !== 'orders') return
+    let isCurrent = true
+    orderService.getAdminOrders({
+      page: orderPage,
+      limit: 10,
+      ...(orderSearch.trim() ? { search: orderSearch.trim() } : {}),
+      ...(orderStatusFilter !== 'all' ? { status: orderStatusFilter } : {}),
+      ...(orderPaymentFilter !== 'all' ? { paymentMethod: orderPaymentFilter } : {}),
+    })
+      .then((res) => {
+        if (!isCurrent) return
+        setAdminOrders(res.data?.orders || [])
+        setOrderTotal(res.data?.total || 0)
+        setOrderTotalPages(res.data?.totalPages || 1)
+        setOrdersLoading(false)
+      })
+      .catch((err) => {
+        if (!isCurrent) return
+        setOrdersLoading(false)
+        showToast(err.response?.data?.message || err.message || 'Không thể tải danh sách đơn hàng.', 'error')
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderRefreshTrigger, showToast])
 
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
@@ -145,6 +184,13 @@ function AdminDashboard() {
     }
   }
 
+  const handleUpdateOrderStatus = async (orderId, newStatus, note) => {
+    await orderService.updateOrderStatus(orderId, { status: newStatus, note })
+    showToast('Cập nhật trạng thái đơn hàng thành công!')
+    setOrdersLoading(true)
+    setOrderRefreshTrigger((prev) => prev + 1)
+  }
+
   return (
     <div className="admin-container">
       {toast && (
@@ -195,6 +241,16 @@ function AdminDashboard() {
         >
           🏷️ Quản lý Thể loại Sách
         </button>
+        <button
+          type="button"
+          className={`admin-nav-tab ${adminTab === 'orders' ? 'active' : ''}`}
+          onClick={() => {
+            setOrdersLoading(true)
+            setAdminTab('orders')
+          }}
+        >
+          📦 Quản lý Đơn hàng
+        </button>
       </div>
 
       {adminTab === 'books' ? (
@@ -221,7 +277,7 @@ function AdminDashboard() {
           }}
           onToggleStatus={handleToggleBookStatus}
         />
-      ) : (
+      ) : adminTab === 'categories' ? (
         <AdminCategoryTable
           categories={categories}
           loading={categoriesLoading}
@@ -238,6 +294,37 @@ function AdminDashboard() {
             setCategoryModalOpen(true)
           }}
           onToggleStatus={handleToggleCategoryStatus}
+        />
+      ) : (
+        <AdminOrderTable
+          orders={adminOrders}
+          total={orderTotal}
+          page={orderPage}
+          totalPages={orderTotalPages}
+          loading={ordersLoading}
+          search={orderSearch}
+          statusFilter={orderStatusFilter}
+          paymentMethodFilter={orderPaymentFilter}
+          onSearchChange={(val) => {
+            setOrdersLoading(true)
+            setOrderSearch(val)
+            setOrderPage(1)
+          }}
+          onStatusFilterChange={(val) => {
+            setOrdersLoading(true)
+            setOrderStatusFilter(val)
+            setOrderPage(1)
+          }}
+          onPaymentMethodFilterChange={(val) => {
+            setOrdersLoading(true)
+            setOrderPaymentFilter(val)
+            setOrderPage(1)
+          }}
+          onPageChange={(nextPage) => {
+            setOrdersLoading(true)
+            setOrderPage(nextPage)
+          }}
+          onUpdateStatus={handleUpdateOrderStatus}
         />
       )}
 
