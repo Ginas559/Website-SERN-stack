@@ -14,7 +14,7 @@
 .cart-header-section {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin-bottom: 28px;
     border-bottom: 1px solid #3d3d3a;
     padding-bottom: 18px;
