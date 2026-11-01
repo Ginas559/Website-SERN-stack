@@ -8,6 +8,7 @@ import AdminDashboard from './components/AdminDashboard'
 import CartPage from './components/CartPage'
 import WishlistPage from './components/WishlistPage'
 import CheckoutPage from './components/CheckoutPage'
+import PaymentResult from './components/PaymentResult'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
@@ -15,6 +16,10 @@ import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/sl
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
 if (resetToken) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+const hasInitialPaymentReturn = typeof window !== 'undefined' && (
+  window.location.search.includes('vnp_SecureHash') ||
+  window.location.pathname.includes('/payment/vnpay-return')
+)
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
@@ -41,6 +46,7 @@ function App() {
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
   const [checkoutData, setCheckoutData] = useState({ items: [], total: 0 })
+  const [isPaymentReturn, setIsPaymentReturn] = useState(hasInitialPaymentReturn)
   const cartState = useSelector((state) => state.cart)
   const wishlistState = useSelector((state) => state.wishlist)
 
@@ -223,7 +229,29 @@ function App() {
         </nav>
       </header>
 
-      {activeTab === 'admin' && isAdmin ? (
+      {isPaymentReturn ? (
+        <PaymentResult 
+          searchString={window.location.search}
+          onViewOrders={() => {
+            setIsPaymentReturn(false)
+            try {
+              window.history.replaceState({}, document.title, window.location.pathname)
+            } catch {
+              return
+            }
+            setActiveTab('orders')
+          }}
+          onContinueShopping={() => {
+            setIsPaymentReturn(false)
+            try {
+              window.history.replaceState({}, document.title, window.location.pathname)
+            } catch {
+              return
+            }
+            setActiveTab('books')
+          }}
+        />
+      ) : activeTab === 'admin' && isAdmin ? (
         <AdminDashboard />
       ) : activeTab === 'checkout' ? (
         <CheckoutPage 
@@ -231,6 +259,7 @@ function App() {
           currentUser={user}
           onBackToCart={() => setActiveTab('cart')}
           onContinueShopping={() => { setActiveTab('books'); setSelectedBookId(null); }}
+          onViewOrders={() => setActiveTab('orders')}
           onOrderCompleted={() => {
             dispatch(clearCartState())
             try {

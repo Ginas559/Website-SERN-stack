@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import orderService from '../services/orderService';
 import './Checkout.css';
 
 function formatCurrency(amount) {
@@ -9,6 +10,7 @@ function CheckoutPage({
     checkoutItems = [], 
     onBackToCart, 
     onContinueShopping,
+    onViewOrders,
     currentUser = null,
     onOrderCompleted
 }) {
@@ -120,30 +122,54 @@ function CheckoutPage({
             return;
         }
 
+        if (!localStorage.getItem('accessToken')) {
+            triggerToast('Vui lòng đăng nhập tài khoản trước khi đặt hàng.', 'warning');
+            return;
+        }
+
         setIsSubmitting(true);
 
-        setTimeout(() => {
-            setIsSubmitting(false);
-            const randomCode = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-            const newOrder = {
-                orderCode: randomCode,
-                fullName: form.fullName.trim(),
-                phone: phoneTrimmed,
-                address: form.address.trim(),
-                total: finalTotal,
-                paymentMethod: paymentMethod === 'COD' 
-                    ? 'Thanh toán khi nhận hàng (COD)' 
-                    : paymentMethod === 'VNPAY' 
-                        ? 'Cổng thanh toán VNPAY' 
-                        : 'Chuyển khoản ngân hàng',
-                itemsCount: selectedCount
-            };
+        const orderPayload = {
+            receiverName: form.fullName.trim(),
+            phone: phoneTrimmed,
+            address: form.address.trim(),
+            note: form.note.trim() || undefined,
+            paymentMethod,
+            couponCode: couponInput.trim() || undefined,
+            selectedBookIds: items.map((it) => Number(it.book_id || it.id))
+        };
 
-            setSuccessOrder(newOrder);
-            if (onOrderCompleted) {
-                onOrderCompleted(newOrder);
-            }
-        }, 600);
+        orderService.createOrder(orderPayload)
+            .then((res) => {
+                const createdOrder = res.data || res;
+                if (onOrderCompleted) {
+                    onOrderCompleted(createdOrder);
+                }
+
+                if (paymentMethod === 'VNPAY' && createdOrder.pay_url) {
+                    window.location.href = createdOrder.pay_url;
+                    return;
+                }
+
+                setIsSubmitting(false);
+                setSuccessOrder({
+                    orderCode: createdOrder.id,
+                    fullName: form.fullName.trim(),
+                    phone: phoneTrimmed,
+                    address: form.address.trim(),
+                    total: createdOrder.total ?? finalTotal,
+                    paymentMethod: paymentMethod === 'COD' 
+                        ? 'Thanh toán khi nhận hàng (COD)' 
+                        : paymentMethod === 'VNPAY' 
+                            ? 'Cổng thanh toán VNPAY' 
+                            : 'Chuyển khoản ngân hàng',
+                    itemsCount: selectedCount
+                });
+            })
+            .catch((err) => {
+                setIsSubmitting(false);
+                triggerToast(err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.', 'warning');
+            });
     };
 
     if (items.length === 0 && !successOrder) {
@@ -461,9 +487,18 @@ function CheckoutPage({
                         </div>
 
                         <div className="checkout-modal-actions">
+                            {onViewOrders && (
+                                <button 
+                                    type="button" 
+                                    className="checkout-modal-btn-primary"
+                                    onClick={onViewOrders}
+                                >
+                                    Xem đơn hàng của tôi
+                                </button>
+                            )}
                             <button 
                                 type="button" 
-                                className="checkout-modal-btn-primary"
+                                className={onViewOrders ? "checkout-modal-btn-secondary" : "checkout-modal-btn-primary"}
                                 onClick={onContinueShopping}
                             >
                                 Tiếp tục mua sắm
