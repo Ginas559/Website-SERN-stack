@@ -1,10 +1,22 @@
 import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
+import { addToCart } from "../store/slices/cartSlice";
+import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
 
 function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
+    const dispatch = useDispatch();
+    const reduxWishlist = useSelector((state) => state.wishlist);
+    const isAuthenticated = Boolean(localStorage.getItem('accessToken'));
+
     const [quantity, setQuantity] = useState(1);
     const [addedNotice, setAddedNotice] = useState(false);
-    const [isFavorite, setIsFavorite] = useState(() => {
+
+    const isFavoriteRedux = isAuthenticated && Array.isArray(reduxWishlist.items)
+        ? reduxWishlist.items.some((it) => (it.bookId || it.id) === book.id)
+        : null;
+
+    const [isFavoriteLocal, setIsFavoriteLocal] = useState(() => {
         try {
             const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
             return current.some((it) => (it.bookId || it.id) === book.id);
@@ -12,6 +24,8 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
             return false;
         }
     });
+
+    const isFavorite = isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal;
 
     if (!book) return null;
 
@@ -34,6 +48,8 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
         if (!inStock) return;
         if (onAddToCart) {
             onAddToCart(book, quantity);
+        } else if (isAuthenticated) {
+            dispatch(addToCart({ bookId: book.id, quantity }));
         } else {
             try {
                 const current = JSON.parse(localStorage.getItem("guestCart") || "[]");
@@ -64,7 +80,17 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
 
     const handleToggleFavorite = () => {
         const nextState = !isFavorite;
-        setIsFavorite(nextState);
+        setIsFavoriteLocal(nextState);
+
+        if (isAuthenticated) {
+            if (nextState) {
+                dispatch(addToWishlist(book.id));
+            } else {
+                dispatch(removeFromWishlist(book.id));
+            }
+            return;
+        }
+
         try {
             const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
             if (nextState) {

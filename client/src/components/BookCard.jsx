@@ -1,6 +1,16 @@
 import { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { addToWishlist, removeFromWishlist } from '../store/slices/wishlistSlice';
 
 function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
+    const dispatch = useDispatch();
+    const reduxWishlist = useSelector((state) => state.wishlist);
+    const isAuthenticated = Boolean(localStorage.getItem('accessToken'));
+
+    const isFavoriteRedux = isAuthenticated && Array.isArray(reduxWishlist.items)
+        ? reduxWishlist.items.some((it) => (it.bookId || it.id) === book.id)
+        : null;
+
     const [imgError, setImgError] = useState(false);
     const [localFavorite, setLocalFavorite] = useState(() => {
         try {
@@ -11,7 +21,9 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
         }
     });
 
-    const isFavorite = typeof isFavoriteProp === 'boolean' ? isFavoriteProp : localFavorite;
+    const isFavorite = typeof isFavoriteProp === 'boolean' 
+        ? isFavoriteProp 
+        : (isFavoriteRedux !== null ? isFavoriteRedux : localFavorite);
 
     const discount = Math.max(0, Math.min(100, Number(book.discount) || 0));
     const originalPrice = Math.max(0, Number(book.price) || 0);
@@ -32,31 +44,41 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
 
         if (onToggleFavorite) {
             onToggleFavorite(book, nextState);
-        } else {
-            try {
-                const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
-                if (nextState) {
-                    if (!current.some((it) => (it.bookId || it.id) === book.id)) {
-                        current.push({
-                            id: book.id,
-                            bookId: book.id,
-                            title: book.title,
-                            author: book.author,
-                            price: originalPrice,
-                            discount,
-                            stock: Number(book.quantity ?? book.stock ?? 999),
-                            image: book.image
-                        });
-                    }
-                } else {
-                    const filtered = current.filter((it) => (it.bookId || it.id) !== book.id);
-                    localStorage.setItem('guestWishlist', JSON.stringify(filtered));
-                    return;
+            return;
+        }
+
+        if (isAuthenticated) {
+            if (nextState) {
+                dispatch(addToWishlist(book.id));
+            } else {
+                dispatch(removeFromWishlist(book.id));
+            }
+            return;
+        }
+
+        try {
+            const current = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
+            if (nextState) {
+                if (!current.some((it) => (it.bookId || it.id) === book.id)) {
+                    current.push({
+                        id: book.id,
+                        bookId: book.id,
+                        title: book.title,
+                        author: book.author,
+                        price: originalPrice,
+                        discount,
+                        stock: Number(book.quantity ?? book.stock ?? 999),
+                        image: book.image
+                    });
                 }
-                localStorage.setItem('guestWishlist', JSON.stringify(current));
-            } catch {
+            } else {
+                const filtered = current.filter((it) => (it.bookId || it.id) !== book.id);
+                localStorage.setItem('guestWishlist', JSON.stringify(filtered));
                 return;
             }
+            localStorage.setItem('guestWishlist', JSON.stringify(current));
+        } catch {
+            return;
         }
     };
 

@@ -1,4 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+    fetchCart, 
+    updateCartItem, 
+    removeFromCart, 
+    clearCart,
+    validateCart 
+} from '../store/slices/cartSlice';
 import CartTable from './CartTable';
 import CartSummary from './CartSummary';
 import EmptyCart from './EmptyCart';
@@ -44,7 +52,11 @@ function CartPage({
     onRemoveItemOverride, 
     onClearCartOverride 
 }) {
-    const [items, setItems] = useState(() => {
+    const dispatch = useDispatch();
+    const reduxCart = useSelector((state) => state.cart);
+    const isAuthenticated = Boolean(localStorage.getItem('accessToken'));
+
+    const [localGuestItems, setLocalGuestItems] = useState(() => {
         if (cart && Array.isArray(cart.items)) return cleanCartData(cart.items);
         try {
             const saved = localStorage.getItem('guestCart');
@@ -57,6 +69,19 @@ function CartPage({
         }
         return [];
     });
+
+    const items = useMemo(() => {
+        if (isAuthenticated && Array.isArray(reduxCart.items)) {
+            return cleanCartData(reduxCart.items);
+        }
+        return localGuestItems;
+    }, [isAuthenticated, reduxCart.items, localGuestItems]);
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            dispatch(fetchCart());
+        }
+    }, [isAuthenticated, dispatch]);
 
     const [selectedItemIds, setSelectedItemIds] = useState(() => {
         return items
@@ -79,9 +104,9 @@ function CartPage({
             if (e.key === 'guestCart') {
                 try {
                     const next = JSON.parse(e.newValue || '[]');
-                    setItems(cleanCartData(next));
+                    setLocalGuestItems(cleanCartData(next));
                 } catch {
-                    setItems([]);
+                    setLocalGuestItems([]);
                 }
             }
         };
@@ -137,7 +162,19 @@ function CartPage({
             return;
         }
 
-        setItems((prev) => {
+        if (isAuthenticated) {
+            dispatch(updateCartItem({ bookId, quantity: nextQuantity }))
+                .unwrap()
+                .then(() => {
+                    triggerToast('Đã cập nhật số lượng cuốn sách.', 'success');
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể cập nhật số lượng.', 'warning');
+                });
+            return;
+        }
+
+        setLocalGuestItems((prev) => {
             const next = prev.map((item) => {
                 const id = item.bookId || item.id;
                 if (id === bookId) {
@@ -165,7 +202,20 @@ function CartPage({
             return;
         }
 
-        setItems((prev) => {
+        if (isAuthenticated) {
+            dispatch(removeFromCart(bookId))
+                .unwrap()
+                .then(() => {
+                    setSelectedItemIds((prev) => prev.filter((id) => id !== bookId));
+                    triggerToast('Đã xóa cuốn sách khỏi giỏ hàng.', 'info');
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể xóa sản phẩm.', 'warning');
+                });
+            return;
+        }
+
+        setLocalGuestItems((prev) => {
             const next = prev.filter((item) => (item.bookId || item.id) !== bookId);
             try {
                 localStorage.setItem('guestCart', JSON.stringify(next));
@@ -186,8 +236,18 @@ function CartPage({
     const confirmClearCart = () => {
         if (onClearCartOverride) {
             onClearCartOverride();
+        } else if (isAuthenticated) {
+            dispatch(clearCart())
+                .unwrap()
+                .then(() => {
+                    setLocalGuestItems([]);
+                    setSelectedItemIds([]);
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể làm trống giỏ hàng.', 'warning');
+                });
         } else {
-            setItems([]);
+            setLocalGuestItems([]);
             setSelectedItemIds([]);
             try {
                 localStorage.removeItem('guestCart');
@@ -228,9 +288,28 @@ function CartPage({
             triggerToast('Vui lòng tích chọn ít nhất 1 cuốn sách còn hàng để đặt hàng.', 'warning');
             return;
         }
-        if (onCheckout) {
-            onCheckout(selectedItems, total);
+
+        if (!isAuthenticated) {
+            triggerToast('Vui lòng đăng nhập để tiến hành đặt hàng.', 'warning');
+            return;
         }
+
+        dispatch(validateCart())
+            .unwrap()
+            .then((res) => {
+                if (res && res.summary && res.summary.hasErrors) {
+                    triggerToast('Một số sản phẩm trong giỏ có thay đổi tồn kho, vui lòng kiểm tra lại.', 'warning');
+                    return;
+                }
+                if (onCheckout) {
+                    onCheckout(selectedItems, total);
+                } else {
+                    triggerToast('Đã xác nhận tồn kho hợp lệ! Đang chuyển hướng đặt hàng...', 'success');
+                }
+            })
+            .catch((err) => {
+                triggerToast(err || 'Không thể xác thực tồn kho giỏ hàng.', 'warning');
+            });
     };
 
     return (

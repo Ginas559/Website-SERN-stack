@@ -8,6 +8,8 @@ import AdminDashboard from './components/AdminDashboard'
 import CartPage from './components/CartPage'
 import WishlistPage from './components/WishlistPage'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
+import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
+import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
@@ -37,6 +39,8 @@ function App() {
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
+  const cartState = useSelector((state) => state.cart)
+  const wishlistState = useSelector((state) => state.wishlist)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
@@ -78,6 +82,13 @@ function App() {
     dispatch(fetchBookById(selectedBookId))
   }, [selectedBookId, dispatch])
 
+  useEffect(() => {
+    if (localStorage.getItem('accessToken')) {
+      dispatch(fetchCart())
+      dispatch(fetchWishlist())
+    }
+  }, [dispatch])
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -116,6 +127,8 @@ function App() {
         setUser(data.user)
         localStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('user', JSON.stringify(data.user))
+        dispatch(syncGuestCart())
+        dispatch(syncGuestWishlist())
         setMessage('Đăng nhập thành công.')
       }
     } catch (submitError) {
@@ -130,10 +143,32 @@ function App() {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('user')
     setUser(null)
+    dispatch(clearCartState())
+    dispatch(clearWishlistState())
     setActiveTab('books')
     setMessage('Bạn đã đăng xuất.')
   }
 
+  const guestCartCount = (() => {
+    try {
+      const g = JSON.parse(localStorage.getItem('guestCart') || '[]')
+      return Array.isArray(g) ? g.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0) : 0
+    } catch {
+      return 0
+    }
+  })()
+
+  const guestWishlistCount = (() => {
+    try {
+      const g = JSON.parse(localStorage.getItem('guestWishlist') || '[]')
+      return Array.isArray(g) ? g.length : 0
+    } catch {
+      return 0
+    }
+  })()
+
+  const cartBadgeCount = user ? (cartState.totalQuantity || cartState.items.length) : guestCartCount
+  const wishlistBadgeCount = user ? (wishlistState.totalItems || wishlistState.items.length) : guestWishlistCount
   const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
 
   return (
@@ -158,14 +193,14 @@ function App() {
             className={`nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
             onClick={() => { setActiveTab('cart'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
-            🛒 Giỏ hàng
+            🛒 Giỏ hàng {cartBadgeCount > 0 ? `(${cartBadgeCount})` : ''}
           </button>
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'wishlist' ? 'active' : ''}`}
             onClick={() => { setActiveTab('wishlist'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
           >
-            ❤️ Yêu thích
+            ❤️ Yêu thích {wishlistBadgeCount > 0 ? `(${wishlistBadgeCount})` : ''}
           </button>
           {isAdmin && (
             <button 

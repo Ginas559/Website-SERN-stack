@@ -1,4 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+    fetchWishlist, 
+    removeFromWishlist, 
+    clearWishlist 
+} from '../store/slices/wishlistSlice';
+import { addToCart } from '../store/slices/cartSlice';
 import WishlistCard from './WishlistCard';
 import EmptyWishlist from './EmptyWishlist';
 import './Wishlist.css';
@@ -40,7 +47,11 @@ function WishlistPage({
     onRemoveOverride,
     onClearOverride
 }) {
-    const [items, setItems] = useState(() => {
+    const dispatch = useDispatch();
+    const reduxWishlist = useSelector((state) => state.wishlist);
+    const isAuthenticated = Boolean(localStorage.getItem('accessToken'));
+
+    const [localGuestItems, setLocalGuestItems] = useState(() => {
         if (wishlist && Array.isArray(wishlist.items)) return cleanWishlistData(wishlist.items);
         try {
             const saved = localStorage.getItem('guestWishlist');
@@ -53,6 +64,19 @@ function WishlistPage({
         }
         return [];
     });
+
+    const items = useMemo(() => {
+        if (isAuthenticated && Array.isArray(reduxWishlist.items)) {
+            return cleanWishlistData(reduxWishlist.items);
+        }
+        return localGuestItems;
+    }, [isAuthenticated, reduxWishlist.items, localGuestItems]);
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            dispatch(fetchWishlist());
+        }
+    }, [isAuthenticated, dispatch]);
 
     const [toast, setToast] = useState(null);
     const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
@@ -69,9 +93,9 @@ function WishlistPage({
             if (e.key === 'guestWishlist') {
                 try {
                     const next = JSON.parse(e.newValue || '[]');
-                    setItems(cleanWishlistData(next));
+                    setLocalGuestItems(cleanWishlistData(next));
                 } catch {
-                    setItems([]);
+                    setLocalGuestItems([]);
                 }
             }
         };
@@ -102,9 +126,22 @@ function WishlistPage({
             return;
         }
 
+        const bookId = book.bookId || book.id;
+
+        if (isAuthenticated) {
+            dispatch(addToCart({ bookId, quantity: 1 }))
+                .unwrap()
+                .then(() => {
+                    triggerToast(`Đã thêm "${book.title}" vào giỏ hàng.`, 'success');
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể thêm sách vào giỏ hàng.', 'warning');
+                });
+            return;
+        }
+
         try {
             const currentCart = JSON.parse(localStorage.getItem('guestCart') || '[]');
-            const bookId = book.bookId || book.id;
             const existingIndex = currentCart.findIndex((item) => (item.bookId || item.id) === bookId);
 
             if (existingIndex >= 0) {
@@ -138,6 +175,17 @@ function WishlistPage({
         const availableItems = items.filter((it) => it.stock > 0);
         if (availableItems.length === 0) {
             triggerToast('Không có sách nào còn hàng để thêm vào giỏ.', 'warning');
+            return;
+        }
+
+        if (isAuthenticated) {
+            Promise.all(availableItems.map((b) => dispatch(addToCart({ bookId: b.bookId || b.id, quantity: 1 })).unwrap()))
+                .then((resList) => {
+                    triggerToast(`Đã thêm ${resList.length} cuốn sách vào giỏ hàng thành công!`, 'success');
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Đã xảy ra lỗi khi thêm sách vào giỏ hàng.', 'warning');
+                });
             return;
         }
 
@@ -185,7 +233,19 @@ function WishlistPage({
             return;
         }
 
-        setItems((prev) => {
+        if (isAuthenticated) {
+            dispatch(removeFromWishlist(bookId))
+                .unwrap()
+                .then(() => {
+                    triggerToast('Đã xóa khỏi danh sách yêu thích.', 'info');
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể xóa khỏi yêu thích.', 'warning');
+                });
+            return;
+        }
+
+        setLocalGuestItems((prev) => {
             const next = prev.filter((it) => (it.bookId || it.id) !== bookId);
             try {
                 localStorage.setItem('guestWishlist', JSON.stringify(next));
@@ -200,8 +260,17 @@ function WishlistPage({
     const confirmClearAll = () => {
         if (onClearOverride) {
             onClearOverride();
+        } else if (isAuthenticated) {
+            dispatch(clearWishlist())
+                .unwrap()
+                .then(() => {
+                    setLocalGuestItems([]);
+                })
+                .catch((err) => {
+                    triggerToast(err || 'Không thể làm trống danh sách.', 'warning');
+                });
         } else {
-            setItems([]);
+            setLocalGuestItems([]);
             try {
                 localStorage.removeItem('guestWishlist');
             } catch {
