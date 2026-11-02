@@ -1,5 +1,7 @@
+
 const bookModel = require("../models/bookModel");
 const AppError = require("../utils/AppError");
+const categoryModel = require("../models/categoryModel");
 
 function validateBookId(id) {
     const bookId = Number(id);
@@ -92,6 +94,13 @@ async function createBook({
     const normalizedDiscount = validateNumber(discount, "Tỉ lệ giảm giá phải từ 0% đến 100%.", { min: 0, max: 100 });
     const normalizedPurchasePrice = validateNumber(purchase_price, "Giá nhập kho không được nhỏ hơn 0.", { min: 0 });
 
+    for (const catId of normalizedCategoryIds) {
+        const cat = await categoryModel.findById(catId);
+        if (!cat) {
+            throw new AppError(`Thể loại với ID ${catId} không tồn tại.`, 400);
+        }
+    }
+
     const createdBook = await bookModel.create({
         title: normalizedTitle,
         author: normalizedAuthor,
@@ -141,6 +150,16 @@ async function updateBook(id, updateData) {
     const categoryIds = updateData.categoryIds === undefined
         ? null
         : validateCategoryIds(updateData.categoryIds);
+
+    if (categoryIds !== null) {
+        for (const catId of categoryIds) {
+            const cat = await categoryModel.findById(catId);
+            if (!cat) {
+                throw new AppError(`Thể loại với ID ${catId} không tồn tại.`, 400);
+            }
+        }
+    }
+
     const updatedBook = await bookModel.update(bookId, payload, categoryIds);
     if (!updatedBook) {
         throw new AppError("Sách không còn ở trạng thái có thể chỉnh sửa.", 409);
@@ -187,9 +206,140 @@ async function getBookById(id) {
     return book;
 }
 
+async function getClientBooks(options = {}) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (options.minPrice !== undefined && options.minPrice !== null && options.minPrice !== "") {
+        minPrice = Number(options.minPrice);
+        if (Number.isNaN(minPrice) || minPrice < 0) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+    }
+
+    if (options.maxPrice !== undefined && options.maxPrice !== null && options.maxPrice !== "") {
+        maxPrice = Number(options.maxPrice);
+        if (Number.isNaN(maxPrice) || maxPrice < 0) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+    }
+
+    if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+        throw new AppError("Giá tối thiểu không được lớn hơn giá tối đa.", 400);
+    }
+
+    let categoryId = null;
+    if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
+        categoryId = Number(options.categoryId);
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+            throw new AppError("ID thể loại không hợp lệ.", 400);
+        }
+    }
+
+    const allowedSorts = ["newest", "oldest", "price_asc", "price_desc", "discount"];
+    const sort = allowedSorts.includes(options.sort) ? options.sort : "newest";
+
+    const search = typeof options.search === "string" ? options.search.trim() : "";
+
+    return await bookModel.findAll({
+        page,
+        limit,
+        search,
+        categoryId,
+        minPrice,
+        maxPrice,
+        sort,
+        includeDeleted: false,
+    });
+}
+
+async function getClientBookDetail(id, relatedLimit = 4) {
+    const bookId = Number(id);
+    if (!bookId || !Number.isInteger(bookId) || bookId <= 0) {
+        throw new AppError("ID sách không hợp lệ.", 400);
+    }
+    const book = await bookModel.findById(bookId);
+    if (!book || book.isDelete) {
+        throw new AppError("Không tìm thấy ấn phẩm sách yêu cầu.", 404);
+    }
+    const categoryIds = (book.categories || []).map((cat) => cat.id);
+    const relatedBooks = await bookModel.findRelatedBooks(bookId, categoryIds, relatedLimit);
+    return {
+        ...book,
+        relatedBooks,
+    };
+}
+
+async function getAdminBooks(options = {}) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+
+    let isDelete = null;
+    if (options.isDelete !== undefined && options.isDelete !== null && options.isDelete !== "") {
+        const parsedIsDelete = Number(options.isDelete);
+        if (parsedIsDelete === 0 || parsedIsDelete === 1) {
+            isDelete = parsedIsDelete;
+        } else {
+            throw new AppError("Trạng thái isDelete không hợp lệ.", 400);
+        }
+    }
+
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (options.minPrice !== undefined && options.minPrice !== null && options.minPrice !== "") {
+        minPrice = Number(options.minPrice);
+        if (Number.isNaN(minPrice) || minPrice < 0) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+    }
+
+    if (options.maxPrice !== undefined && options.maxPrice !== null && options.maxPrice !== "") {
+        maxPrice = Number(options.maxPrice);
+        if (Number.isNaN(maxPrice) || maxPrice < 0) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+    }
+
+    if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+        throw new AppError("Giá tối thiểu không được lớn hơn giá tối đa.", 400);
+    }
+
+    let categoryId = null;
+    if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
+        categoryId = Number(options.categoryId);
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+            throw new AppError("ID thể loại không hợp lệ.", 400);
+        }
+    }
+
+    const allowedSorts = ["newest", "oldest", "price_asc", "price_desc", "discount"];
+    const sort = allowedSorts.includes(options.sort) ? options.sort : "newest";
+
+    const search = typeof options.search === "string" ? options.search.trim() : "";
+
+    return await bookModel.findAll({
+        page,
+        limit,
+        search,
+        categoryId,
+        minPrice,
+        maxPrice,
+        sort,
+        includeDeleted: true,
+        isDelete,
+    });
+}
+
 module.exports = {
     createBook,
     updateBook,
     changeBookStatus,
     getBookById,
+    getClientBooks,
+    getClientBookDetail,
+    getAdminBooks,
 };

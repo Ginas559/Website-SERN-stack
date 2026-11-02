@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -9,6 +10,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const clientBookRoutes = require("./routes/clientBookRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -29,6 +31,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", orderRoutes);
+app.use("/api/books", clientBookRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);
 module.exports = app;

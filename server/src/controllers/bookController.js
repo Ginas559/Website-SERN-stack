@@ -1,3 +1,4 @@
+
 const bookService = require("../services/bookService");
 
 async function create(req, res) {
@@ -20,9 +21,27 @@ async function getById(req, res) {
     res.json(book);
 }
 
+async function getAllClient(req, res) {
+    const books = await bookService.getClientBooks(req.query);
+    res.json(books);
+}
+
+async function getDetailClient(req, res) {
+    const book = await bookService.getClientBookDetail(req.params.id);
+    res.json(book);
+}
+
+async function getAllAdmin(req, res) {
+    const result = await bookService.getAdminBooks(req.query);
+    res.json(result);
+}
+
 module.exports = {
     create,
     update,
     changeStatus,
     getById,
+    getAllClient,
+    getDetailClient,
+    getAllAdmin,
 };

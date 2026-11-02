@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToWishlist, removeFromWishlist } from '../store/slices/wishlistSlice';
@@ -91,11 +92,19 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
                             src={book.image} 
                             alt={book.title} 
                             className="book-cover"
-                            onError={() => setImgError(true)}
+                            onError={(e) => {
+                                setImgError(true);
+                                e.target.style.display = "none";
+                                if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                            }}
                         />
-                    ) : (
-                        <div className="book-cover-placeholder">📚</div>
-                    )}
+                    ) : null}
+                    <div 
+                        className="book-cover-placeholder" 
+                        style={{ display: book.image && !imgError ? "none" : "flex" }}
+                    >
+                        📚
+                    </div>
 
                     {discount > 0 && (
                         <span className="discount-badge">-{discount}%</span>

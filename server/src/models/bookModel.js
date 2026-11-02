@@ -1,3 +1,4 @@
+
 const { sql, connectDB } = require("../config/connectDB");
 const AppError = require("../utils/AppError");
 
@@ -129,6 +130,7 @@ async function findAll({
     maxPrice = null,
     sort = "newest",
     includeDeleted = false,
+    isDelete = null,
 } = {}) {
     const pool = await connectDB();
     const request = pool.request();
@@ -136,6 +138,9 @@ async function findAll({
 
     if (!includeDeleted) {
         conditions.push("b.isDelete = 0");
+    } else if (isDelete !== null && isDelete !== undefined) {
+        request.input("isDelete", sql.Int, Number(isDelete));
+        conditions.push("b.isDelete = @isDelete");
     }
 
     if (search && search.trim()) {
@@ -161,9 +166,17 @@ async function findAll({
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     let orderBy = "b.id DESC";
-    if (sort === "price_asc") orderBy = "b.price ASC";
-    else if (sort === "price_desc") orderBy = "b.price DESC";
-    else if (sort === "discount") orderBy = "b.discount DESC";
+    if (sort === "price_asc") {
+        orderBy = "b.price ASC, b.id DESC";
+    } else if (sort === "price_desc") {
+        orderBy = "b.price DESC, b.id DESC";
+    } else if (sort === "discount") {
+        orderBy = "b.discount DESC, b.id DESC";
+    } else if (sort === "oldest") {
+        orderBy = "b.publication_date ASC, b.id ASC";
+    } else if (sort === "newest") {
+        orderBy = "b.publication_date DESC, b.id DESC";
+    }
 
     const countQuery = `SELECT COUNT(DISTINCT b.id) AS total FROM dbo.books b ${whereClause}`;
     const countResult = await request.query(countQuery);
@@ -184,6 +197,34 @@ async function findAll({
 
     const dataResult = await request.query(dataQuery);
     const books = dataResult.recordset;
+
+    if (books.length > 0) {
+        const bookIds = books.map((b) => b.id);
+        const catReq = pool.request();
+        const catCondition = includeDeleted ? "" : "AND c.isDelete = 0";
+        const catResult = await catReq.query(`SELECT bc.book_id, c.id, c.name, c.description, c.image 
+                                              FROM dbo.categories c 
+                                              INNER JOIN dbo.book_categories bc ON c.id = bc.category_id 
+                                              WHERE bc.book_id IN (${bookIds.join(",")}) ${catCondition}`);
+        const catMap = {};
+        for (const row of catResult.recordset) {
+            if (!catMap[row.book_id]) {
+                catMap[row.book_id] = [];
+            }
+            catMap[row.book_id].push({
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                image: row.image,
+            });
+        }
+        for (const b of books) {
+            b.categories = catMap[b.id] || [];
+        }
+    }
+
+    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
+    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
 
     return {
         books,
@@ -379,6 +420,34 @@ async function restoreStock(bookId, quantity, transaction = null) {
     return result.recordset[0] || null;
 }
 
+async function findRelatedBooks(bookId, categoryIds = [], limit = 4) {
+    if (!Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+    const validIds = categoryIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0);
+    if (validIds.length === 0) return [];
+
+    const safeLimit = Number.isInteger(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 20) : 4;
+    const pool = await connectDB();
+    const request = pool.request();
+    request.input("bookId", sql.Int, Number(bookId));
+    request.input("limit", sql.Int, safeLimit);
+
+    const cols = bookColumns.split(", ").map((col) => `b.${col}`).join(", ");
+    const query = `SELECT TOP (@limit) ${cols} 
+                   FROM dbo.books b 
+                   WHERE b.id != @bookId 
+                     AND b.isDelete = 0 
+                     AND b.id IN (
+                         SELECT bc.book_id 
+                         FROM dbo.book_categories bc 
+                         INNER JOIN dbo.categories c ON bc.category_id = c.id 
+                         WHERE bc.category_id IN (${validIds.join(",")}) 
+                           AND c.isDelete = 0
+                     ) 
+                   ORDER BY b.id DESC`;
+    const result = await request.query(query);
+    return result.recordset;
+}
+
 module.exports = {
     create,
     findById,
@@ -389,4 +458,5 @@ module.exports = {
     setCategories,
     deductStock,
     restoreStock,
+    findRelatedBooks,
 };
