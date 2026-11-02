@@ -1,121 +1,251 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useState, useEffect, useCallback } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import './App.css'
+import './components/BooksPage.css'
+import BookList from './components/BookList'
+import BookDetail from './components/BookDetail'
+import AdminDashboard from './components/AdminDashboard'
+import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
+if (resetToken) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+
+async function request(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  const accessToken = localStorage.getItem('accessToken')
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+  const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: 'include' })
+  const data = response.status === 204 ? null : await response.json()
+  if (!response.ok) throw new Error(data?.message || 'Đã xảy ra lỗi.')
+  return data
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const dispatch = useDispatch()
+  const {
+    books,
+    total,
+    totalPages,
+    selectedBook,
+    loading: booksLoading,
+  } = useSelector((state) => state.books)
+
+  const [activeTab, setActiveTab] = useState('books')
+  const [page, setPage] = useState(1)
+  const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
+  const [selectedBookId, setSelectedBookId] = useState(null)
+
+  const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
+  const [form, setForm] = useState({
+    username: '', fullName: '', email: '', phone: '', address: '',
+    password: '', confirmPassword: '', currentPassword: '', newPassword: '', token: resetToken,
+  })
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
+
+  const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
+  const changeMode = (nextMode) => {
+    setMode(nextMode)
+    setMessage('')
+    setError('')
+  }
+
+  const loadBooks = useCallback(() => {
+    if (activeTab !== 'books' || selectedBookId) return
+    const query = {
+      page,
+      limit: 8,
+      ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
+      ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
+      ...(filters.sort ? { sort: filters.sort } : {}),
+    }
+    dispatch(fetchBooks(query))
+  }, [activeTab, page, filters, selectedBookId, dispatch])
+
+  useEffect(() => {
+    loadBooks()
+  }, [loadBooks])
+
+  useEffect(() => {
+    if (!selectedBookId) return
+    dispatch(fetchBookById(selectedBookId))
+  }, [selectedBookId, dispatch])
+
+  async function submit(event) {
+    event.preventDefault()
+    setError('')
+    setMessage('')
+    setLoading(true)
+    try {
+      const path = mode === 'register' ? '/auth/register'
+        : mode === 'forgot' ? '/auth/forgot-password'
+          : mode === 'reset' ? '/auth/reset-password'
+            : mode === 'change' ? '/auth/change-password' : '/auth/login'
+      const payload = mode === 'register'
+        ? { username: form.username, fullName: form.fullName, email: form.email, phone: form.phone, address: form.address, password: form.password, confirmPassword: form.confirmPassword }
+        : mode === 'forgot'
+          ? { email: form.email }
+          : mode === 'reset'
+            ? { token: form.token, password: form.password, confirmPassword: form.confirmPassword }
+            : mode === 'change'
+              ? { currentPassword: form.currentPassword, newPassword: form.newPassword, confirmPassword: form.confirmPassword }
+              : { email: form.email, password: form.password }
+      const data = await request(path, { method: 'POST', body: JSON.stringify(payload) })
+      if (mode === 'forgot') {
+        setMessage(data.message)
+      } else if (mode === 'reset' || mode === 'change') {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('user')
+        setUser(null)
+        setMode('login')
+        setForm({ ...form, password: '', confirmPassword: '', currentPassword: '', newPassword: '', token: '' })
+        if (mode === 'reset') window.history.replaceState({}, '', window.location.pathname)
+        setMessage(data.message)
+      } else if (mode === 'register') {
+        setMode('login')
+        setForm({ ...form, password: '', confirmPassword: '' })
+        setMessage(data.message || 'Đăng ký thành công.')
+      } else {
+        setUser(data.user)
+        localStorage.setItem('accessToken', data.accessToken)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        setMessage('Đăng nhập thành công.')
+      }
+    } catch (submitError) {
+      setError(submitError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function logout() {
+    request('/auth/logout', { method: 'POST' }).catch(() => {})
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('user')
+    setUser(null)
+    setActiveTab('books')
+    setMessage('Bạn đã đăng xuất.')
+  }
+
+  const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div>
+      <header className="app-navbar">
+        <div 
+          className="app-brand" 
+          onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
         >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          SERN BOOKSTORE
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        <nav className="app-nav-links">
+          <button 
+            type="button" 
+            className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+          >
+            Cửa hàng sách
+          </button>
+          {isAdmin && (
+            <button 
+              type="button" 
+              className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+            >
+              Quản trị
+            </button>
+          )}
+          <button 
+            type="button" 
+            className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            {user ? user.fullName : 'Tài khoản'}
+          </button>
+        </nav>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {activeTab === 'admin' && isAdmin ? (
+        <AdminDashboard />
+      ) : activeTab === 'books' ? (
+        selectedBookId && selectedBook ? (
+          <BookDetail 
+            book={selectedBook} 
+            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); }} 
+            onSelectBook={(id) => setSelectedBookId(id)}
+          />
+        ) : (
+          <BookList 
+            books={books}
+            total={total}
+            page={page}
+            totalPages={totalPages}
+            filters={filters}
+            loading={booksLoading}
+            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); }}
+            onPageChange={(nextPage) => setPage(nextPage)}
+            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); }}
+            onSelectBook={(id) => setSelectedBookId(id)}
+          />
+        )
+      ) : user ? (
+        <main className="page">
+          <section className="card welcome">
+            <span className="eyebrow">SERN BOOKSTORE</span>
+            <h1>Xin chào, {user.fullName}</h1>
+            <p>Bạn đang đăng nhập với vai trò <strong>{user.role || (user.isAdmin ? 'Admin' : 'Customer')}</strong>.</p>
+            <button onClick={() => changeMode('change')}>Đổi mật khẩu</button>
+            <button className="secondary" onClick={logout}>Đăng xuất</button>
+            {mode === 'change' && (
+              <form onSubmit={submit}>
+                <label>Mật khẩu hiện tại<input type="password" name="currentPassword" value={form.currentPassword} onChange={update} required /></label>
+                <label>Mật khẩu mới<input type="password" name="newPassword" value={form.newPassword} onChange={update} required minLength="8" /></label>
+                <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>
+                <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</button>
+              </form>
+            )}
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </main>
+      ) : (
+        <main className="page">
+          <section className="intro">
+            <span className="eyebrow">SERN BOOKSTORE</span>
+            <h1>Mở cánh cửa<br /><em>tri thức.</em></h1>
+            <p>Hệ thống bán sách trực tuyến sử dụng SQL Server, Express, React và Node.js.</p>
+          </section>
+          <section className="card auth-card">
+            <div className="tabs">
+              <button className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>Đăng nhập</button>
+              <button className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>Đăng ký</button>
+            </div>
+            <h2>{mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Quên mật khẩu' : mode === 'reset' ? 'Đặt lại mật khẩu' : 'Chào mừng trở lại'}</h2>
+            <p className="muted">{mode === 'login' ? 'Đăng nhập để tiếp tục mua sắm.' : 'Nhập thông tin để tiếp tục.'}</p>
+            <form onSubmit={submit}>
+              {mode === 'register' && <label>Họ và tên<input name="fullName" value={form.fullName} onChange={update} required minLength="2" /></label>}
+              {mode === 'register' && <label>Username<input name="username" value={form.username} onChange={update} required minLength="3" /></label>}
+              {mode === 'register' && <label>Số điện thoại<input name="phone" value={form.phone} onChange={update} required /></label>}
+              {mode === 'register' && <label>Địa chỉ<input name="address" value={form.address} onChange={update} required minLength="2" /></label>}
+              {mode === 'reset' && !resetToken && <label>Mã đặt lại mật khẩu<input name="token" value={form.token} onChange={update} required autoComplete="off" /></label>}
+              {mode !== 'reset' && <label>Email<input type="email" name="email" value={form.email} onChange={update} required /></label>}
+              {mode !== 'forgot' && <label>Mật khẩu<input type="password" name="password" value={form.password} onChange={update} required minLength="8" /></label>}
+              {(mode === 'register' || mode === 'reset') && <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>}
+              <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : mode === 'register' ? 'Tạo tài khoản' : mode === 'forgot' ? 'Gửi yêu cầu' : mode === 'reset' ? 'Đổi mật khẩu' : 'Đăng nhập'}</button>
+            </form>
+            {mode === 'login' && <button className="link" onClick={() => changeMode('forgot')}>Quên mật khẩu?</button>}
+            {(mode === 'forgot' || mode === 'reset') && <button className="link" onClick={() => changeMode('login')}>Quay lại đăng nhập</button>}
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
+          </section>
+        </main>
+      )}
+    </div>
   )
 }
 

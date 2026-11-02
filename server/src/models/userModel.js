@@ -1,0 +1,143 @@
+const crypto = require("crypto");
+const { sql, connectDB } = require("../config/connectDB");
+
+const publicColumns = "id, username, email, phone_number, full_name, address, avatar, isAdmin, createdAt, updatedAt, isDelete, blockReason, isVerified, verificationToken, isVip";
+const insertedPublicColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.isAdmin, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.verificationToken, INSERTED.isVip";
+
+async function findByEmail(email) {
+    const pool = await connectDB();
+    const result = await pool.request().input("email", sql.NVarChar(255), email)
+        .query(`SELECT TOP 1 ${publicColumns}, [password] FROM dbo.Users WHERE email = @email`);
+    return result.recordset[0] || null;
+}
+
+async function findByUsername(username) {
+    const pool = await connectDB();
+    const result = await pool.request().input("username", sql.VarChar(255), username)
+        .query(`SELECT TOP 1 ${publicColumns} FROM dbo.Users WHERE username = @username`);
+    return result.recordset[0] || null;
+}
+
+async function findById(id) {
+    const pool = await connectDB();
+    const result = await pool.request()    .input("id", sql.Char(36), id)
+    .query(`SELECT TOP 1 ${publicColumns} FROM dbo.Users WHERE id = @id`);
+    return result.recordset[0] || null;
+}
+
+async function findPasswordById(id) {
+    const pool = await connectDB();
+    const result = await pool.request().input("id", sql.Char(36), id)
+        .query("SELECT TOP 1 id, [password] FROM dbo.Users WHERE id = @id AND isDelete = 0");
+    return result.recordset[0] || null;
+}
+
+async function create({ id, username, fullName, email, phone, address, passwordHash }) {
+    const pool = await connectDB();
+    const result = await pool.request()
+        .input("id", sql.Char(36), id)
+        .input("username", sql.VarChar(255), username)
+        .input("fullName", sql.VarChar(255), fullName)
+        .input("email", sql.VarChar(255), email)
+        .input("phone", sql.VarChar(255), phone)
+        .input("address", sql.VarChar(255), address)
+        .input("password", sql.VarChar(255), passwordHash)
+        .query(`INSERT INTO dbo.Users (id, username, full_name, email, phone_number, [address], [password]) OUTPUT ${insertedPublicColumns} VALUES (@id, @username, @fullName, @email, @phone, @address, @password)`);
+    return result.recordset[0];
+}
+
+async function saveRefreshToken(userId, tokenId, expiresAt) {
+    const pool = await connectDB();
+    await pool.request()    .input("userId", sql.Char(36), userId).input("tokenId", sql.VarChar(36), tokenId)
+        .input("expiresAt", sql.DateTime2, expiresAt)
+        .query("INSERT INTO dbo.RefreshTokens (UserId, TokenId, ExpiresAt) VALUES (@userId, @tokenId, @expiresAt)");
+}
+
+async function rotateRefreshToken(tokenId, newTokenId, expiresAt) {
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+        const request = new sql.Request(transaction);
+        const result = await request.input("tokenId", sql.VarChar(36), tokenId)
+            .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() OUTPUT INSERTED.UserId WHERE TokenId = @tokenId AND RevokedAt IS NULL AND ExpiresAt > SYSUTCDATETIME()");
+        if (!result.recordset[0]) {
+            await transaction.rollback();
+            return null;
+        }
+        await new sql.Request(transaction).input("userId", sql.Char(36), result.recordset[0].UserId)
+            .input("newTokenId", sql.VarChar(36), newTokenId).input("expiresAt", sql.DateTime2, expiresAt)
+            .query("INSERT INTO dbo.RefreshTokens (UserId, TokenId, ExpiresAt) VALUES (@userId, @newTokenId, @expiresAt)");
+        await transaction.commit();
+        return result.recordset[0].UserId;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
+
+async function revokeRefreshToken(tokenId) {
+    const pool = await connectDB();
+    await pool.request().input("tokenId", sql.VarChar(36), tokenId)
+        .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE TokenId = @tokenId AND RevokedAt IS NULL");
+}
+
+async function revokeUserRefreshTokens(userId) {
+    const pool = await connectDB();
+    await pool.request().input("userId", sql.Char(36), userId)
+        .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE UserId = @userId AND RevokedAt IS NULL");
+}
+
+async function saveResetToken(email, tokenHash, expiresAt) {
+    const pool = await connectDB();
+    const result = await pool.request().input("email", sql.VarChar(255), email)
+        .input("tokenHash", sql.Char(64), tokenHash).input("expiresAt", sql.DateTime2, expiresAt)
+        .query("UPDATE dbo.Users SET verificationToken = @tokenHash, resetPasswordExpiresAt = @expiresAt, resetPasswordUsedAt = NULL, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
+    return result.recordset[0] || null;
+}
+
+async function resetPassword(tokenHash, passwordHash) {
+    const pool = await connectDB();
+    const result = await pool.request().input("tokenHash", sql.VarChar(255), tokenHash).input("passwordHash", sql.VarChar(255), passwordHash)
+        .query(`UPDATE dbo.Users SET [password] = @passwordHash, verificationToken = NULL, resetPasswordExpiresAt = NULL, resetPasswordUsedAt = SYSUTCDATETIME(), updatedAt = SYSUTCDATETIME() OUTPUT ${insertedPublicColumns} WHERE verificationToken = @tokenHash AND resetPasswordExpiresAt > SYSUTCDATETIME() AND resetPasswordUsedAt IS NULL AND isDelete = 0`);
+    return result.recordset[0] || null;
+}
+
+function hashResetToken(token) {
+    return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function changePassword(userId, currentPasswordHash, passwordHash) {
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+        const userResult = await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .query("SELECT TOP 1 [password] FROM dbo.Users WHERE id = @userId AND isDelete = 0");
+        const user = userResult.recordset[0];
+        if (!user) {
+            await transaction.rollback();
+            return null;
+        }
+        const result = await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .input("currentPasswordHash", sql.VarChar(255), currentPasswordHash)
+            .input("passwordHash", sql.VarChar(255), passwordHash)
+            .query("UPDATE dbo.Users SET [password] = @passwordHash, updatedAt = SYSUTCDATETIME() WHERE id = @userId AND [password] = @currentPasswordHash AND isDelete = 0");
+        if (!result.rowsAffected[0]) {
+            await transaction.rollback();
+            return null;
+        }
+        await new sql.Request(transaction)
+            .input("userId", sql.Char(36), userId)
+            .query("UPDATE dbo.RefreshTokens SET RevokedAt = SYSUTCDATETIME() WHERE UserId = @userId AND RevokedAt IS NULL");
+        await transaction.commit();
+        return true;
+    } catch (error) {
+        await transaction.rollback();
+        throw error;
+    }
+}
+
+module.exports = { findByEmail, findByUsername, findById, findPasswordById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeUserRefreshTokens, saveResetToken, resetPassword, changePassword, hashResetToken };
