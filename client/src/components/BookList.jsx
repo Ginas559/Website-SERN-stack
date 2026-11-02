@@ -1,3 +1,4 @@
+
 import BookCard from "./BookCard";
 
 function BookList({
@@ -34,7 +35,7 @@ function BookList({
         <div className="books-container">
             <div className="books-header">
                 <div>
-                    <h1 className="books-title">Không Gian Sách Trực Tuyến</h1>
+                    <h1 className="books-title">Cửa Hàng Sách</h1>
                     <div style={{ color: "#b9b0a7", fontSize: "0.95rem", marginTop: "4px" }}>
                         Khám phá kho tàng tri thức với hàng ngàn đầu sách chọn lọc
                     </div>
@@ -164,4 +165,3 @@ function BookList({
 }
 
 export default BookList;
-

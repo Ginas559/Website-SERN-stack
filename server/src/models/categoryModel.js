@@ -1,4 +1,6 @@
+
 const { sql, connectDB } = require("../config/connectDB");
+const AppError = require("../utils/AppError");
 
 const categoryColumns = "id, name, description, image, createdAt, updatedAt, isDelete";
 const insertedCategoryColumns = "INSERTED.id, INSERTED.name, INSERTED.description, INSERTED.image, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete";
@@ -12,46 +14,98 @@ async function findAll({ includeDeleted = false } = {}) {
     return result.recordset;
 }
 
-async function findById(id) {
+async function findById(id, { includeDeleted = false } = {}) {
     const pool = await connectDB();
+    const condition = includeDeleted ? "WHERE id = @id" : "WHERE id = @id AND isDelete = 0";
     const result = await pool.request()
         .input("id", sql.Int, id)
-        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories WHERE id = @id`);
+        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories ${condition}`);
     return result.recordset[0] || null;
 }
 
-async function findByName(name) {
+async function findByName(name, { includeDeleted = false } = {}) {
     const pool = await connectDB();
+    const condition = includeDeleted ? "WHERE name = @name" : "WHERE name = @name AND isDelete = 0";
     const result = await pool.request()
         .input("name", sql.NVarChar(255), name)
-        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories WHERE name = @name`);
+        .query(`SELECT TOP 1 ${categoryColumns} FROM dbo.categories ${condition}`);
     return result.recordset[0] || null;
 }
 
 async function create({ name, description = null, image = null }) {
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    if (!trimmedName) {
+        throw new AppError("Tên thể loại không được để trống.", 400);
+    }
+
+    const existingCategory = await findByName(trimmedName, { includeDeleted: false });
+    if (existingCategory) {
+        throw new AppError("Tên thể loại đã tồn tại.", 409);
+    }
+
     const pool = await connectDB();
     const result = await pool.request()
-        .input("name", sql.NVarChar(255), name)
+        .input("name", sql.NVarChar(255), trimmedName)
         .input("description", sql.NVarChar(sql.MAX), description)
         .input("image", sql.VarChar(255), image)
         .query(`INSERT INTO dbo.categories (name, description, image) OUTPUT ${insertedCategoryColumns} VALUES (@name, @description, @image)`);
     return result.recordset[0];
 }
 
-async function update(id, { name, description, image }) {
+async function update(id, fields = {}) {
+    const existing = await findById(id, { includeDeleted: false });
+    if (!existing) {
+        return null;
+    }
+
     const pool = await connectDB();
-    const result = await pool.request()
-        .input("id", sql.Int, id)
-        .input("name", sql.NVarChar(255), name)
-        .input("description", sql.NVarChar(sql.MAX), description)
-        .input("image", sql.VarChar(255), image)
-        .query(`UPDATE dbo.categories 
-                SET name = COALESCE(@name, name), 
-                    description = COALESCE(@description, description), 
-                    image = COALESCE(@image, image), 
-                    updatedAt = GETDATE() 
-                OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+
+    if (fields.name !== undefined) {
+        const trimmedName = typeof fields.name === "string" ? fields.name.trim() : "";
+        if (!trimmedName) {
+            throw new AppError("Tên thể loại không được để trống.", 400);
+        }
+
+        const duplicateCheck = await pool.request()
+            .input("name", sql.NVarChar(255), trimmedName)
+            .input("id", sql.Int, id)
+            .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
+
+        if (duplicateCheck.recordset[0]) {
+            throw new AppError("Tên thể loại đã tồn tại.", 409);
+        }
+        fields.name = trimmedName;
+    }
+
+    const request = pool.request();
+    request.input("id", sql.Int, id);
+
+    const setClauses = [];
+
+    if (fields.name !== undefined) {
+        request.input("name", sql.NVarChar(255), fields.name);
+        setClauses.push("name = @name");
+    }
+    if (fields.description !== undefined) {
+        request.input("description", sql.NVarChar(sql.MAX), fields.description);
+        setClauses.push("description = @description");
+    }
+    if (fields.image !== undefined) {
+        request.input("image", sql.VarChar(255), fields.image);
+        setClauses.push("image = @image");
+    }
+
+    if (setClauses.length === 0) {
+        return existing;
+    }
+
+    setClauses.push("updatedAt = GETDATE()");
+
+    const query = `UPDATE dbo.categories 
+                   SET ${setClauses.join(", ")} 
+                   OUTPUT ${insertedCategoryColumns} 
+                   WHERE id = @id AND isDelete = 0`;
+    const result = await request.query(query);
     return result.recordset[0] || null;
 }
 
@@ -62,18 +116,35 @@ async function softDelete(id) {
         .query(`UPDATE dbo.categories 
                 SET isDelete = 1, updatedAt = GETDATE() 
                 OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 
 async function restore(id) {
+    const existing = await findById(id, { includeDeleted: true });
+    if (!existing) {
+        return null;
+    }
+    if (!existing.isDelete) {
+        return existing;
+    }
+
     const pool = await connectDB();
+    const duplicateCheck = await pool.request()
+        .input("name", sql.NVarChar(255), existing.name)
+        .input("id", sql.Int, id)
+        .query("SELECT TOP 1 id FROM dbo.categories WHERE name = @name AND id != @id AND isDelete = 0");
+
+    if (duplicateCheck.recordset[0]) {
+        throw new AppError("Tên thể loại đã tồn tại.", 409);
+    }
+
     const result = await pool.request()
         .input("id", sql.Int, id)
         .query(`UPDATE dbo.categories 
                 SET isDelete = 0, updatedAt = GETDATE() 
                 OUTPUT ${insertedCategoryColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 1`);
     return result.recordset[0] || null;
 }
 

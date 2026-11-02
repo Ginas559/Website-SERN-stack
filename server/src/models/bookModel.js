@@ -1,7 +1,52 @@
+
 const { sql, connectDB } = require("../config/connectDB");
+const AppError = require("../utils/AppError");
 
 const bookColumns = "id, title, author, price, description, image, publication_date, createdAt, updatedAt, isDelete, quantity, discount, purchase_price";
 const insertedBookColumns = "INSERTED.id, INSERTED.title, INSERTED.author, INSERTED.price, INSERTED.description, INSERTED.image, INSERTED.publication_date, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.quantity, INSERTED.discount, INSERTED.purchase_price";
+
+async function syncBookCategories(transaction, bookId, categoryIds) {
+    if (!Array.isArray(categoryIds)) {
+        const error = new Error("categoryIds phải là một danh sách mảng.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    for (const cid of categoryIds) {
+        if (typeof cid !== "number" || !Number.isInteger(cid) || cid <= 0) {
+            const error = new Error("Mỗi ID thể loại phải là một số nguyên dương hợp lệ.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const cleanIds = [...new Set(categoryIds)];
+
+    if (cleanIds.length > 0) {
+        const checkReq = new sql.Request(transaction);
+        const catResult = await checkReq.query(`SELECT id FROM dbo.categories WHERE id IN (${cleanIds.join(",")}) AND isDelete = 0`);
+        const existingIds = new Set(catResult.recordset.map((r) => r.id));
+
+        for (const cid of cleanIds) {
+            if (!existingIds.has(cid)) {
+                const error = new Error(`Thể loại với ID ${cid} không tồn tại hoặc đã bị ẩn.`);
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+    }
+
+    const delReq = new sql.Request(transaction);
+    delReq.input("book_id", sql.Int, bookId);
+    await delReq.query("DELETE FROM dbo.book_categories WHERE book_id = @book_id");
+
+    for (const cid of cleanIds) {
+        const insReq = new sql.Request(transaction);
+        insReq.input("book_id", sql.Int, bookId);
+        insReq.input("category_id", sql.Int, cid);
+        await insReq.query("INSERT INTO dbo.book_categories (book_id, category_id) VALUES (@book_id, @category_id)");
+    }
+}
 
 async function create({
     title,
@@ -17,9 +62,12 @@ async function create({
 }) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
+        await transaction.begin();
+        isTransactionActive = true;
+
         const bookReq = new sql.Request(transaction);
         const result = await bookReq
             .input("title", sql.NVarChar(255), title)
@@ -38,29 +86,27 @@ async function create({
 
         const createdBook = result.recordset[0];
 
-        if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-            for (const catId of categoryIds) {
-                const catReq = new sql.Request(transaction);
-                await catReq
-                    .input("book_id", sql.Int, createdBook.id)
-                    .input("category_id", sql.Int, catId)
-                    .query("INSERT INTO dbo.book_categories (book_id, category_id) VALUES (@book_id, @category_id)");
-            }
+        if (categoryIds !== null && categoryIds !== undefined) {
+            await syncBookCategories(transaction, createdBook.id, categoryIds);
         }
 
         await transaction.commit();
+        isTransactionActive = false;
         return createdBook;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
 }
 
-async function findById(id) {
+async function findById(id, { includeDeleted = false } = {}) {
     const pool = await connectDB();
+    const condition = includeDeleted ? "WHERE id = @id" : "WHERE id = @id AND isDelete = 0";
     const result = await pool.request()
         .input("id", sql.Int, id)
-        .query(`SELECT TOP 1 ${bookColumns} FROM dbo.books WHERE id = @id`);
+        .query(`SELECT TOP 1 ${bookColumns} FROM dbo.books ${condition}`);
 
     const book = result.recordset[0];
     if (!book) return null;
@@ -136,9 +182,12 @@ async function findAll({
     const countResult = await request.query(countQuery);
     const total = countResult.recordset[0]?.total || 0;
 
-    const offset = (Math.max(1, page) - 1) * limit;
+    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
+    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+    const offset = (sanitizedPage - 1) * sanitizedLimit;
+
     request.input("offset", sql.Int, offset);
-    request.input("limit", sql.Int, limit);
+    request.input("limit", sql.Int, sanitizedLimit);
 
     const dataQuery = `SELECT ${bookColumns.split(", ").map((col) => `b.${col}`).join(", ")} 
                        FROM dbo.books b 
@@ -189,54 +238,92 @@ async function findAll({
 async function update(id, fields = {}, categoryIds = null) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
+        await transaction.begin();
+        isTransactionActive = true;
+
         const bookReq = new sql.Request(transaction);
         bookReq.input("id", sql.Int, id);
-        bookReq.input("title", sql.NVarChar(255), fields.title);
-        bookReq.input("author", sql.NVarChar(255), fields.author);
-        bookReq.input("price", sql.Int, fields.price);
-        bookReq.input("description", sql.NVarChar(sql.MAX), fields.description);
-        bookReq.input("image", sql.VarChar(255), fields.image);
-        bookReq.input("publication_date", sql.DateTime, fields.publication_date);
-        bookReq.input("quantity", sql.Int, fields.quantity);
-        bookReq.input("discount", sql.Int, fields.discount);
-        bookReq.input("purchase_price", sql.Int, fields.purchase_price);
 
-        const result = await bookReq.query(`UPDATE dbo.books 
-            SET title = COALESCE(@title, title),
-                author = COALESCE(@author, author),
-                price = COALESCE(@price, price),
-                description = COALESCE(@description, description),
-                image = COALESCE(@image, image),
-                publication_date = COALESCE(@publication_date, publication_date),
-                quantity = COALESCE(@quantity, quantity),
-                discount = COALESCE(@discount, discount),
-                purchase_price = COALESCE(@purchase_price, purchase_price),
-                updatedAt = GETDATE()
-            OUTPUT ${insertedBookColumns}
-            WHERE id = @id`);
+        const setClauses = [];
 
-        const updatedBook = result.recordset[0];
+        if (fields.title !== undefined) {
+            bookReq.input("title", sql.NVarChar(255), fields.title);
+            setClauses.push("title = @title");
+        }
+        if (fields.author !== undefined) {
+            bookReq.input("author", sql.NVarChar(255), fields.author);
+            setClauses.push("author = @author");
+        }
+        if (fields.price !== undefined) {
+            bookReq.input("price", sql.Int, fields.price);
+            setClauses.push("price = @price");
+        }
+        if (fields.description !== undefined) {
+            bookReq.input("description", sql.NVarChar(sql.MAX), fields.description);
+            setClauses.push("description = @description");
+        }
+        if (fields.image !== undefined) {
+            bookReq.input("image", sql.VarChar(255), fields.image);
+            setClauses.push("image = @image");
+        }
+        if (fields.publication_date !== undefined) {
+            bookReq.input("publication_date", sql.DateTime, fields.publication_date);
+            setClauses.push("publication_date = @publication_date");
+        }
+        if (fields.quantity !== undefined) {
+            bookReq.input("quantity", sql.Int, fields.quantity);
+            setClauses.push("quantity = @quantity");
+        }
+        if (fields.discount !== undefined) {
+            bookReq.input("discount", sql.Int, fields.discount);
+            setClauses.push("discount = @discount");
+        }
+        if (fields.purchase_price !== undefined) {
+            bookReq.input("purchase_price", sql.Int, fields.purchase_price);
+            setClauses.push("purchase_price = @purchase_price");
+        }
 
-        if (Array.isArray(categoryIds)) {
-            const delReq = new sql.Request(transaction);
-            delReq.input("book_id", sql.Int, id);
-            await delReq.query("DELETE FROM dbo.book_categories WHERE book_id = @book_id");
+        let updatedBook = null;
 
-            for (const catId of categoryIds) {
-                const insReq = new sql.Request(transaction);
-                insReq.input("book_id", sql.Int, id);
-                insReq.input("category_id", sql.Int, catId);
-                await insReq.query("INSERT INTO dbo.book_categories (book_id, category_id) VALUES (@book_id, @category_id)");
+        if (setClauses.length > 0) {
+            setClauses.push("updatedAt = GETDATE()");
+            const updateQuery = `UPDATE dbo.books 
+                                 SET ${setClauses.join(", ")} 
+                                 OUTPUT ${insertedBookColumns} 
+                                 WHERE id = @id AND isDelete = 0`;
+            const result = await bookReq.query(updateQuery);
+            updatedBook = result.recordset[0];
+            if (!updatedBook) {
+                await transaction.rollback();
+                isTransactionActive = false;
+                return null;
+            }
+        } else {
+            const checkReq = new sql.Request(transaction);
+            checkReq.input("id", sql.Int, id);
+            const checkResult = await checkReq.query(`SELECT TOP 1 ${bookColumns} FROM dbo.books WHERE id = @id AND isDelete = 0`);
+            updatedBook = checkResult.recordset[0];
+            if (!updatedBook) {
+                await transaction.rollback();
+                isTransactionActive = false;
+                return null;
             }
         }
 
+        if (categoryIds !== null && categoryIds !== undefined) {
+            await syncBookCategories(transaction, id, categoryIds);
+        }
+
         await transaction.commit();
-        return updatedBook || null;
+        isTransactionActive = false;
+        return updatedBook;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
 }
@@ -248,7 +335,7 @@ async function softDelete(id) {
         .query(`UPDATE dbo.books 
                 SET isDelete = 1, updatedAt = GETDATE() 
                 OUTPUT ${insertedBookColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 0`);
     return result.recordset[0] || null;
 }
 
@@ -259,35 +346,78 @@ async function restore(id) {
         .query(`UPDATE dbo.books 
                 SET isDelete = 0, updatedAt = GETDATE() 
                 OUTPUT ${insertedBookColumns} 
-                WHERE id = @id`);
+                WHERE id = @id AND isDelete = 1`);
     return result.recordset[0] || null;
 }
 
 async function setCategories(bookId, categoryIds = []) {
     const pool = await connectDB();
     const transaction = new sql.Transaction(pool);
-    await transaction.begin();
+    let isTransactionActive = false;
 
     try {
-        const delReq = new sql.Request(transaction);
-        delReq.input("book_id", sql.Int, bookId);
-        await delReq.query("DELETE FROM dbo.book_categories WHERE book_id = @book_id");
+        await transaction.begin();
+        isTransactionActive = true;
 
-        if (Array.isArray(categoryIds) && categoryIds.length > 0) {
-            for (const catId of categoryIds) {
-                const insReq = new sql.Request(transaction);
-                insReq.input("book_id", sql.Int, bookId);
-                insReq.input("category_id", sql.Int, catId);
-                await insReq.query("INSERT INTO dbo.book_categories (book_id, category_id) VALUES (@book_id, @category_id)");
-            }
+        const checkReq = new sql.Request(transaction);
+        checkReq.input("id", sql.Int, bookId);
+        const checkResult = await checkReq.query("SELECT TOP 1 id FROM dbo.books WHERE id = @id AND isDelete = 0");
+        if (!checkResult.recordset[0]) {
+            await transaction.rollback();
+            isTransactionActive = false;
+            return false;
         }
 
+        await syncBookCategories(transaction, bookId, categoryIds);
         await transaction.commit();
+        isTransactionActive = false;
         return true;
     } catch (error) {
-        await transaction.rollback();
+        if (isTransactionActive) {
+            await transaction.rollback().catch(() => null);
+        }
         throw error;
     }
+}
+
+async function deductStock(bookId, quantity, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor);
+    const result = await req
+        .input("id", sql.Int, Number(bookId))
+        .input("quantity", sql.Int, Number(quantity))
+        .query(`UPDATE dbo.books 
+                SET quantity = quantity - @quantity, updatedAt = GETDATE() 
+                OUTPUT ${insertedBookColumns} 
+                WHERE id = @id AND isDelete = 0 AND quantity >= @quantity`);
+
+    const updated = result.recordset[0];
+    if (!updated) {
+        const checkReq = new sql.Request(executor);
+        checkReq.input("id", sql.Int, Number(bookId));
+        const checkResult = await checkReq.query("SELECT id, title, quantity, isDelete FROM dbo.books WHERE id = @id");
+        const book = checkResult.recordset[0];
+        if (!book || book.isDelete === 1) {
+            throw new AppError("Sách không tồn tại hoặc đã ngừng kinh doanh.", 404);
+        }
+        throw new AppError(`Ấn phẩm "${book.title}" không đủ số lượng tồn kho (chỉ còn ${book.quantity} cuốn).`, 409);
+    }
+    return updated;
+}
+
+async function restoreStock(bookId, quantity, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+    const req = new sql.Request(executor);
+    const result = await req
+        .input("id", sql.Int, Number(bookId))
+        .input("quantity", sql.Int, Math.max(0, Number(quantity) || 0))
+        .query(`UPDATE dbo.books 
+                SET quantity = quantity + @quantity, updatedAt = GETDATE() 
+                OUTPUT ${insertedBookColumns} 
+                WHERE id = @id AND isDelete = 0`);
+    return result.recordset[0] || null;
 }
 
 async function findRelatedBooks(bookId, categoryIds = [], limit = 4) {
@@ -326,5 +456,7 @@ module.exports = {
     softDelete,
     restore,
     setCategories,
+    deductStock,
+    restoreStock,
     findRelatedBooks,
 };
