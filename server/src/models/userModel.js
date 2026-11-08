@@ -1,6 +1,9 @@
 const crypto = require("crypto");
 const { sql, connectDB } = require("../config/connectDB");
+const AppError = require("../utils/AppError");
 
+const safeProfileColumns = "id, username, email, phone_number, full_name, address, avatar, isAdmin, isVip, isVerified, createdAt, updatedAt";
+const insertedSafeColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.isAdmin, INSERTED.isVip, INSERTED.isVerified, INSERTED.createdAt, INSERTED.updatedAt";
 const publicColumns = "id, username, email, phone_number, full_name, address, avatar, isAdmin, createdAt, updatedAt, isDelete, blockReason, isVerified, verificationToken, isVip";
 const insertedPublicColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.isAdmin, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.verificationToken, INSERTED.isVip";
 
@@ -140,4 +143,61 @@ async function changePassword(userId, currentPasswordHash, passwordHash) {
     }
 }
 
-module.exports = { findByEmail, findByUsername, findById, findPasswordById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeUserRefreshTokens, saveResetToken, resetPassword, changePassword, hashResetToken };
+
+function handleUserWriteError(error) {
+    if (error && (error.number === 2601 || error.number === 2627)) {
+        throw new AppError("Thông tin người dùng (email hoặc số điện thoại) đã tồn tại trong hệ thống.", 409, error);
+    }
+    throw error;
+}
+
+async function findByIdSafe(id) {
+    const pool = await connectDB();
+    const result = await pool.request()
+        .input("id", sql.Char(36), id)
+        .query(`SELECT TOP 1 ${safeProfileColumns} FROM dbo.Users WHERE id = @id AND isDelete = 0`);
+    return result.recordset[0] || null;
+}
+
+async function findStatusById(id) {
+    const pool = await connectDB();
+    const result = await pool.request()
+        .input("id", sql.Char(36), id)
+        .query("SELECT TOP 1 id, isDelete, blockReason, isVerified, isVip FROM dbo.Users WHERE id = @id");
+    return result.recordset[0] || null;
+}
+
+async function updateProfile(id, { fullName, phoneNumber, address, avatar } = {}) {
+    const pool = await connectDB();
+    const req = pool.request().input("id", sql.Char(36), id);
+    const updates = ["updatedAt = GETDATE()"];
+
+    if (fullName !== undefined) {
+        updates.push("full_name = @fullName");
+        req.input("fullName", sql.NVarChar(255), fullName ? String(fullName).trim() : null);
+    }
+    if (phoneNumber !== undefined) {
+        updates.push("phone_number = @phoneNumber");
+        req.input("phoneNumber", sql.VarChar(255), phoneNumber ? String(phoneNumber).trim() : null);
+    }
+    if (address !== undefined) {
+        updates.push("[address] = @address");
+        req.input("address", sql.NVarChar(255), address ? String(address).trim() : null);
+    }
+    if (avatar !== undefined) {
+        updates.push("avatar = @avatar");
+        req.input("avatar", sql.VarChar(255), avatar ? String(avatar).trim() : null);
+    }
+
+    try {
+        const result = await req.query(`UPDATE dbo.Users
+                                        SET ${updates.join(", ")}
+                                        OUTPUT ${insertedSafeColumns}
+                                        WHERE id = @id AND isDelete = 0`);
+        return result.recordset[0] || null;
+    } catch (error) {
+        handleUserWriteError(error);
+    }
+}
+
+module.exports = { findByEmail, findByUsername, findById, findPasswordById, create, saveRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeUserRefreshTokens, saveResetToken, resetPassword, changePassword, hashResetToken, findByIdSafe, findStatusById, updateProfile, handleUserWriteError };
