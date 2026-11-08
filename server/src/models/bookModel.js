@@ -223,8 +223,6 @@ async function findAll({
         }
     }
 
-    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
-    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
 
     return {
         books,
