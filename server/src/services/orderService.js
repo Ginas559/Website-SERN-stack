@@ -67,9 +67,9 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         throw new AppError("Người dùng không hợp lệ.", 401);
     }
 
-    const receiverName = validateReceiverName(orderPayload.receiverName || orderPayload.fullName);
-    const phone = validatePhoneNumber(orderPayload.phone || orderPayload.phoneNumber);
-    const address = validateAddress(orderPayload.address);
+    const receiverName = validateReceiverName(orderPayload.receiverName || orderPayload.fullName || orderPayload.recipientName || orderPayload.recipient_name || orderPayload.customerName);
+    const phone = validatePhoneNumber(orderPayload.phone || orderPayload.phoneNumber || orderPayload.recipientPhone || orderPayload.recipient_phone);
+    const address = validateAddress(orderPayload.address || orderPayload.shippingAddress || orderPayload.shipping_address);
     const note = orderPayload.note && typeof orderPayload.note === "string" ? orderPayload.note.trim().slice(0, 500) : null;
     const paymentMethod = orderPayload.paymentMethod === "VNPAY" ? "VNPAY" : orderPayload.paymentMethod === "BANK" ? "BANK" : "COD";
 
@@ -134,8 +134,13 @@ async function createOrderFromCart(userId, orderPayload = {}) {
 
     const ghnInfo = {
         receiverName,
+        recipientName: receiverName,
+        fullName: receiverName,
         phone,
+        phoneNumber: phone,
+        recipientPhone: phone,
         address,
+        shippingAddress: address,
         note,
         subtotal,
         shippingFee,
@@ -379,10 +384,25 @@ function parseOrderJsonFields(order) {
         }
     }
 
+    const info = ghnInfo || {};
+    const recipientName = order.recipientName || order.recipient_name || order.receiverName || order.fullName || order.customerName || info.receiverName || info.recipientName || info.fullName || null;
+    const recipientPhone = order.recipientPhone || order.recipient_phone || order.phoneNumber || order.phone || info.phone || info.phoneNumber || info.recipientPhone || null;
+    const shippingAddress = order.shippingAddress || order.shipping_address || order.address || info.address || info.shippingAddress || null;
+
     return {
         ...order,
         ghn_info: ghnInfo || null,
-        ghn_response: ghnResponse || null
+        ghn_response: ghnResponse || null,
+        recipientName,
+        recipient_name: recipientName,
+        receiverName: recipientName,
+        recipientPhone,
+        recipient_phone: recipientPhone,
+        phone: recipientPhone,
+        phoneNumber: recipientPhone,
+        shippingAddress,
+        shipping_address: shippingAddress,
+        address: shippingAddress
     };
 }
 

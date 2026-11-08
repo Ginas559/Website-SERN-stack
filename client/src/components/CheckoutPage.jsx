@@ -131,8 +131,13 @@ function CheckoutPage({
 
         const orderPayload = {
             receiverName: form.fullName.trim(),
+            recipientName: form.fullName.trim(),
+            fullName: form.fullName.trim(),
             phone: phoneTrimmed,
+            phoneNumber: phoneTrimmed,
+            recipientPhone: phoneTrimmed,
             address: form.address.trim(),
+            shippingAddress: form.address.trim(),
             note: form.note.trim() || undefined,
             paymentMethod,
             couponCode: couponInput.trim() || undefined,

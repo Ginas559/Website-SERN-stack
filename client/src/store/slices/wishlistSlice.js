@@ -16,7 +16,8 @@ export const addToWishlist = createAsyncThunk(
   'wishlist/addToWishlist',
   async (bookId, { rejectWithValue }) => {
     try {
-      return await wishlistService.addItem(bookId)
+      await wishlistService.addItem(bookId)
+      return await wishlistService.getWishlist()
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -27,7 +28,8 @@ export const removeFromWishlist = createAsyncThunk(
   'wishlist/removeFromWishlist',
   async (bookId, { rejectWithValue }) => {
     try {
-      return await wishlistService.removeItem(bookId)
+      await wishlistService.removeItem(bookId)
+      return await wishlistService.getWishlist()
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -38,7 +40,8 @@ export const clearWishlist = createAsyncThunk(
   'wishlist/clearWishlist',
   async (_, { rejectWithValue }) => {
     try {
-      return await wishlistService.clearWishlist()
+      await wishlistService.clearWishlist()
+      return { items: [], totalItems: 0 }
     } catch (error) {
       return rejectWithValue(error.message)
     }
@@ -47,21 +50,24 @@ export const clearWishlist = createAsyncThunk(
 
 export const syncGuestWishlist = createAsyncThunk(
   'wishlist/syncGuestWishlist',
-  async (_, { rejectWithValue }) => {
+  async (guestItems, { rejectWithValue }) => {
     try {
-      const raw = localStorage.getItem('guestWishlist')
-      if (raw) {
-        const guestItems = JSON.parse(raw)
-        if (Array.isArray(guestItems) && guestItems.length > 0) {
-          for (const item of guestItems) {
-            const bId = item.bookId || item.id
-            if (bId) {
-              await wishlistService.addItem(bId)
-            }
+      if (!Array.isArray(guestItems) || guestItems.length === 0) {
+        return await wishlistService.getWishlist()
+      }
+
+      for (const item of guestItems) {
+        const bookId = item.bookId || item.id
+        if (bookId) {
+          try {
+            await wishlistService.addItem(bookId)
+          } catch {
+            return
           }
         }
-        localStorage.removeItem('guestWishlist')
       }
+
+      localStorage.removeItem('guestWishlist')
       return await wishlistService.getWishlist()
     } catch (error) {
       return rejectWithValue(error.message)
@@ -83,10 +89,12 @@ const wishlistSlice = createSlice({
     clearWishlistState: (state) => {
       state.items = []
       state.totalItems = 0
+      state.loading = false
       state.error = null
     },
     setWishlistItems: (state, action) => {
       state.items = action.payload || []
+      state.totalItems = state.items.length
     },
   },
   extraReducers: (builder) => {
@@ -104,25 +112,39 @@ const wishlistSlice = createSlice({
         state.loading = false
         state.error = action.payload
       })
-      .addCase(addToWishlist.pending, (state) => {
+      .addCase(addToWishlist.pending, (state, action) => {
         state.loading = true
         state.error = null
+        const targetBookId = Number(action.meta.arg)
+        if (targetBookId && !state.items.some((it) => (it.bookId || it.id) === targetBookId)) {
+          state.items.push({
+            id: targetBookId,
+            bookId: targetBookId,
+          })
+          state.totalItems = state.items.length
+        }
       })
       .addCase(addToWishlist.fulfilled, (state, action) => {
         state.loading = false
-        state.items = action.payload?.items || []
-        state.totalItems = action.payload?.totalItems || 0
+        state.items = action.payload?.items || state.items
+        state.totalItems = action.payload?.totalItems || state.items.length
       })
       .addCase(addToWishlist.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload
+        const targetBookId = Number(action.meta.arg)
+        state.items = state.items.filter((it) => (it.bookId || it.id) !== targetBookId)
+        state.totalItems = state.items.length
       })
-      .addCase(removeFromWishlist.pending, (state) => {
+      .addCase(removeFromWishlist.pending, (state, action) => {
         state.error = null
+        const targetBookId = Number(action.meta.arg)
+        state.items = state.items.filter((it) => (it.bookId || it.id) !== targetBookId)
+        state.totalItems = state.items.length
       })
       .addCase(removeFromWishlist.fulfilled, (state, action) => {
-        state.items = action.payload?.items || []
-        state.totalItems = action.payload?.totalItems || 0
+        state.items = action.payload?.items || state.items
+        state.totalItems = action.payload?.totalItems || state.items.length
       })
       .addCase(removeFromWishlist.rejected, (state, action) => {
         state.error = action.payload
@@ -158,4 +180,3 @@ const wishlistSlice = createSlice({
 
 export const { clearWishlistState, setWishlistItems } = wishlistSlice.actions
 export default wishlistSlice.reducer
-

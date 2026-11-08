@@ -9,7 +9,10 @@ function formatCurrency(amount) {
 function formatDate(dateStr) {
   if (!dateStr) return ''
   try {
-    return new Date(dateStr).toLocaleString('vi-VN', {
+    const raw = String(dateStr).trim()
+    const cleanStr = raw.endsWith('Z') ? raw.slice(0, -1) : raw
+    const d = new Date(cleanStr)
+    return d.toLocaleString('vi-VN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -277,9 +280,9 @@ function OrderHistoryPage({
 
                   <div className="order-card-footer">
                     <div className="order-shipping-info">
-                      <strong>Người nhận:</strong> {ghnInfo.receiverName || '---'} ({ghnInfo.phone || '---'})
+                      <strong>Người nhận:</strong> {order.recipientName || order.recipient_name || order.receiverName || order.fullName || order.customerName || ghnInfo.receiverName || ghnInfo.recipientName || ghnInfo.fullName || '---'} ({order.recipientPhone || order.recipient_phone || order.phoneNumber || order.phone || ghnInfo.phone || ghnInfo.phoneNumber || ghnInfo.recipientPhone || '---'})
                       <br />
-                      <strong>Địa chỉ:</strong> {ghnInfo.address || '---'}
+                      <strong>Địa chỉ:</strong> {order.shippingAddress || order.shipping_address || order.address || ghnInfo.address || ghnInfo.shippingAddress || '---'}
                       <br />
                       <strong>Phương thức:</strong> {order.payment_method === 'VNPAY' ? 'VNPAY Sandbox' : order.payment_method === 'BANK' ? 'Chuyển khoản' : 'Thanh toán khi nhận hàng (COD)'}
                     </div>

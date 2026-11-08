@@ -165,12 +165,24 @@ async function updatePaymentSuccess(id, { ghnResponse = null, ghnInfo = null } =
         throw new AppError("Đơn hàng không ở trạng thái chờ thanh toán.", 409);
     }
 
+    let mergedGhnInfo = ghnInfo;
+    if (ghnInfo && typeof ghnInfo === "object") {
+        let currentInfo = current.ghn_info;
+        if (typeof currentInfo === "string") {
+            try { currentInfo = JSON.parse(currentInfo); } catch { currentInfo = {}; }
+        }
+        mergedGhnInfo = {
+            ...(currentInfo || {}),
+            ...ghnInfo
+        };
+    }
+
     const pool = await connectDB();
     const executor = transaction || pool;
     const req = new sql.Request(executor)
         .input("id", sql.Char(36), id)
         .input("ghn_response", sql.NVarChar(sql.MAX), typeof ghnResponse === "object" ? JSON.stringify(ghnResponse) : ghnResponse)
-        .input("ghn_info", sql.NVarChar(sql.MAX), typeof ghnInfo === "object" ? JSON.stringify(ghnInfo) : ghnInfo);
+        .input("ghn_info", sql.NVarChar(sql.MAX), typeof mergedGhnInfo === "object" ? JSON.stringify(mergedGhnInfo) : mergedGhnInfo);
 
     const result = await req.query(`UPDATE dbo.orders 
                                     SET status = 1,
