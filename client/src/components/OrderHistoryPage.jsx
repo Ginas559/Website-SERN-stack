@@ -10,15 +10,14 @@ function formatDate(dateStr) {
   if (!dateStr) return ''
   try {
     const raw = String(dateStr).trim()
-    const cleanStr = raw.endsWith('Z') ? raw.slice(0, -1) : raw
-    const d = new Date(cleanStr)
-    return d.toLocaleString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+    if (match) {
+      const [, year, month, day, hours, minutes] = match
+      return `${hours}:${minutes} ${day}/${month}/${year}`
+    }
+    const d = new Date(raw)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
   } catch {
     return dateStr
   }

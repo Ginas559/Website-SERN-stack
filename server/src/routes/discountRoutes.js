@@ -1,5 +1,5 @@
 const express = require("express");
-const { param, query } = require("express-validator");
+const { body, param, query } = require("express-validator");
 const controller = require("../controllers/discountController");
 const validate = require("../middleware/validateMiddleware");
 
@@ -31,6 +31,44 @@ router.get(
     controller.getActiveDiscounts
 );
 
+router.post(
+    "/validate",
+    [
+        body("code")
+            .isString()
+            .withMessage("Mã khuyến mãi phải là chuỗi ký tự.")
+            .bail()
+            .trim()
+            .notEmpty()
+            .withMessage("Vui lòng cung cấp mã khuyến mãi.")
+            .bail()
+            .isLength({ max: 50 })
+            .withMessage("Mã khuyến mãi không được vượt quá 50 ký tự."),
+        body("subtotal")
+            .notEmpty()
+            .withMessage("Vui lòng cung cấp tổng tiền tạm tính của đơn hàng.")
+            .bail()
+            .isNumeric()
+            .withMessage("Tổng tiền tạm tính phải là một số hợp lệ.")
+            .bail()
+            .custom((val) => Number(val) > 0)
+            .withMessage("Tổng tiền tạm tính phải lớn hơn 0.")
+            .bail()
+            .toInt(),
+        body("shippingFee")
+            .optional()
+            .isNumeric()
+            .withMessage("Phí vận chuyển phải là một số hợp lệ.")
+            .bail()
+            .custom((val) => Number(val) >= 0)
+            .withMessage("Phí vận chuyển không được là số âm.")
+            .bail()
+            .toInt()
+    ],
+    validate,
+    controller.validateAndCalculate
+);
+
 router.get(
     "/code/:code",
     [
@@ -60,4 +98,3 @@ router.get(
 );
 
 module.exports = router;
-
