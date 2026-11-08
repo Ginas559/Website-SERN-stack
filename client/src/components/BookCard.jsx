@@ -12,6 +12,7 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
         : null;
 
     const [imgError, setImgError] = useState(false);
+    const [optimisticState, setOptimisticState] = useState(null);
     const [localFavorite, setLocalFavorite] = useState(() => {
         try {
             const saved = JSON.parse(localStorage.getItem('guestWishlist') || '[]');
@@ -21,9 +22,11 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
         }
     });
 
-    const isFavorite = typeof isFavoriteProp === 'boolean' 
-        ? isFavoriteProp 
-        : (isFavoriteRedux !== null ? isFavoriteRedux : localFavorite);
+    const isFavorite = optimisticState !== null
+        ? optimisticState
+        : typeof isFavoriteProp === 'boolean'
+            ? isFavoriteProp
+            : (isFavoriteRedux !== null ? isFavoriteRedux : localFavorite);
 
     const discount = Math.max(0, Math.min(100, Number(book.discount) || 0));
     const originalPrice = Math.max(0, Number(book.price) || 0);
@@ -40,6 +43,7 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
     const handleHeartClick = (e) => {
         e.stopPropagation();
         const nextState = !isFavorite;
+        setOptimisticState(nextState);
         setLocalFavorite(nextState);
 
         if (onToggleFavorite) {

@@ -11,6 +11,7 @@ const cartRoutes = require("./routes/cartRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const discountRoutes = require("./routes/discountRoutes");
+const adminDiscountRoutes = require("./routes/adminDiscountRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -24,6 +25,7 @@ app.use("/api/users", webRoutes);
 app.use("/api/admin/books", bookRoutes);
 app.use("/api/admin/categories", categoryRoutes);
 app.use("/api/books", clientBookRoutes);
+app.use("/api/admin/discounts", adminDiscountRoutes);
 app.use("/api/admin/orders", (req, res, next) => {
     req.url = `/admin${req.url === "/" ? "" : req.url}`;
     orderRoutes(req, res, next);
