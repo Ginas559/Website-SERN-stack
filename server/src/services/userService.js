@@ -122,9 +122,125 @@ async function getAccountStatus(userId) {
     };
 }
 
+async function getAdminUsers(queryParams = {}) {
+    const {
+        page = 1,
+        limit = 10,
+        search,
+        isDelete,
+        isAdmin,
+        isVerified,
+        isVip,
+        sortBy = "createdAt",
+        sortOrder = "DESC"
+    } = queryParams;
+
+    if (page !== undefined && (!Number.isInteger(Number(page)) || Number(page) < 1)) {
+        throw new AppError("Số trang phải là số nguyên lớn hơn 0.", 400);
+    }
+    if (limit !== undefined && (!Number.isInteger(Number(limit)) || Number(limit) < 1 || Number(limit) > 100)) {
+        throw new AppError("Số lượng mỗi trang phải từ 1 đến 100.", 400);
+    }
+
+    return userModel.findAllForAdmin({
+        page,
+        limit,
+        search,
+        isDelete,
+        isAdmin,
+        isVerified,
+        isVip,
+        sortBy,
+        sortOrder
+    });
+}
+
+async function getAdminUserById(userId) {
+    if (!userId) {
+        throw new AppError("ID người dùng không hợp lệ.", 400);
+    }
+    const user = await userModel.findByIdAdmin(userId);
+    if (!user) {
+        throw new AppError("Không tìm thấy thông tin người dùng.", 404);
+    }
+    return user;
+}
+
+async function blockUser(targetUserId, { blockReason = null } = {}, adminId) {
+    if (!targetUserId) {
+        throw new AppError("ID người dùng không hợp lệ.", 400);
+    }
+    if (adminId && String(targetUserId).trim() === String(adminId).trim()) {
+        throw new AppError("Không thể tự chặn tài khoản của chính mình.", 400);
+    }
+
+    const user = await userModel.findByIdAdmin(targetUserId);
+    if (!user) {
+        throw new AppError("Không tìm thấy thông tin người dùng.", 404);
+    }
+
+    if (user.isAdmin === 1) {
+        throw new AppError("Không thể chặn tài khoản Quản trị viên.", 403);
+    }
+
+    const cleanReason = blockReason && typeof blockReason === "string" ? blockReason.trim() : null;
+    if (cleanReason && cleanReason.length > 255) {
+        throw new AppError("Lý do chặn không được vượt quá 255 ký tự.", 400);
+    }
+
+    if (user.isDelete === 1) {
+        return user;
+    }
+
+    const blockedUser = await userModel.block(targetUserId, cleanReason);
+    if (!blockedUser) {
+        throw new AppError("Trạng thái người dùng đã thay đổi, vui lòng thử lại.", 409);
+    }
+
+    await userModel.revokeUserRefreshTokens(targetUserId);
+    return blockedUser;
+}
+
+async function restoreUser(targetUserId) {
+    if (!targetUserId) {
+        throw new AppError("ID người dùng không hợp lệ.", 400);
+    }
+
+    const user = await userModel.findByIdAdmin(targetUserId);
+    if (!user) {
+        throw new AppError("Không tìm thấy thông tin người dùng.", 404);
+    }
+
+    if (user.isDelete === 0) {
+        return user;
+    }
+
+    const restoredUser = await userModel.restore(targetUserId);
+    if (!restoredUser) {
+        throw new AppError("Trạng thái người dùng đã thay đổi, vui lòng thử lại.", 409);
+    }
+
+    return restoredUser;
+}
+
+async function changeUserStatus(targetUserId, { isDelete, blockReason = null } = {}, adminId) {
+    if (Number(isDelete) === 1) {
+        return blockUser(targetUserId, { blockReason }, adminId);
+    }
+    if (Number(isDelete) === 0) {
+        return restoreUser(targetUserId);
+    }
+    throw new AppError("Trạng thái isDelete không hợp lệ.", 400);
+}
+
 module.exports = {
     getProfile,
     updateProfile,
-    getAccountStatus
+    getAccountStatus,
+    getAdminUsers,
+    getAdminUserById,
+    blockUser,
+    restoreUser,
+    changeUserStatus
 };
 
