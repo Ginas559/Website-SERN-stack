@@ -14,6 +14,29 @@ router.get("/validate", controller.validateCart);
 router.post("/sync", controller.syncCart);
 
 router.post(
+    "/apply-coupon",
+    [
+        body("code")
+            .isString()
+            .withMessage("Mã khuyến mãi phải là chuỗi ký tự.")
+            .bail()
+            .trim()
+            .notEmpty()
+            .withMessage("Vui lòng cung cấp mã khuyến mãi.")
+            .bail()
+            .isLength({ max: 50 })
+            .withMessage("Mã khuyến mãi không được vượt quá 50 ký tự."),
+        body("selectedBookIds")
+            .optional()
+            .isArray()
+            .withMessage("selectedBookIds phải là một danh sách mảng.")
+            .bail()
+    ],
+    validate,
+    controller.applyCoupon
+);
+
+router.post(
     "/items",
     [
         body("bookId")

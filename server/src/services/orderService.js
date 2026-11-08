@@ -5,6 +5,7 @@ const orderItemModel = require("../models/orderItemModel");
 const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
 const paymentService = require("./paymentService");
+const discountService = require("./discountService");
 const AppError = require("../utils/AppError");
 
 function calculateItemPrice(price, discount = 0) {
@@ -50,17 +51,7 @@ function calculateShippingFee(subtotal) {
     return 25000;
 }
 
-function calculateDiscountValue(couponCode, subtotal, shippingFee) {
-    if (!couponCode || typeof couponCode !== "string") return 0;
-    const clean = couponCode.trim().toUpperCase();
-    if (clean === "BOOKWEB10") {
-        return Math.round(subtotal * 0.1);
-    }
-    if (clean === "FREESHIP") {
-        return shippingFee;
-    }
-    return 0;
-}
+
 
 async function createOrderFromCart(userId, orderPayload = {}) {
     if (!userId) {
@@ -129,7 +120,25 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     }
 
     const shippingFee = calculateShippingFee(subtotal);
-    const discountValue = calculateDiscountValue(orderPayload.couponCode, subtotal, shippingFee);
+    let discountValue = 0;
+    let appliedDiscountId = null;
+    let appliedCouponCode = null;
+
+    if (orderPayload.couponCode && typeof orderPayload.couponCode === "string" && orderPayload.couponCode.trim()) {
+        const cleanCoupon = orderPayload.couponCode.trim().toUpperCase();
+        if (cleanCoupon.length > 50) {
+            throw new AppError("Mã khuyến mãi không được vượt quá 50 ký tự.", 400);
+        }
+        const promoResult = await discountService.validateAndCalculatePromotion({
+            code: cleanCoupon,
+            subtotal,
+            shippingFee
+        });
+        discountValue = promoResult.discountAmount;
+        appliedDiscountId = promoResult.discount.id;
+        appliedCouponCode = promoResult.discount.code;
+    }
+
     const finalTotal = Math.max(0, subtotal + shippingFee - discountValue);
 
     const ghnInfo = {
@@ -145,7 +154,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         subtotal,
         shippingFee,
         discountValue,
-        couponCode: orderPayload.couponCode ? String(orderPayload.couponCode).trim().toUpperCase() : null
+        couponCode: appliedCouponCode
     };
 
     const orderId = uuidv4();
@@ -171,7 +180,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
             paymentMethod,
             payUrl,
             ghnFee: shippingFee,
-            discount: orderPayload.discountId ? Number(orderPayload.discountId) : null,
+            discount: appliedDiscountId || null,
             ghnInfo
         }, transaction);
 
@@ -687,7 +696,7 @@ module.exports = {
     verifyPaymentSignature: paymentService.verifyPaymentSignature,
     calculateItemPrice,
     calculateShippingFee,
-    calculateDiscountValue,
+    calculateDiscountValue: discountService.calculateDiscountValue,
     validatePhoneNumber,
     validateReceiverName,
     validateAddress
