@@ -6,6 +6,7 @@ const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
 const paymentService = require("./paymentService");
 const discountService = require("./discountService");
+const discountModel = require("../models/discountModel");
 const AppError = require("../utils/AppError");
 
 function calculateItemPrice(price, discount = 0) {
@@ -185,6 +186,12 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         }, transaction);
 
         const createdDetails = await orderItemModel.createMany(createdOrder.id, orderItems, transaction);
+        if (appliedDiscountId) {
+            const incremented = await discountModel.incrementUsedCount(appliedDiscountId, transaction);
+            if (!incremented) {
+                throw new AppError("Mã khuyến mãi đã hết lượt sử dụng, vui lòng thử lại.", 400);
+            }
+        }
 
         for (const item of orderItems) {
             await bookModel.deductStock(item.bookId, item.quantity, transaction);
@@ -280,6 +287,10 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
 
         for (const item of orderItems) {
             await bookModel.restoreStock(item.book_id, item.quantity, transaction);
+        }
+
+        if (order.discount) {
+            await discountModel.decrementUsedCount(order.discount, transaction);
         }
 
         await transaction.commit();

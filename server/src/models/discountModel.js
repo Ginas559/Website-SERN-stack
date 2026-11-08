@@ -230,6 +230,20 @@ async function incrementUsedCount(id, transaction = null) {
     return result.recordset[0] || null;
 }
 
+async function decrementUsedCount(id, transaction = null) {
+    const pool = await connectDB();
+    const executor = transaction || pool;
+
+    const result = await new sql.Request(executor)
+        .input("id", sql.Int, Number(id))
+        .query(`UPDATE dbo.discounts
+                SET usedCount = CASE WHEN usedCount > 0 THEN usedCount - 1 ELSE 0 END, updatedAt = GETDATE()
+                OUTPUT ${insertedColumns}
+                WHERE id = @id AND isDelete = 0`);
+
+    return result.recordset[0] || null;
+}
+
 module.exports = {
     create,
     findById,
@@ -239,6 +253,7 @@ module.exports = {
     softDelete,
     restore,
     incrementUsedCount,
+    decrementUsedCount,
     handleDiscountWriteError
 };
 
