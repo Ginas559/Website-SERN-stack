@@ -239,6 +239,70 @@ async function getAdminDiscountById(id) {
     return discount;
 }
 
+function calculateDiscountValue(discount, subtotal) {
+    if (!discount || !subtotal || subtotal <= 0) return 0;
+    let discountAmount;
+    if (discount.discount_type === "PERCENT") {
+        discountAmount = Math.round((subtotal * discount.value) / 100);
+        if (discount.maxDiscountValue !== null && discount.maxDiscountValue !== undefined && discount.maxDiscountValue > 0) {
+            discountAmount = Math.min(discountAmount, discount.maxDiscountValue);
+        }
+    } else {
+        discountAmount = Math.min(discount.value, subtotal);
+    }
+    return Math.max(0, Math.min(discountAmount, subtotal));
+}
+
+async function validateAndCalculatePromotion({ code, subtotal = 0, shippingFee = 0 }) {
+    if (!code || typeof code !== "string" || !code.trim()) {
+        throw new AppError("Vui lòng nhập mã khuyến mãi.", 400);
+    }
+
+    const numSubtotal = Number(subtotal);
+    if (!Number.isFinite(numSubtotal) || numSubtotal <= 0) {
+        throw new AppError("Tổng giá trị đơn hàng phải lớn hơn 0 để áp dụng mã khuyến mãi.", 400);
+    }
+
+    const numShippingFee = Math.max(0, Number(shippingFee) || 0);
+    const cleanCode = code.trim().toUpperCase();
+
+    const discount = await discountModel.findByCode(cleanCode, { includeDeleted: false });
+    if (!discount) {
+        throw new AppError("Mã khuyến mãi không tồn tại hoặc đã hết hiệu lực.", 404);
+    }
+
+    const now = new Date();
+    if (discount.startDate && new Date(discount.startDate) > now) {
+        throw new AppError("Mã khuyến mãi chưa đến thời gian áp dụng.", 400);
+    }
+
+    if (discount.expiredAt && new Date(discount.expiredAt) < now) {
+        throw new AppError("Mã khuyến mãi đã hết hạn sử dụng.", 400);
+    }
+
+    if (discount.usedCount >= discount.quantity) {
+        throw new AppError("Mã khuyến mãi đã hết lượt sử dụng.", 400);
+    }
+
+    if (discount.minimumOrderValue > 0 && numSubtotal < discount.minimumOrderValue) {
+        const formattedMin = Number(discount.minimumOrderValue).toLocaleString("vi-VN");
+        throw new AppError(`Đơn hàng phải từ ${formattedMin} đ để áp dụng mã khuyến mãi này.`, 400);
+    }
+
+    const discountAmount = calculateDiscountValue(discount, numSubtotal);
+    const finalTotal = Math.max(0, numSubtotal + numShippingFee - discountAmount);
+
+    return {
+        isValid: true,
+        discount: formatDiscountResponse(discount),
+        subtotal: numSubtotal,
+        shippingFee: numShippingFee,
+        discountAmount,
+        finalTotal,
+        message: "Áp dụng mã khuyến mãi thành công."
+    };
+}
+
 module.exports = {
     getActiveDiscounts,
     getDiscountById,
@@ -248,5 +312,7 @@ module.exports = {
     changeDiscountStatus,
     getAdminDiscounts,
     getAdminDiscountById,
+    calculateDiscountValue,
+    validateAndCalculatePromotion,
     formatDiscountResponse
 };

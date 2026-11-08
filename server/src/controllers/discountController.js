@@ -16,6 +16,12 @@ async function getByCode(req, res) {
     res.json(discount);
 }
 
+async function validateAndCalculate(req, res) {
+    const { code, subtotal, shippingFee } = req.body;
+    const result = await discountService.validateAndCalculatePromotion({ code, subtotal, shippingFee });
+    res.json(result);
+}
+
 async function adminCreate(req, res) {
     const discount = await discountService.createDiscount(req.body);
     res.status(201).json(discount);
@@ -45,6 +51,7 @@ module.exports = {
     getActiveDiscounts,
     getById,
     getByCode,
+    validateAndCalculate,
     adminCreate,
     adminUpdate,
     adminChangeStatus,
