@@ -14,6 +14,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const clientBookRoutes = require("./routes/clientBookRoutes");
 const discountRoutes = require("./routes/discountRoutes");
 const adminDiscountRoutes = require("./routes/adminDiscountRoutes");
+const adminUserRoutes = require("./routes/adminUserRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -28,6 +29,7 @@ app.use("/api/users", webRoutes);
 app.use("/api/admin/books", bookRoutes);
 app.use("/api/admin/categories", categoryRoutes);
 app.use("/api/admin/discounts", adminDiscountRoutes);
+app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", (req, res, next) => {
     req.url = `/admin${req.url === "/" ? "" : req.url}`;
     orderRoutes(req, res, next);
