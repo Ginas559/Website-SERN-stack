@@ -188,12 +188,68 @@ async function getBookById(id) {
 }
 
 async function getClientBooks(options = {}) {
-    const page = Math.max(1, parseInt(options.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+    const page = options.page === undefined
+        ? 1
+        : Number(options.page);
+    const limit = options.limit === undefined
+        ? 10
+        : Number(options.limit);
+
+    if (!Number.isFinite(page) || !Number.isInteger(page) || page <= 0) {
+        throw new AppError("Số trang không hợp lệ.", 400);
+    }
+    if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0 || limit > 100) {
+        throw new AppError("Số lượng mỗi trang phải là số nguyên từ 1 đến 100.", 400);
+    }
+
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (options.minPrice !== undefined) {
+        if (options.minPrice === null || (typeof options.minPrice === "string" && !options.minPrice.trim())) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+        minPrice = Number(options.minPrice);
+        if (!Number.isFinite(minPrice) || !Number.isInteger(minPrice) || minPrice < 0) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+    }
+
+    if (options.maxPrice !== undefined) {
+        if (options.maxPrice === null || (typeof options.maxPrice === "string" && !options.maxPrice.trim())) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+        maxPrice = Number(options.maxPrice);
+        if (!Number.isFinite(maxPrice) || !Number.isInteger(maxPrice) || maxPrice < 0) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+    }
+
+    if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+        throw new AppError("Giá tối thiểu không được lớn hơn giá tối đa.", 400);
+    }
+
+    let categoryId = null;
+    if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
+        categoryId = Number(options.categoryId);
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+            throw new AppError("ID thể loại không hợp lệ.", 400);
+        }
+    }
+
+    const allowedSorts = ["newest", "oldest", "price_asc", "price_desc", "discount"];
+    const sort = allowedSorts.includes(options.sort) ? options.sort : "newest";
+
+    const search = typeof options.search === "string" ? options.search.trim() : "";
+
     return await bookModel.findAllClient({
-        ...options,
         page,
         limit,
+        search,
+        categoryId,
+        minPrice,
+        maxPrice,
+        sort,
         includeDeleted: false,
     });
 }
