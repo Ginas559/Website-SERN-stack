@@ -79,6 +79,15 @@ router.post(
             .isArray()
             .withMessage("selectedBookIds phải là một danh sách mảng.")
             .bail(),
+        body("couponCode")
+            .optional()
+            .isString()
+            .withMessage("Mã khuyến mãi phải là chuỗi ký tự.")
+            .bail()
+            .trim()
+            .isLength({ max: 50 })
+            .withMessage("Mã khuyến mãi không được vượt quá 50 ký tự.")
+            .bail(),
     ],
     validate,
     controller.createOrder

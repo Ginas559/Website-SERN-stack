@@ -40,6 +40,11 @@ async function syncCart(req, res) {
     res.json(result);
 }
 
+async function applyCoupon(req, res) {
+    const result = await cartService.applyCoupon(req.user.id, req.body);
+    res.json(result);
+}
+
 module.exports = {
     getCart,
     addItem,
@@ -49,4 +54,5 @@ module.exports = {
     getSummary,
     validateCart,
     syncCart,
+    applyCoupon,
 };
