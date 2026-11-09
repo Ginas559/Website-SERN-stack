@@ -87,8 +87,8 @@ function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
   }
 
   return (
-    <div className="admin-modal-backdrop" onClick={onClose}>
-      <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-backdrop">
+      <div className="admin-modal">
         <div className="admin-modal-header">
           <h3>{mode === 'edit' ? 'Chỉnh sửa ấn phẩm' : 'Thêm ấn phẩm mới'}</h3>
           <button type="button" className="admin-modal-close" onClick={onClose}>×</button>

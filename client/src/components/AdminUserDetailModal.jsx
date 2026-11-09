@@ -21,8 +21,8 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
   const isBlocked = Boolean(user.isDelete)
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal-box user-detail" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-box user-detail">
         <div className="admin-modal-header">
           <div className="admin-user-detail-header-info">
             <div className="admin-user-avatar-large">

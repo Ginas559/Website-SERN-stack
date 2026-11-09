@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 function toInputDate(dateStr) {
   if (!dateStr) return ''
@@ -12,34 +12,15 @@ function toInputDate(dateStr) {
   }
 }
 
-function AdminPromotionModal({
-  isOpen,
+function PromotionModalContent({
   mode = 'create',
   promotion = null,
   onClose,
   onSave,
 }) {
-  const [formData, setFormData] = useState({
-    code: '',
-    discount_type: 'PERCENT',
-    value: '',
-    maxDiscountValue: '',
-    minimumOrderValue: '0',
-    quantity: '100',
-    description: '',
-    startDate: '',
-    expiredAt: '',
-  })
-  const [errors, setErrors] = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen) {
-      setErrors({})
-      return
-    }
+  const [formData, setFormData] = useState(() => {
     if (mode === 'edit' && promotion) {
-      setFormData({
+      return {
         code: promotion.code || '',
         discount_type: promotion.discount_type || 'PERCENT',
         value: promotion.value !== undefined ? String(promotion.value) : '',
@@ -49,28 +30,27 @@ function AdminPromotionModal({
         description: promotion.description || '',
         startDate: toInputDate(promotion.startDate),
         expiredAt: toInputDate(promotion.expiredAt),
-      })
-    } else {
-      const today = new Date()
-      const nextMonth = new Date(today)
-      nextMonth.setDate(today.getDate() + 30)
-
-      setFormData({
-        code: '',
-        discount_type: 'PERCENT',
-        value: '',
-        maxDiscountValue: '',
-        minimumOrderValue: '0',
-        quantity: '100',
-        description: '',
-        startDate: toInputDate(today),
-        expiredAt: toInputDate(nextMonth),
-      })
+      }
     }
-    setErrors({})
-  }, [isOpen, mode, promotion])
+    const today = new Date()
+    const nextMonth = new Date(today)
+    nextMonth.setDate(today.getDate() + 30)
 
-  if (!isOpen) return null
+    return {
+      code: '',
+      discount_type: 'PERCENT',
+      value: '',
+      maxDiscountValue: '',
+      minimumOrderValue: '0',
+      quantity: '100',
+      description: '',
+      startDate: toInputDate(today),
+      expiredAt: toInputDate(nextMonth),
+    }
+  })
+
+  const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
 
   const validate = () => {
     const newErrors = {}
@@ -121,6 +101,12 @@ function AdminPromotionModal({
     return Object.keys(newErrors).length === 0
   }
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault()
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!validate()) return
@@ -151,8 +137,8 @@ function AdminPromotionModal({
   }
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal-box" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-box">
         <div className="admin-modal-header">
           <h2 className="admin-modal-title">
             {mode === 'edit' ? 'Chỉnh sửa Mã Khuyến Mãi' : 'Thêm Mã Khuyến Mãi Mới'}
@@ -166,7 +152,7 @@ function AdminPromotionModal({
           <div className="admin-modal-error-banner">{errors.submit}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="admin-modal-form">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="admin-modal-form">
           <div className="admin-form-row">
             <div className="admin-form-group">
               <label className="admin-form-label">
@@ -341,5 +327,24 @@ function AdminPromotionModal({
   )
 }
 
-export default AdminPromotionModal
+function AdminPromotionModal({
+  isOpen,
+  mode = 'create',
+  promotion = null,
+  onClose,
+  onSave,
+}) {
+  if (!isOpen) return null
 
+  return (
+    <PromotionModalContent
+      key={mode === 'edit' && promotion ? promotion.id : 'create'}
+      mode={mode}
+      promotion={promotion}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  )
+}
+
+export default AdminPromotionModal

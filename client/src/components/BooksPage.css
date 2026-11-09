@@ -462,3 +462,39 @@
 @media (max-width: 520px) {
     .books-grid { grid-template-columns: 1fr; }
 }
+
+.app-nav-links {
+    flex-wrap: wrap;
+}
+
+.nav-btn {
+    flex-shrink: 0;
+    min-width: max-content;
+}
+
+.nav-btn-account {
+    flex-shrink: 0;
+    min-width: max-content;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    background: #e7b26a;
+    color: #1a1a1a;
+    border: 1px solid #e7b26a;
+    transition: all 0.2s ease;
+}
+
+.nav-btn-account:hover {
+    background: #d69f54;
+    color: #1a1a1a;
+}
+
+.nav-btn-account.active {
+    background: #c68a3f;
+    color: #ffffff;
+    border-color: #c68a3f;
+}

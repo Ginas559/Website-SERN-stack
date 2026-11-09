@@ -11,6 +11,8 @@ function formatDiscountResponse(discount) {
         maxDiscountValue: discount.maxDiscountValue,
         minimumOrderValue: discount.minimumOrderValue,
         description: discount.description,
+        quantity: discount.quantity,
+        usedCount: discount.usedCount,
         startDate: discount.startDate,
         expiredAt: discount.expiredAt
     };

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import './App.css'
@@ -11,6 +10,7 @@ import WishlistPage from './components/WishlistPage'
 import CheckoutPage from './components/CheckoutPage'
 import PaymentResult from './components/PaymentResult'
 import OrderHistoryPage from './components/OrderHistoryPage'
+import UserProfile from './components/UserProfile'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
@@ -96,6 +96,25 @@ function App() {
     if (localStorage.getItem('accessToken')) {
       dispatch(fetchCart())
       dispatch(fetchWishlist())
+    }
+  }, [dispatch])
+
+  useEffect(() => {
+    const handleAccountBlocked = (event) => {
+      const blockMsg = event?.detail?.message || 'Tài khoản của bạn đã bị khóa bởi Quản trị viên.'
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('user')
+      setUser(null)
+      dispatch(clearCartState())
+      dispatch(clearWishlistState())
+      setActiveTab('account')
+      setMode('login')
+      setError(blockMsg)
+    }
+
+    window.addEventListener('sern:account-blocked', handleAccountBlocked)
+    return () => {
+      window.removeEventListener('sern:account-blocked', handleAccountBlocked)
     }
   }, [dispatch])
 
@@ -232,10 +251,10 @@ function App() {
           )}
           <button 
             type="button" 
-            className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
+            className={`nav-btn nav-btn-account ${activeTab === 'account' ? 'active' : ''}`}
             onClick={() => setActiveTab('account')}
           >
-            {user ? user.fullName : 'Tài khoản'}
+            👤 {user?.fullName || user?.username || 'Tài khoản'}
           </button>
         </nav>
       </header>
@@ -320,25 +339,11 @@ function App() {
           />
         )
       ) : user ? (
-        <main className="page">
-          <section className="card welcome">
-            <span className="eyebrow">SERN BOOKSTORE</span>
-            <h1>Xin chào, {user.fullName}</h1>
-            <p>Bạn đang đăng nhập với vai trò <strong>{user.role || (user.isAdmin ? 'Admin' : 'Customer')}</strong>.</p>
-            <button onClick={() => changeMode('change')}>Đổi mật khẩu</button>
-            <button className="secondary" onClick={logout}>Đăng xuất</button>
-            {mode === 'change' && (
-              <form onSubmit={submit}>
-                <label>Mật khẩu hiện tại<input type="password" name="currentPassword" value={form.currentPassword} onChange={update} required /></label>
-                <label>Mật khẩu mới<input type="password" name="newPassword" value={form.newPassword} onChange={update} required minLength="8" /></label>
-                <label>Xác nhận mật khẩu<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={update} required minLength="8" /></label>
-                <button type="submit" disabled={loading}>{loading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}</button>
-              </form>
-            )}
-            {message && <p className="success">{message}</p>}
-            {error && <p className="error">{error}</p>}
-          </section>
-        </main>
+        <UserProfile 
+          user={user} 
+          onLogout={logout} 
+          onProfileUpdated={(updated) => setUser(updated)} 
+        />
       ) : (
         <main className="page">
           <section className="intro">

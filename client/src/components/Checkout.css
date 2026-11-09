@@ -636,3 +636,213 @@
     }
 }
 
+
+.applied-coupon-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px dashed #4ade80;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    gap: 10px;
+}
+
+.applied-coupon-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.applied-coupon-badge {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #4ade80;
+    letter-spacing: 0.04em;
+}
+
+.applied-coupon-text {
+    font-size: 0.8rem;
+    color: #b9b0a7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.remove-coupon-btn {
+    background: transparent;
+    border: none;
+    color: #f87171;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.remove-coupon-btn:hover {
+    background: rgba(248, 113, 113, 0.15);
+}
+
+.checkout-avail-promo-section {
+    margin-bottom: 16px;
+}
+
+.checkout-avail-promo-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #b9b0a7;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.checkout-avail-promo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.checkout-avail-promo-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.checkout-avail-promo-list::-webkit-scrollbar-track {
+    background: rgba(26, 25, 23, 0.6);
+    border-radius: 999px;
+}
+
+.checkout-avail-promo-list::-webkit-scrollbar-thumb {
+    background: #4a453e;
+    border-radius: 999px;
+}
+
+.checkout-avail-promo-list::-webkit-scrollbar-thumb:hover {
+    background: #e7b26a;
+}
+
+.checkout-promo-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #20201f;
+    border: 1px solid #3d3d3a;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkout-promo-chip:hover {
+    border-color: #e7b26a;
+    background: #2c2b28;
+}
+
+.checkout-promo-chip-code {
+    font-weight: 700;
+    color: #e7b26a;
+}
+
+.checkout-promo-chip-desc {
+    color: #b9b0a7;
+    font-size: 0.75rem;
+}
+
+.checkout-default-address-card {
+    background: #20201f;
+    border: 1px solid #3d3d3a;
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.checkout-default-address-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 240px;
+}
+
+.checkout-default-badge {
+    background: rgba(231, 178, 106, 0.15);
+    border: 1px solid #e7b26a;
+    color: #e7b26a;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.checkout-default-text {
+    font-size: 0.95rem;
+    color: #f3eadb;
+}
+
+.checkout-change-address-btn {
+    background: transparent;
+    border: 1px solid #4d4d48;
+    color: #e7b26a;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.checkout-change-address-btn:hover {
+    background: #2c2b28;
+    border-color: #e7b26a;
+}
+
+.checkout-new-address-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.checkout-revert-address-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: #b9b0a7;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+
+.checkout-revert-address-btn:hover {
+    color: #e7b26a;
+}
+
+.checkout-save-default-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #b9b0a7;
+    cursor: pointer;
+    user-select: none;
+    margin-top: 4px;
+}
+
+.checkout-save-default-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #e7b26a;
+    cursor: pointer;
+}

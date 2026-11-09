@@ -39,8 +39,8 @@ function CategoryModalContent({ mode, category, onClose, onSave }) {
   }
 
   return (
-    <div className="admin-modal-backdrop" onClick={onClose}>
-      <div className="admin-modal admin-modal-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-backdrop">
+      <div className="admin-modal admin-modal-sm">
         <div className="admin-modal-header">
           <h3>{mode === 'edit' ? 'Chỉnh sửa thể loại' : 'Thêm thể loại mới'}</h3>
           <button type="button" className="admin-modal-close" onClick={onClose}>×</button>

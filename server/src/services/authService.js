@@ -49,8 +49,12 @@ async function register({ username, fullName, email, phone, address, password })
 
 async function login({ email, password }) {
     const user = await userModel.findByEmail(normalizeEmail(email));
-    if (!user || user.isDelete || !(await bcrypt.compare(password, user.password))) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
         throw new AppError("Email hoặc mật khẩu không chính xác.", 401);
+    }
+    if (user.isDelete) {
+        const reasonMsg = user.blockReason ? ` Lý do: ${user.blockReason}.` : "";
+        throw new AppError(`Tài khoản của bạn đã bị khóa.${reasonMsg} Vui lòng liên hệ bộ phận hỗ trợ/quản trị viên để được giải quyết.`, 403);
     }
     return { user: publicUser(user), ...(await issueTokens(user)) };
 }
@@ -67,7 +71,8 @@ async function refresh(refreshToken) {
     const userId = await userModel.rotateRefreshToken(payload.tokenId, newTokenId, refreshExpiresAt());
     if (!userId) throw new AppError("Refresh token đã bị thu hồi.", 401);
     const user = await userModel.findById(userId);
-    if (!user || user.isDelete) throw new AppError("Tài khoản không tồn tại.", 401);
+    if (!user) throw new AppError("Tài khoản không tồn tại.", 401);
+    if (user.isDelete) throw new AppError("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ bộ phận hỗ trợ/quản trị viên.", 403);
     return { user: publicUser(user), accessToken: generateAccessToken(user), refreshToken: generateRefreshToken(user, newTokenId) };
 }
 
@@ -76,8 +81,8 @@ async function logout(refreshToken) {
     try {
         const payload = verifyRefreshToken(refreshToken);
         await userModel.revokeRefreshToken(payload.tokenId);
-    } catch {
-        // An expired token is already unusable; clearing the cookie completes logout.
+    } catch (err) {
+        void err;
     }
 }
 
