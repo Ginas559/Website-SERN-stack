@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   fetchAdminBooks,
@@ -18,7 +17,14 @@ import AdminBookModal from './AdminBookModal'
 import AdminCategoryTable from './AdminCategoryTable'
 import AdminCategoryModal from './AdminCategoryModal'
 import AdminOrderTable from './AdminOrderTable'
+import AdminPromotionTable from './AdminPromotionTable'
+import AdminPromotionModal from './AdminPromotionModal'
+import AdminUserTable from './AdminUserTable'
+import AdminUserBlockModal from './AdminUserBlockModal'
+import AdminUserDetailModal from './AdminUserDetailModal'
 import orderService from '../services/orderService'
+import discountService from '../services/discountService'
+import userService from '../services/userService'
 import './AdminDashboard.css'
 
 function AdminDashboard() {
@@ -50,6 +56,33 @@ function AdminDashboard() {
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all')
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderRefreshTrigger, setOrderRefreshTrigger] = useState(0)
+
+  const [adminPromotions, setAdminPromotions] = useState([])
+  const [promoTotal, setPromoTotal] = useState(0)
+  const [promoPage, setPromoPage] = useState(1)
+  const [promoTotalPages, setPromoTotalPages] = useState(1)
+  const [promoSearch, setPromoSearch] = useState('')
+  const [promoStatusFilter, setPromoStatusFilter] = useState('all')
+  const [promosLoading, setPromosLoading] = useState(false)
+  const [promoRefreshTrigger, setPromoRefreshTrigger] = useState(0)
+  const [promoModalOpen, setPromoModalOpen] = useState(false)
+  const [promoModalMode, setPromoModalMode] = useState('create')
+  const [currentPromo, setCurrentPromo] = useState(null)
+
+  const [adminUsers, setAdminUsers] = useState([])
+  const [userTotal, setUserTotal] = useState(0)
+  const [userPage, setUserPage] = useState(1)
+  const [userTotalPages, setUserTotalPages] = useState(1)
+  const [userSearch, setUserSearch] = useState('')
+  const [userStatusFilter, setUserStatusFilter] = useState('all')
+  const [userRoleFilter, setUserRoleFilter] = useState('all')
+  const [userVipFilter, setUserVipFilter] = useState('all')
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [userRefreshTrigger, setUserRefreshTrigger] = useState(0)
+  const [userBlockModalOpen, setUserBlockModalOpen] = useState(false)
+  const [userBlockTarget, setUserBlockTarget] = useState(null)
+  const [userDetailModalOpen, setUserDetailModalOpen] = useState(false)
+  const [userDetailTarget, setUserDetailTarget] = useState(null)
 
   const [bookModalOpen, setBookModalOpen] = useState(false)
   const [bookModalMode, setBookModalMode] = useState('create')
@@ -99,6 +132,31 @@ function AdminDashboard() {
   }, [fetchCategoriesData])
 
   useEffect(() => {
+    let isCurrent = true
+    orderService.getAdminOrders({ page: 1, limit: 1 })
+      .then((res) => {
+        if (!isCurrent) return
+        setOrderTotal(res.total ?? res.data?.total ?? 0)
+      })
+      .catch(() => {})
+    discountService.getAdminDiscounts({ page: 1, limit: 1 })
+      .then((res) => {
+        if (!isCurrent) return
+        setPromoTotal(res.total ?? res.data?.total ?? 0)
+      })
+      .catch(() => {})
+    userService.getAdminUsers({ page: 1, limit: 1 })
+      .then((res) => {
+        if (!isCurrent) return
+        setUserTotal(res.total ?? res.data?.total ?? 0)
+      })
+      .catch(() => {})
+    return () => {
+      isCurrent = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (adminTab !== 'orders') return
     let isCurrent = true
     orderService.getAdminOrders({
@@ -110,9 +168,9 @@ function AdminDashboard() {
     })
       .then((res) => {
         if (!isCurrent) return
-        setAdminOrders(res.data?.orders || [])
-        setOrderTotal(res.data?.total || 0)
-        setOrderTotalPages(res.data?.totalPages || 1)
+        setAdminOrders(res.orders || res.data?.orders || [])
+        setOrderTotal(res.total ?? res.data?.total ?? 0)
+        setOrderTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
         setOrdersLoading(false)
       })
       .catch((err) => {
@@ -124,6 +182,69 @@ function AdminDashboard() {
       isCurrent = false
     }
   }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderRefreshTrigger, showToast])
+
+  useEffect(() => {
+    if (adminTab !== 'promotions') return
+    let isCurrent = true
+    const queryParams = {
+      page: promoPage,
+      limit: 10,
+      ...(promoSearch.trim() ? { search: promoSearch.trim() } : {}),
+    }
+    if (promoStatusFilter === 'deleted') {
+      queryParams.isDelete = 1
+    } else if (promoStatusFilter !== 'all') {
+      queryParams.status = promoStatusFilter
+      queryParams.isDelete = 0
+    }
+
+    discountService.getAdminDiscounts(queryParams)
+      .then((res) => {
+        if (!isCurrent) return
+        setAdminPromotions(res.discounts || res.data?.discounts || [])
+        setPromoTotal(res.total ?? res.data?.total ?? 0)
+        setPromoTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
+        setPromosLoading(false)
+      })
+      .catch((err) => {
+        if (!isCurrent) return
+        setPromosLoading(false)
+        showToast(err.response?.data?.message || err.message || 'Không thể tải danh sách khuyến mãi.', 'error')
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [adminTab, promoPage, promoSearch, promoStatusFilter, promoRefreshTrigger, showToast])
+
+  useEffect(() => {
+    if (adminTab !== 'users') return
+    let isCurrent = true
+    const queryParams = {
+      page: userPage,
+      limit: 10,
+      ...(userSearch.trim() ? { search: userSearch.trim() } : {}),
+      ...(userStatusFilter !== 'all' ? { isDelete: userStatusFilter } : {}),
+      ...(userRoleFilter === 'admin' ? { isAdmin: 1 } : userRoleFilter === 'customer' ? { isAdmin: 0 } : {}),
+      ...(userVipFilter !== 'all' ? { isVip: userVipFilter } : {}),
+    }
+
+    userService.getAdminUsers(queryParams)
+      .then((res) => {
+        if (!isCurrent) return
+        setAdminUsers(res.users || res.data?.users || [])
+        setUserTotal(res.total ?? res.data?.total ?? 0)
+        setUserTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
+        setUsersLoading(false)
+      })
+      .catch((err) => {
+        if (!isCurrent) return
+        setUsersLoading(false)
+        showToast(err.response?.data?.message || err.message || 'Không thể tải danh sách người dùng.', 'error')
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [adminTab, userPage, userSearch, userStatusFilter, userRoleFilter, userVipFilter, userRefreshTrigger, showToast])
 
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
@@ -185,12 +306,56 @@ function AdminDashboard() {
     }
   }
 
-  const handleUpdateOrderStatus = async (orderId, newStatus, note) => {
+  const handleUpdateOrderStatus = useCallback(async (orderId, newStatus, note) => {
     await orderService.updateOrderStatus(orderId, { status: newStatus, note })
     showToast('Cập nhật trạng thái đơn hàng thành công!')
     setOrdersLoading(true)
     setOrderRefreshTrigger((prev) => prev + 1)
-  }
+  }, [showToast])
+
+  const handleSavePromotion = useCallback(async (payload, promoId) => {
+    if (promoId) {
+      await discountService.updateDiscount(promoId, payload)
+      showToast('Cập nhật mã khuyến mãi thành công!')
+    } else {
+      await discountService.createDiscount(payload)
+      showToast('Thêm mã khuyến mãi mới thành công!')
+    }
+    setPromosLoading(true)
+    setPromoRefreshTrigger((prev) => prev + 1)
+  }, [showToast])
+
+  const handleTogglePromotionStatus = useCallback(async (promo) => {
+    const nextStatus = promo.isDelete ? 0 : 1
+    try {
+      await discountService.changeDiscountStatus(promo.id, nextStatus)
+      showToast(nextStatus === 1 ? 'Đã ẩn mã khuyến mãi.' : 'Đã khôi phục mã khuyến mãi.')
+      setPromosLoading(true)
+      setPromoRefreshTrigger((prev) => prev + 1)
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật trạng thái khuyến mãi.', 'error')
+    }
+  }, [showToast])
+
+  const handleConfirmBlockUser = useCallback(async (userId, reason) => {
+    await userService.blockUser(userId, { blockReason: reason })
+    showToast('Đã khóa tài khoản người dùng thành công.')
+    setUsersLoading(true)
+    setUserRefreshTrigger((prev) => prev + 1)
+  }, [showToast])
+
+  const handleRestoreUser = useCallback(async (user) => {
+    try {
+      await userService.restoreUser(user.id)
+      showToast('Đã mở khóa tài khoản người dùng thành công.')
+      setUsersLoading(true)
+      setUserRefreshTrigger((prev) => prev + 1)
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi mở khóa người dùng.', 'error')
+    }
+  }, [showToast])
+
+  const activeCategories = useMemo(() => categories.filter((c) => !c.isDelete), [categories])
 
   return (
     <div className="admin-container">
@@ -205,7 +370,7 @@ function AdminDashboard() {
           <span className="admin-eyebrow">HỆ THỐNG QUẢN TRỊ NỘI BỘ</span>
           <h1 className="admin-title">Bảng điều khiển Quản trị viên</h1>
           <p className="admin-subtitle">
-            Quản lý kho ấn phẩm, danh mục thể loại sách và thông tin phát hành trên toàn hệ thống SERN Bookstore.
+            Quản lý kho ấn phẩm, danh mục thể loại, đơn hàng, chương trình khuyến mãi và người dùng toàn hệ thống BookWeb.
           </p>
         </div>
       </div>
@@ -220,10 +385,16 @@ function AdminDashboard() {
           <div className="admin-stat-value">{categories.length}</div>
         </div>
         <div className="admin-stat-card">
-          <div className="admin-stat-label">Thể loại đang hoạt động</div>
-          <div className="admin-stat-value success">
-            {categories.filter((c) => !c.isDelete).length}
-          </div>
+          <div className="admin-stat-label">Tổng số đơn hàng</div>
+          <div className="admin-stat-value">{orderTotal}</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-label">Mã khuyến mãi</div>
+          <div className="admin-stat-value">{promoTotal}</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-label">Người dùng hệ thống</div>
+          <div className="admin-stat-value">{userTotal}</div>
         </div>
       </div>
 
@@ -251,6 +422,26 @@ function AdminDashboard() {
           }}
         >
           📦 Quản lý Đơn hàng
+        </button>
+        <button
+          type="button"
+          className={`admin-nav-tab ${adminTab === 'promotions' ? 'active' : ''}`}
+          onClick={() => {
+            setPromosLoading(true)
+            setAdminTab('promotions')
+          }}
+        >
+          🎟️ Quản lý Khuyến mãi
+        </button>
+        <button
+          type="button"
+          className={`admin-nav-tab ${adminTab === 'users' ? 'active' : ''}`}
+          onClick={() => {
+            setUsersLoading(true)
+            setAdminTab('users')
+          }}
+        >
+          👥 Quản lý Người dùng
         </button>
       </div>
 
@@ -296,7 +487,7 @@ function AdminDashboard() {
           }}
           onToggleStatus={handleToggleCategoryStatus}
         />
-      ) : (
+      ) : adminTab === 'orders' ? (
         <AdminOrderTable
           orders={adminOrders}
           total={orderTotal}
@@ -327,13 +518,93 @@ function AdminDashboard() {
           }}
           onUpdateStatus={handleUpdateOrderStatus}
         />
+      ) : adminTab === 'promotions' ? (
+        <AdminPromotionTable
+          promotions={adminPromotions}
+          total={promoTotal}
+          page={promoPage}
+          totalPages={promoTotalPages}
+          loading={promosLoading}
+          search={promoSearch}
+          statusFilter={promoStatusFilter}
+          onSearchChange={(val) => {
+            setPromosLoading(true)
+            setPromoSearch(val)
+            setPromoPage(1)
+          }}
+          onStatusFilterChange={(val) => {
+            setPromosLoading(true)
+            setPromoStatusFilter(val)
+            setPromoPage(1)
+          }}
+          onPageChange={(nextPage) => {
+            setPromosLoading(true)
+            setPromoPage(nextPage)
+          }}
+          onOpenCreate={() => {
+            setCurrentPromo(null)
+            setPromoModalMode('create')
+            setPromoModalOpen(true)
+          }}
+          onOpenEdit={(promo) => {
+            setCurrentPromo(promo)
+            setPromoModalMode('edit')
+            setPromoModalOpen(true)
+          }}
+          onToggleStatus={handleTogglePromotionStatus}
+        />
+      ) : (
+        <AdminUserTable
+          users={adminUsers}
+          total={userTotal}
+          page={userPage}
+          totalPages={userTotalPages}
+          loading={usersLoading}
+          search={userSearch}
+          statusFilter={userStatusFilter}
+          roleFilter={userRoleFilter}
+          vipFilter={userVipFilter}
+          onSearchChange={(val) => {
+            setUsersLoading(true)
+            setUserSearch(val)
+            setUserPage(1)
+          }}
+          onStatusFilterChange={(val) => {
+            setUsersLoading(true)
+            setUserStatusFilter(val)
+            setUserPage(1)
+          }}
+          onRoleFilterChange={(val) => {
+            setUsersLoading(true)
+            setUserRoleFilter(val)
+            setUserPage(1)
+          }}
+          onVipFilterChange={(val) => {
+            setUsersLoading(true)
+            setUserVipFilter(val)
+            setUserPage(1)
+          }}
+          onPageChange={(nextPage) => {
+            setUsersLoading(true)
+            setUserPage(nextPage)
+          }}
+          onViewDetail={(user) => {
+            setUserDetailTarget(user)
+            setUserDetailModalOpen(true)
+          }}
+          onRequestBlock={(user) => {
+            setUserBlockTarget(user)
+            setUserBlockModalOpen(true)
+          }}
+          onRestoreUser={handleRestoreUser}
+        />
       )}
 
       <AdminBookModal
         isOpen={bookModalOpen}
         mode={bookModalMode}
         book={currentBook}
-        categories={categories.filter((c) => !c.isDelete)}
+        categories={activeCategories}
         onClose={() => setBookModalOpen(false)}
         onSave={handleSaveBook}
       />
@@ -344,6 +615,33 @@ function AdminDashboard() {
         category={currentCategory}
         onClose={() => setCategoryModalOpen(false)}
         onSave={handleSaveCategory}
+      />
+
+      <AdminPromotionModal
+        isOpen={promoModalOpen}
+        mode={promoModalMode}
+        promotion={currentPromo}
+        onClose={() => setPromoModalOpen(false)}
+        onSave={handleSavePromotion}
+      />
+
+      <AdminUserBlockModal
+        isOpen={userBlockModalOpen}
+        user={userBlockTarget}
+        onClose={() => {
+          setUserBlockModalOpen(false)
+          setUserBlockTarget(null)
+        }}
+        onConfirmBlock={handleConfirmBlockUser}
+      />
+
+      <AdminUserDetailModal
+        isOpen={userDetailModalOpen}
+        user={userDetailTarget}
+        onClose={() => {
+          setUserDetailModalOpen(false)
+          setUserDetailTarget(null)
+        }}
       />
     </div>
   )
