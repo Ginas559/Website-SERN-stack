@@ -28,3 +28,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Test artifacts
+cypress/
+cypress.config.js
+client/cypress/
+client/cypress.config.js

@@ -88,6 +88,16 @@ router.post(
             .isLength({ max: 50 })
             .withMessage("Mã khuyến mãi không được vượt quá 50 ký tự.")
             .bail(),
+        body("setAsDefaultAddress")
+            .optional()
+            .isBoolean()
+            .withMessage("setAsDefaultAddress phải là kiểu boolean.")
+            .bail(),
+        body("saveAsDefaultAddress")
+            .optional()
+            .isBoolean()
+            .withMessage("saveAsDefaultAddress phải là kiểu boolean.")
+            .bail(),
     ],
     validate,
     controller.createOrder

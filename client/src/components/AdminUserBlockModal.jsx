@@ -38,8 +38,8 @@ function AdminUserBlockModal({
   }
 
   return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal-box block-confirm" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-modal-overlay">
+      <div className="admin-modal-box block-confirm">
         <div className="admin-modal-header">
           <h2 className="admin-modal-title" style={{ color: '#f87171' }}>
             🔒 Xác nhận Khóa Tài Khoản

@@ -48,6 +48,20 @@ function OrderHistoryPage({
   const [isCancelling, setIsCancelling] = useState(false)
 
   const [toast, setToast] = useState(null)
+  const [copiedOrderId, setCopiedOrderId] = useState(null)
+
+  const handleCopyOrderId = useCallback((id) => {
+    if (!id) return
+    const markDone = () => {
+      setCopiedOrderId(id)
+      setTimeout(() => setCopiedOrderId(null), 2000)
+    }
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(id).then(markDone).catch(markDone)
+    } else {
+      markDone()
+    }
+  }, [])
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type })
@@ -248,7 +262,15 @@ function OrderHistoryPage({
                 <div key={order.id} className="order-card-item">
                   <div className="order-card-header">
                     <div className="order-id-meta">
-                      <span className="order-id-text">Mã đơn: #{order.id.slice(0, 8)}...{order.id.slice(-4)}</span>
+                      <span className="order-id-text" title={`Mã đơn hàng đầy đủ: #${order.id}`}>Mã đơn: #{order.id.slice(0, 8)}...{order.id.slice(-4)}</span>
+                      <button 
+                        type="button" 
+                        className="order-copy-id-btn"
+                        title="Sao chép toàn bộ mã đơn hàng"
+                        onClick={() => handleCopyOrderId(order.id)}
+                      >
+                        {copiedOrderId === order.id ? '✓ Đã chép' : '📋 Chép mã'}
+                      </button>
                       <span className="order-date-text">{formatDate(order.createdAt)}</span>
                     </div>
                     <div className="order-status-wrap">
@@ -287,9 +309,29 @@ function OrderHistoryPage({
                     </div>
 
                     <div className="order-summary-and-actions">
-                      <div className="order-total-block">
-                        <span className="order-total-label">Tổng tiền ({order.total_quantity || items.length} cuốn):</span>
-                        <span className="order-total-amount">{formatCurrency(order.total)}</span>
+                      <div className="order-calc-breakdown">
+                        {ghnInfo.subtotal > 0 && ghnInfo.subtotal !== order.total && (
+                          <div className="order-calc-item">
+                            <span className="order-calc-label">Tạm tính:</span>
+                            <span className="order-calc-val">{formatCurrency(ghnInfo.subtotal)}</span>
+                          </div>
+                        )}
+                        {ghnInfo.shippingFee !== undefined && (
+                          <div className="order-calc-item">
+                            <span className="order-calc-label">Phí vận chuyển:</span>
+                            <span className="order-calc-val">{ghnInfo.shippingFee > 0 ? formatCurrency(ghnInfo.shippingFee) : 'Miễn phí'}</span>
+                          </div>
+                        )}
+                        {(ghnInfo.discountValue > 0 || order.discount > 0) && (
+                          <div className="order-calc-item discount">
+                            <span className="order-calc-label">Voucher giảm giá {ghnInfo.couponCode ? `(${ghnInfo.couponCode})` : ''}:</span>
+                            <span className="order-calc-val">-{formatCurrency(ghnInfo.discountValue || order.discount)}</span>
+                          </div>
+                        )}
+                        <div className="order-total-block">
+                          <span className="order-total-label">Tổng thanh toán ({order.total_quantity || items.length} cuốn):</span>
+                          <span className="order-total-amount">{formatCurrency(order.total)}</span>
+                        </div>
                       </div>
 
                       <div className="order-action-buttons">
@@ -357,8 +399,8 @@ function OrderHistoryPage({
       </div>
 
       {cancelModalOrder && (
-        <div className="order-modal-backdrop" onClick={handleCloseCancelModal}>
-          <div className="order-modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="order-modal-backdrop">
+          <div className="order-modal-box">
             <h3 className="order-modal-title">Xác nhận hủy đơn hàng</h3>
             <p className="order-modal-desc">
               Bạn có chắc chắn muốn hủy đơn hàng <strong>#{cancelModalOrder.id.slice(0, 8)}...</strong> không? Toàn bộ số lượng sách sẽ được hoàn trả về kho.

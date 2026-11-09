@@ -1,0 +1,306 @@
+.user-profile-wrapper {
+    min-height: calc(100vh - 80px);
+    background-color: #20201f;
+    padding: 32px 24px 60px;
+    font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #f3eadb;
+}
+
+.user-profile-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.user-profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #3d3d3a;
+    padding-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.user-profile-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #e7b26a;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.user-profile-logout-btn {
+    background: transparent;
+    border: 1px solid #e78282;
+    color: #f87171;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-profile-logout-btn:hover {
+    background: rgba(248, 113, 113, 0.15);
+}
+
+.user-profile-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid #3d3d3a;
+    margin-bottom: 24px;
+}
+
+.user-profile-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #b9b0a7;
+    padding: 12px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-profile-tab-btn:hover {
+    color: #f3eadb;
+}
+
+.user-profile-tab-btn.active {
+    color: #e7b26a;
+    border-bottom-color: #e7b26a;
+}
+
+.user-profile-card {
+    background: #282827;
+    border: 1px solid #3d3d3a;
+    border-radius: 14px;
+    padding: 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    margin-bottom: 24px;
+}
+
+.user-profile-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.user-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    background: rgba(231, 178, 106, 0.15);
+    color: #e7b26a;
+    border: 1px solid rgba(231, 178, 106, 0.3);
+}
+
+.user-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.user-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.user-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.user-form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.user-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #b9b0a7;
+}
+
+.user-input {
+    background: #20201f;
+    border: 1px solid #4d4d48;
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: #f3eadb;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.user-input:focus {
+    border-color: #e7b26a;
+}
+
+.user-input:disabled {
+    background: #1a1a19;
+    color: #88827b;
+    cursor: not-allowed;
+}
+
+.user-form-actions,
+.profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    width: 100%;
+    grid-column: 1 / -1;
+}
+
+.user-save-btn {
+    background-color: #e7b26a;
+    color: #1a1917;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 28px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-save-btn:hover:not(:disabled) {
+    background-color: #d69f54;
+}
+
+.user-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.user-reset-btn {
+    background: transparent;
+    border: 1px solid #4d4d48;
+    color: #b9b0a7;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-reset-btn:hover {
+    background: #333230;
+    color: #f3eadb;
+}
+
+.user-promo-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.user-promo-card {
+    background: #20201f;
+    border: 1px dashed #e7b26a;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 12px;
+    transition: transform 0.2s ease;
+}
+
+.user-promo-card:hover {
+    transform: translateY(-2px);
+    border-style: solid;
+}
+
+.user-promo-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.user-promo-card-code {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #e7b26a;
+    letter-spacing: 0.05em;
+}
+
+.user-promo-copy-btn {
+    background: rgba(231, 178, 106, 0.15);
+    border: 1px solid #e7b26a;
+    color: #e7b26a;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-promo-copy-btn:hover {
+    background: #e7b26a;
+    color: #1a1917;
+}
+
+.user-promo-card-desc {
+    font-size: 0.85rem;
+    color: #b9b0a7;
+    line-height: 1.4;
+}
+
+.user-promo-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: #88827b;
+    border-top: 1px solid #333230;
+    padding-top: 8px;
+}
+
+.user-feedback-msg {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+
+.user-feedback-msg.success {
+    background: rgba(74, 222, 128, 0.15);
+    border: 1px solid #4ade80;
+    color: #4ade80;
+}
+
+.user-feedback-msg.error {
+    background: rgba(248, 113, 113, 0.15);
+    border: 1px solid #f87171;
+    color: #f87171;
+}
+
+@media (max-width: 768px) {
+    .user-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

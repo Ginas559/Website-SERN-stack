@@ -7,6 +7,7 @@ const bookModel = require("../models/bookModel");
 const paymentService = require("./paymentService");
 const discountService = require("./discountService");
 const discountModel = require("../models/discountModel");
+const userModel = require("../models/userModel");
 const AppError = require("../utils/AppError");
 
 function calculateItemPrice(price, discount = 0) {
@@ -215,6 +216,14 @@ async function createOrderFromCart(userId, orderPayload = {}) {
                     WHERE id = @cart_id`);
 
         await transaction.commit();
+
+        if (orderPayload.setAsDefaultAddress || orderPayload.saveAsDefaultAddress) {
+            await userModel.updateProfile(userId, {
+                fullName: receiverName,
+                phoneNumber: phone,
+                address
+            });
+        }
 
         return {
             ...createdOrder,

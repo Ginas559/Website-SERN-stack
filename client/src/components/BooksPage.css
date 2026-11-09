@@ -15,8 +15,9 @@
 }
 
 .books-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 2.2rem;
+    font-weight: 800;
     color: #e7b26a;
     margin: 0;
 }
@@ -281,7 +282,7 @@
 }
 
 .detail-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 2rem;
     margin: 0 0 10px;
     color: #20201f;
@@ -338,6 +339,24 @@
     font-weight: 700;
 }
 
+.detail-badge-stock {
+    background: #39734a;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.detail-badge-out {
+    background: #b33b32;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
 .detail-back-btn {
     background: none;
     border: 0;
@@ -362,7 +381,7 @@
 }
 
 .related-title {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 1.6rem;
     color: #e7b26a;
     margin-bottom: 20px;
@@ -378,7 +397,7 @@
 }
 
 .empty-state h3 {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     color: #e7b26a;
     font-size: 1.4rem;
     margin-bottom: 8px;
@@ -415,7 +434,7 @@
     background: none;
     border: 0;
     padding: 0;
-    font-family: 'Playfair Display', serif;
+    font-family: 'Be Vietnam Pro', sans-serif;
     font-size: 1.5rem;
     font-weight: 700;
     color: #e7b26a;
@@ -429,6 +448,7 @@
 
 .app-nav-links {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     align-items: center;
 }
@@ -442,6 +462,8 @@
     padding: 8px 16px;
     border-radius: 8px;
     cursor: pointer;
+    flex-shrink: 0;
+    min-width: max-content;
     transition: color .2s, background .2s;
 }
 
@@ -455,6 +477,32 @@
     background: #e7b26a;
 }
 
+.nav-btn-account {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: max-content;
+    padding: 8px 14px;
+    border: 1px solid #e7b26a;
+    border-radius: 20px;
+    background: #e7b26a;
+    color: #1a1a1a;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.nav-btn-account:hover {
+    background: #d69f54;
+    color: #1a1a1a;
+}
+
+.nav-btn-account.active {
+    background: #c68a3f;
+    color: #ffffff;
+    border-color: #c68a3f;
+}
+
 @media (max-width: 960px) {
     .books-grid { grid-template-columns: repeat(2, 1fr); }
     .filter-bar { grid-template-columns: 1fr; }
@@ -464,4 +512,3 @@
 @media (max-width: 520px) {
     .books-grid { grid-template-columns: 1fr; }
 }
-

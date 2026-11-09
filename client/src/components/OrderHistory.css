@@ -512,3 +512,51 @@
   }
 }
 
+
+.order-copy-id-btn {
+  background: rgba(231, 178, 106, 0.12);
+  border: 1px solid rgba(231, 178, 106, 0.3);
+  color: #e7b26a;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+}
+
+.order-copy-id-btn:hover {
+  background: #e7b26a;
+  color: #1a1917;
+}
+
+.order-calc-breakdown {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+}
+
+.order-calc-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  color: #a8a29e;
+}
+
+.order-calc-item.discount {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.order-calc-item .order-calc-val {
+  font-weight: 600;
+  color: #f3eadb;
+}
+
+.order-calc-item.discount .order-calc-val {
+  color: #4ade80;
+}
