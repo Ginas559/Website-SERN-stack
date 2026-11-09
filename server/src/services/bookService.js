@@ -20,6 +20,20 @@ function validateNumber(value, field, { min, max } = {}) {
     return number;
 }
 
+function normalizePagination(options = {}) {
+    const page = options.page === undefined ? 1 : Number(options.page);
+    const limit = options.limit === undefined ? 10 : Number(options.limit);
+
+    if (!Number.isFinite(page) || !Number.isInteger(page) || page <= 0) {
+        throw new AppError("Số trang không hợp lệ.", 400);
+    }
+    if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0 || limit > 100) {
+        throw new AppError("Số lượng mỗi trang phải là số nguyên từ 1 đến 100.", 400);
+    }
+
+    return { page, limit };
+}
+
 function validatePublicationDate(value) {
     if (value === null || value === undefined) return null;
     const isoDatePattern = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,7})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
@@ -188,19 +202,7 @@ async function getBookById(id) {
 }
 
 async function getClientBooks(options = {}) {
-    const page = options.page === undefined
-        ? 1
-        : Number(options.page);
-    const limit = options.limit === undefined
-        ? 10
-        : Number(options.limit);
-
-    if (!Number.isFinite(page) || !Number.isInteger(page) || page <= 0) {
-        throw new AppError("Số trang không hợp lệ.", 400);
-    }
-    if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0 || limit > 100) {
-        throw new AppError("Số lượng mỗi trang phải là số nguyên từ 1 đến 100.", 400);
-    }
+    const { page, limit } = normalizePagination(options);
 
     let minPrice = null;
     let maxPrice = null;
@@ -272,8 +274,7 @@ async function getClientBookDetail(id, relatedLimit = 4) {
 }
 
 async function getAdminBooks(options = {}) {
-    const page = Math.max(1, parseInt(options.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+    const { page, limit } = normalizePagination(options);
 
     let isDelete = null;
     if (options.isDelete !== undefined && options.isDelete !== null && options.isDelete !== "") {

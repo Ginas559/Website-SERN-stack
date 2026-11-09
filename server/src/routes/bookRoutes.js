@@ -13,6 +13,7 @@ router.get(
     [
         query("page").optional().isInt({ min: 1 }).withMessage("Số trang phải là số nguyên dương lớn hơn hoặc bằng 1."),
         query("limit").optional().isInt({ min: 1, max: 100 }).withMessage("Số lượng mỗi trang phải từ 1 đến 100."),
+        query("search").optional().isString().trim().isLength({ max: 255 }).withMessage("Từ khóa tìm kiếm không được vượt quá 255 ký tự."),
         query("categoryId").optional().isInt({ min: 1 }).withMessage("ID thể loại phải là số nguyên dương."),
         query("minPrice").optional().isInt({ min: 0 }).withMessage("Giá tối thiểu phải là số nguyên không âm."),
         query("maxPrice").optional().isInt({ min: 0 }).withMessage("Giá tối đa phải là số nguyên không âm."),

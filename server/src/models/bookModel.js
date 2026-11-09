@@ -189,12 +189,10 @@ async function findAllWithColumns(columns, {
     const countResult = await request.query(countQuery);
     const total = countResult.recordset[0]?.total || 0;
 
-    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
-    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
-    const offset = (sanitizedPage - 1) * sanitizedLimit;
+    const offset = (page - 1) * limit;
 
     request.input("offset", sql.Int, offset);
-    request.input("limit", sql.Int, sanitizedLimit);
+    request.input("limit", sql.Int, limit);
 
     const dataQuery = `SELECT ${columns.split(", ").map((col) => `b.${col}`).join(", ")}
                        FROM dbo.books b 
@@ -209,9 +207,9 @@ async function findAllWithColumns(columns, {
         const bookIds = books.map((b) => b.id);
         const catReq = pool.request();
         const catCondition = includeDeleted ? "" : "AND c.isDelete = 0";
-        const catResult = await catReq.query(`SELECT bc.book_id, c.id, c.name, c.description, c.image 
-                                              FROM dbo.categories c 
-                                              INNER JOIN dbo.book_categories bc ON c.id = bc.category_id 
+        const catResult = await catReq.query(`SELECT bc.book_id, c.id, c.name, c.description, c.image
+                                              FROM dbo.categories c
+                                              INNER JOIN dbo.book_categories bc ON c.id = bc.category_id
                                               WHERE bc.book_id IN (${bookIds.join(",")}) ${catCondition}`);
         const catMap = {};
         for (const row of catResult.recordset) {
@@ -230,15 +228,12 @@ async function findAllWithColumns(columns, {
         }
     }
 
-    const sanitizedPage = Math.max(1, parseInt(page, 10) || 1);
-    const sanitizedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
-
     return {
         books,
         total,
-        page: sanitizedPage,
-        limit: sanitizedLimit,
-        totalPages: Math.ceil(total / sanitizedLimit) || 1,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
     };
 }
 
