@@ -14,6 +14,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const discountRoutes = require("./routes/discountRoutes");
 const adminDiscountRoutes = require("./routes/adminDiscountRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", orderRoutes);
 app.use("/api/discounts", discountRoutes);
+app.use("/api", reviewRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);
 module.exports = app;
