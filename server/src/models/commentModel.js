@@ -216,7 +216,7 @@ async function changeStatus(id, isDelete, transaction = null) {
     return result.recordset[0] || null;
 }
 
-async function findAllAdmin({ page = 1, limit = 10, bookId = null, rate = null, isDelete = null, search = null } = {}) {
+async function findAllAdmin({ page = 1, limit = 10, bookId = null, rate = null, isDelete = null, search = null, type = null } = {}) {
     const pool = await connectDB();
     const safePage = Math.max(1, Number(page) || 1);
     const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
@@ -234,7 +234,16 @@ async function findAllAdmin({ page = 1, limit = 10, bookId = null, rate = null, 
         listReq.input("book_id", sql.Int, Number(bookId));
     }
 
-    if (rate !== null && rate !== undefined && rate !== "") {
+    if (type === "discussions" || rate === "discussion" || rate === "0" || rate === 0) {
+        whereClauses.push("c.rate IS NULL");
+    } else if (type === "reviews") {
+        whereClauses.push("c.rate IS NOT NULL");
+        if (rate !== null && rate !== undefined && rate !== "" && Number.isInteger(Number(rate))) {
+            whereClauses.push("c.rate = @rate");
+            countReq.input("rate", sql.Int, Number(rate));
+            listReq.input("rate", sql.Int, Number(rate));
+        }
+    } else if (rate !== null && rate !== undefined && rate !== "" && Number.isInteger(Number(rate))) {
         whereClauses.push("c.rate = @rate");
         countReq.input("rate", sql.Int, Number(rate));
         listReq.input("rate", sql.Int, Number(rate));
