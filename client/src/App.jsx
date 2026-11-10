@@ -24,10 +24,15 @@ function App() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
+  const [filters, setFilters] = useState({ search: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
   const [selectedBook, setSelectedBook] = useState(null)
-  const [booksLoading, setBooksLoading] = useState(false)
+  const [booksLoading, setBooksLoading] = useState(true)
+  const [booksError, setBooksError] = useState('')
+  const [booksRetry, setBooksRetry] = useState(0)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  const [detailRetry, setDetailRetry] = useState(0)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState({
@@ -48,41 +53,55 @@ function App() {
 
   useEffect(() => {
     if (activeTab !== 'books' || selectedBookId) return
-    let isMounted = true
+    const controller = new AbortController()
     const query = new URLSearchParams()
     query.set('page', String(page))
     query.set('limit', '8')
     if (filters.search) query.set('search', filters.search)
-    if (filters.categoryId) query.set('categoryId', filters.categoryId)
     if (filters.minPrice) query.set('minPrice', filters.minPrice)
     if (filters.maxPrice) query.set('maxPrice', filters.maxPrice)
     if (filters.sort) query.set('sort', filters.sort)
 
-    request(`/books?${query.toString()}`)
+    request(`/books?${query.toString()}`, { signal: controller.signal })
       .then((data) => {
-        if (isMounted && data) {
-          setBooks(data.books || [])
-          setTotal(data.total || 0)
-          setTotalPages(data.totalPages || 1)
+        if (!data || !Array.isArray(data.books) || typeof data.total !== 'number' || typeof data.totalPages !== 'number') {
+          throw new Error('Dữ liệu danh sách sách không hợp lệ.')
+        }
+        setBooks(data.books)
+        setTotal(data.total)
+        setTotalPages(data.totalPages)
+      })
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') {
+          setBooksError(requestError.message)
         }
       })
-      .catch(() => {})
       .finally(() => {
-        if (isMounted) setBooksLoading(false)
+        if (!controller.signal.aborted) setBooksLoading(false)
       })
-    return () => { isMounted = false }
-  }, [activeTab, page, filters, selectedBookId])
+    return () => controller.abort()
+  }, [activeTab, page, filters, selectedBookId, booksRetry])
 
   useEffect(() => {
-    if (!selectedBookId) return
-    let isMounted = true
-    request(`/books/${selectedBookId}`)
+    if (activeTab !== 'books' || !selectedBookId) return
+    const controller = new AbortController()
+    request(`/books/${selectedBookId}`, { signal: controller.signal })
       .then((data) => {
-        if (isMounted) setSelectedBook(data)
+        if (!data || typeof data !== 'object' || Array.isArray(data) || data.id === undefined || data.id === null) {
+          throw new Error('Dữ liệu thông tin sách không hợp lệ.')
+        }
+        setSelectedBook(data)
       })
-      .catch(() => {})
-    return () => { isMounted = false }
-  }, [selectedBookId])
+      .catch((requestError) => {
+        if (requestError.name !== 'AbortError') {
+          setDetailError(requestError.message)
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDetailLoading(false)
+      })
+    return () => controller.abort()
+  }, [activeTab, selectedBookId, detailRetry])
 
   async function submit(event) {
     event.preventDefault()
@@ -142,24 +161,43 @@ function App() {
   return (
     <div>
       <header className="app-navbar">
-        <div 
-          className="app-brand" 
-          onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+        <button
+          type="button"
+          className="app-brand"
+          onClick={() => {
+            setActiveTab('books')
+            setSelectedBookId(null)
+            setSelectedBook(null)
+            setBooksLoading(true)
+            setBooksError('')
+          }}
         >
           SERN BOOKSTORE
-        </div>
+        </button>
         <nav className="app-nav-links">
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('books'); setSelectedBookId(null); setSelectedBook(null); }}
+            onClick={() => {
+              setActiveTab('books')
+              setSelectedBookId(null)
+              setSelectedBook(null)
+              setBooksLoading(true)
+              setBooksError('')
+            }}
           >
             Cửa hàng sách
           </button>
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => setActiveTab('account')}
+            onClick={() => {
+              setActiveTab('account')
+              setSelectedBookId(null)
+              setSelectedBook(null)
+              setDetailLoading(false)
+              setDetailError('')
+            }}
           >
             {user ? user.fullName : 'Tài khoản'}
           </button>
@@ -167,24 +205,73 @@ function App() {
       </header>
 
       {activeTab === 'books' ? (
-        selectedBookId && selectedBook ? (
-          <BookDetail 
-            book={selectedBook} 
-            onBack={() => { setSelectedBookId(null); setSelectedBook(null); }} 
-            onSelectBook={(id) => setSelectedBookId(id)}
+        selectedBookId ? (
+          <BookDetail
+            book={selectedBook}
+            loading={detailLoading}
+            error={detailError}
+            onRetry={() => {
+              setDetailLoading(true)
+              setDetailError('')
+              setDetailRetry((retry) => retry + 1)
+            }}
+            onBack={() => {
+              setSelectedBookId(null)
+              setSelectedBook(null)
+              setBooks([])
+              setTotal(0)
+              setTotalPages(1)
+              setBooksLoading(true)
+              setBooksError('')
+            }}
+            onSelectBook={(id) => {
+              setDetailLoading(true)
+              setDetailError('')
+              setSelectedBookId(id)
+              setSelectedBook(null)
+            }}
           />
         ) : (
-          <BookList 
+          <BookList
             books={books}
             total={total}
             page={page}
             totalPages={totalPages}
             filters={filters}
             loading={booksLoading}
-            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); setBooksLoading(true); }}
-            onPageChange={(nextPage) => { setPage(nextPage); setBooksLoading(true); }}
-            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); setBooksLoading(true); }}
-            onSelectBook={(id) => setSelectedBookId(id)}
+            error={booksError}
+            onRetry={() => {
+              setBooksLoading(true)
+              setBooksError('')
+              setBooks([])
+              setBooksRetry((retry) => retry + 1)
+            }}
+            onFilterChange={(nextFilters) => {
+              setBooksLoading(true)
+              setBooksError('')
+              setBooks([])
+              setFilters(nextFilters)
+              setPage(1)
+            }}
+            onPageChange={(nextPage) => {
+              setBooksLoading(true)
+              setBooksError('')
+              setBooks([])
+              setPage(nextPage)
+            }}
+            onResetFilters={() => {
+              setBooksLoading(true)
+              setBooksError('')
+              setBooks([])
+              setFilters({ search: '', minPrice: '', maxPrice: '', sort: 'newest' })
+              setPage(1)
+            }}
+            onSelectBook={(id) => {
+              setDetailLoading(true)
+              setDetailError('')
+              setSelectedBookId(id)
+              setSelectedBook(null)
+            }}
           />
         )
       ) : user ? (

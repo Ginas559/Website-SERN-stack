@@ -26,7 +26,7 @@
     border-radius: 16px;
     padding: 18px;
     display: grid;
-    grid-template-columns: 2fr 1.2fr 1fr 1fr 1.2fr auto;
+    grid-template-columns: 2fr 1fr 1fr 1.2fr auto;
     gap: 12px;
     margin-bottom: 28px;
     border: 1px solid #3d3d3a;
@@ -68,10 +68,14 @@
 }
 
 .book-card {
+    width: 100%;
     background: #fffaf1;
     color: #20201f;
+    border: 0;
     border-radius: 16px;
     padding: 16px;
+    text-align: left;
+    font: inherit;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -167,6 +171,7 @@
 }
 
 .book-card-btn {
+    display: block;
     width: 100%;
     background: #c77736;
     color: white;
@@ -306,24 +311,6 @@
     font-weight: 700;
 }
 
-.detail-badge-stock {
-    background: #39734a;
-    color: white;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
-}
-
-.detail-badge-out {
-    background: #b33b32;
-    color: white;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 700;
-}
-
 .detail-back-btn {
     background: none;
     border: 0;
@@ -375,6 +362,16 @@
     margin: 0;
 }
 
+.error-state .filter-btn-reset {
+    margin-top: 20px;
+}
+
+.detail-publication-date {
+    margin-bottom: 14px;
+    color: #83796e;
+    font-size: 0.9rem;
+}
+
 .app-navbar {
     display: flex;
     justify-content: space-between;
@@ -388,12 +385,19 @@
 }
 
 .app-brand {
+    background: none;
+    border: 0;
+    padding: 0;
     font-family: 'Playfair Display', serif;
     font-size: 1.5rem;
     font-weight: 700;
     color: #e7b26a;
     cursor: pointer;
     text-decoration: none;
+}
+
+.app-brand:hover {
+    background: none;
 }
 
 .app-nav-links {
