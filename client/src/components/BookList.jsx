@@ -86,7 +86,7 @@ function BookList({
                 </button>
             </div>
 
-            {loading ? (
+            {loading && books.length === 0 ? (
                 <div className="empty-state" aria-live="polite">
                     <h3>Đang tải danh sách sách...</h3>
                     <p>Vui lòng đợi trong giây lát</p>
@@ -106,7 +106,7 @@ function BookList({
                 </div>
             ) : (
                 <>
-                    <div className="books-grid">
+                    <div className="books-grid" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
                         {books.map((book) => (
                             <BookCard
                                 key={book.id}

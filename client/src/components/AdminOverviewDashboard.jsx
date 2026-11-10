@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react'
 import statisticsService from '../services/statisticsService'
+import AdminAnalyticsCharts from './AdminAnalyticsCharts'
 import './AdminOverviewDashboard.css'
 
 function formatVND(value) {
@@ -38,15 +39,68 @@ function getStatusBadge(status) {
 
 function AdminOverviewDashboard({ onNavigateTab }) {
   const [timeRange, setTimeRange] = useState('7days')
+  const [groupBy, setGroupBy] = useState('day')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [queryParams, setQueryParams] = useState({ timeRange: '7days', groupBy: 'day' })
   const [loading, setLoading] = useState(true)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [dashboardData, setDashboardData] = useState(null)
   const [errorMsg, setErrorMsg] = useState(null)
 
   const handleTimeRangeChange = (val) => {
-    setLoading(true)
     setErrorMsg(null)
     setTimeRange(val)
+    if (val === 'custom') {
+      return
+    }
+    const nextGroupBy = val === '6months' || val === '12months' ? 'month' : 'day'
+    setGroupBy(nextGroupBy)
+    setLoading(true)
+    setQueryParams({ timeRange: val, groupBy: nextGroupBy })
+  }
+
+  const handleGroupByChange = (nextGroupBy) => {
+    setErrorMsg(null)
+    setGroupBy(nextGroupBy)
+    if (timeRange === 'custom') {
+      if (!customStart || !customEnd) {
+        setErrorMsg('Vui lòng chọn đầy đủ Ngày bắt đầu và Ngày kết thúc trước khi lọc.')
+        return
+      }
+      if (new Date(customStart) > new Date(customEnd)) {
+        setErrorMsg('Ngày bắt đầu không được lớn hơn ngày kết thúc.')
+        return
+      }
+      setLoading(true)
+      setQueryParams({ startDate: customStart, endDate: customEnd, groupBy: nextGroupBy })
+      return
+    }
+    setLoading(true)
+    setQueryParams({ timeRange, groupBy: nextGroupBy })
+  }
+
+  const handleApplyCustomRange = () => {
+    setErrorMsg(null)
+    if (!customStart || !customEnd) {
+      setErrorMsg('Vui lòng chọn đầy đủ cả Ngày bắt đầu và Ngày kết thúc.')
+      return
+    }
+    const startDt = new Date(customStart)
+    const endDt = new Date(customEnd)
+    if (startDt > endDt) {
+      setErrorMsg('Ngày bắt đầu không được lớn hơn ngày kết thúc.')
+      return
+    }
+    const diffDays = Math.ceil((endDt - startDt) / (1000 * 60 * 60 * 24))
+    if (diffDays > 366) {
+      setErrorMsg('Khoảng thời gian tùy chọn không được vượt quá 366 ngày.')
+      return
+    }
+    const nextGroupBy = diffDays > 60 ? 'month' : groupBy
+    setGroupBy(nextGroupBy)
+    setLoading(true)
+    setQueryParams({ startDate: customStart, endDate: customEnd, groupBy: nextGroupBy })
   }
 
   const handleRefresh = () => {
@@ -59,7 +113,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
     let isCurrent = true
 
     statisticsService
-      .getSummary({ timeRange })
+      .getSummary(queryParams)
       .then((res) => {
         if (!isCurrent) return
         setDashboardData(res)
@@ -68,13 +122,13 @@ function AdminOverviewDashboard({ onNavigateTab }) {
       .catch((err) => {
         if (!isCurrent) return
         setLoading(false)
-        setErrorMsg(err.message || 'Không thể tải dữ liệu thống kê tổng quan.')
+        setErrorMsg(`Lỗi API /admin/statistics/summary: ${err.message || 'Không thể tải dữ liệu thống kê tổng quan.'}`)
       })
 
     return () => {
       isCurrent = false
     }
-  }, [timeRange, refreshTrigger])
+  }, [queryParams, refreshTrigger])
 
   const overview = dashboardData?.overview || {}
   const revenue = overview.revenue || {}
@@ -116,7 +170,45 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             <option value="14days">14 ngày qua</option>
             <option value="30days">30 ngày qua</option>
             <option value="thisMonth">Tháng này</option>
+            <option value="6months">6 tháng qua</option>
+            <option value="12months">12 tháng qua</option>
+            <option value="custom">Tùy chọn ngày...</option>
           </select>
+
+          <select
+            className="overview-range-select"
+            value={groupBy}
+            onChange={(e) => handleGroupByChange(e.target.value)}
+          >
+            <option value="day">Theo ngày</option>
+            <option value="month">Theo tháng</option>
+          </select>
+
+          {timeRange === 'custom' ? (
+            <div className="overview-custom-date-box">
+              <input
+                type="date"
+                className="overview-date-input"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+              />
+              <span style={{ color: '#8c857b' }}>→</span>
+              <input
+                type="date"
+                className="overview-date-input"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+              />
+              <button
+                type="button"
+                className="overview-apply-btn"
+                onClick={handleApplyCustomRange}
+                disabled={loading}
+              >
+                Áp dụng
+              </button>
+            </div>
+          ) : null}
 
           <button
             type="button"
@@ -141,7 +233,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             <span className="kpi-label">Tổng Doanh Thu</span>
             <div className="kpi-icon-badge">💰</div>
           </div>
-          <div className="kpi-value">{loading ? '...' : formatVND(revenue.total)}</div>
+          <div className="kpi-value">{loading && !dashboardData ? '...' : formatVND(revenue.total)}</div>
           <div className="kpi-subtext">
             <span>COD: <strong className="kpi-sub-highlight">{formatVND(revenue.cod)}</strong></span>
             <span>•</span>
@@ -154,7 +246,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             <span className="kpi-label">Tổng Đơn Hàng</span>
             <div className="kpi-icon-badge">📦</div>
           </div>
-          <div className="kpi-value">{loading ? '...' : orders.total || 0}</div>
+          <div className="kpi-value">{loading && !dashboardData ? '...' : orders.total || 0}</div>
           <div className="kpi-subtext">
             <span>Thành công: <strong style={{ color: '#10b981' }}>{orders.completed || 0}</strong></span>
             <span>•</span>
@@ -167,7 +259,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             <span className="kpi-label">Độc Giả Hệ Thống</span>
             <div className="kpi-icon-badge">👥</div>
           </div>
-          <div className="kpi-value">{loading ? '...' : users.customers || 0}</div>
+          <div className="kpi-value">{loading && !dashboardData ? '...' : users.customers || 0}</div>
           <div className="kpi-subtext">
             <span>Thành viên VIP: <strong style={{ color: '#e7b26a' }}>{users.vip || 0}</strong></span>
             <span>•</span>
@@ -180,7 +272,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             <span className="kpi-label">Ấn Phẩm Kinh Doanh</span>
             <div className="kpi-icon-badge">📚</div>
           </div>
-          <div className="kpi-value">{loading ? '...' : books.total || 0}</div>
+          <div className="kpi-value">{loading && !dashboardData ? '...' : books.total || 0}</div>
           <div className="kpi-subtext">
             <span>Tồn kho: <strong style={{ color: '#3b82f6' }}>{books.totalInventory || 0} cuốn</strong></span>
             <span>•</span>
@@ -188,6 +280,8 @@ function AdminOverviewDashboard({ onNavigateTab }) {
           </div>
         </div>
       </div>
+
+      <AdminAnalyticsCharts revenueChart={dashboardData?.revenueChart} loading={loading} />
 
       <div className="overview-two-col-grid">
         <div className="overview-panel">

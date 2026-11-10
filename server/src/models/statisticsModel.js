@@ -7,6 +7,9 @@ async function getOverviewMetrics() {
         SELECT 
             COUNT(1) AS totalOrders,
             COALESCE(SUM(CASE WHEN status = 3 THEN total ELSE 0 END), 0) AS totalRevenue,
+            COALESCE(SUM(CASE WHEN status = 0 THEN total ELSE 0 END), 0) AS pendingRevenue,
+            COALESCE(SUM(CASE WHEN status IN (1, 2) THEN total ELSE 0 END), 0) AS shippingRevenue,
+            COALESCE(SUM(CASE WHEN status = 4 THEN total ELSE 0 END), 0) AS cancelledRevenue,
             COUNT(CASE WHEN status = 0 THEN 1 END) AS pendingOrders,
             COUNT(CASE WHEN status = 1 THEN 1 END) AS paidOrders,
             COUNT(CASE WHEN status = 2 THEN 1 END) AS shippingOrders,
@@ -80,7 +83,12 @@ async function getOverviewMetrics() {
         revenue: {
             total: o.totalRevenue || 0,
             cod: o.codRevenue || 0,
-            vnpay: o.vnpayRevenue || 0
+            vnpay: o.vnpayRevenue || 0,
+            pending: o.pendingRevenue || 0,
+            shipping: o.shippingRevenue || 0,
+            cancelled: o.cancelledRevenue || 0,
+            reconciled: o.vnpayRevenue || 0,
+            unreconciled: o.codRevenue || 0
         },
         orders: {
             total: o.totalOrders || 0,
@@ -126,9 +134,10 @@ async function getOverviewMetrics() {
     };
 }
 
-async function getRevenueAndOrdersTimeSeries({ startDate, endDate }) {
+async function getRevenueAndOrdersTimeSeries({ startDate, endDate, groupBy = "day" }) {
     const pool = await connectDB();
     const req = pool.request();
+    const dateLen = groupBy === "month" ? 7 : 10;
 
     let whereClause = "";
     if (startDate && endDate) {
@@ -142,16 +151,50 @@ async function getRevenueAndOrdersTimeSeries({ startDate, endDate }) {
 
     const query = `
         SELECT 
-            CONVERT(VARCHAR(10), createdAt, 120) AS [date],
+            CONVERT(VARCHAR(${dateLen}), createdAt, 120) AS [date],
             COUNT(1) AS ordersCount,
+            COUNT(CASE WHEN status = 0 THEN 1 END) AS pendingOrdersCount,
+            COUNT(CASE WHEN status IN (1, 2) THEN 1 END) AS shippingOrdersCount,
             COUNT(CASE WHEN status = 3 THEN 1 END) AS completedOrdersCount,
             COUNT(CASE WHEN status = 4 THEN 1 END) AS cancelledOrdersCount,
             COALESCE(SUM(CASE WHEN status = 3 THEN total ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN status = 0 THEN total ELSE 0 END), 0) AS pendingRevenue,
+            COALESCE(SUM(CASE WHEN status IN (1, 2) THEN total ELSE 0 END), 0) AS shippingRevenue,
             COALESCE(SUM(CASE WHEN status = 3 AND payment_method = 'VNPAY' THEN total ELSE 0 END), 0) AS vnpayRevenue,
             COALESCE(SUM(CASE WHEN status = 3 AND payment_method = 'COD' THEN total ELSE 0 END), 0) AS codRevenue
         FROM dbo.orders
         ${whereClause}
-        GROUP BY CONVERT(VARCHAR(10), createdAt, 120)
+        GROUP BY CONVERT(VARCHAR(${dateLen}), createdAt, 120)
+        ORDER BY [date] ASC
+    `;
+
+    const res = await req.query(query);
+    return res.recordset;
+}
+
+async function getUsersTimeSeries({ startDate, endDate, groupBy = "day" }) {
+    const pool = await connectDB();
+    const req = pool.request();
+    const dateLen = groupBy === "month" ? 7 : 10;
+
+    let dateCondition = "";
+    if (startDate && endDate) {
+        dateCondition = "AND createdAt >= @startDate AND createdAt <= @endDate";
+        req.input("startDate", sql.DateTime, new Date(startDate));
+        req.input("endDate", sql.DateTime, new Date(endDate));
+    } else if (startDate) {
+        dateCondition = "AND createdAt >= @startDate";
+        req.input("startDate", sql.DateTime, new Date(startDate));
+    }
+
+    const query = `
+        SELECT 
+            CONVERT(VARCHAR(${dateLen}), createdAt, 120) AS [date],
+            COUNT(1) AS newUsersCount
+        FROM dbo.Users
+        WHERE isDelete = 0 AND (isAdmin = 0 OR isAdmin IS NULL)
+        ${dateCondition}
+        GROUP BY CONVERT(VARCHAR(${dateLen}), createdAt, 120)
         ORDER BY [date] ASC
     `;
 
@@ -237,6 +280,7 @@ async function getRecentOrders({ limit = 5 }) {
 module.exports = {
     getOverviewMetrics,
     getRevenueAndOrdersTimeSeries,
+    getUsersTimeSeries,
     getTopSellingBooks,
     getCategoryDistribution,
     getRecentOrders

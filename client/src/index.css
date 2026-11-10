@@ -41,6 +41,11 @@
   height: 0;
 }
 
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
   min-width: 320px;

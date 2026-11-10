@@ -37,22 +37,31 @@
 
 .admin-navigation-tabs {
   display: flex;
-  gap: 12px;
+  gap: 4px;
   border-bottom: 2px solid #3d3d3a;
   margin-bottom: 24px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.admin-navigation-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-nav-tab {
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  padding: 12px 20px;
-  font-size: 1rem;
+  padding: 12px 13px;
+  font-size: 0.9rem;
   font-weight: 600;
   color: #b9b0a7;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
   margin-bottom: -2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .admin-nav-tab:hover {
@@ -62,7 +71,6 @@
 .admin-nav-tab.active {
   color: #e7b26a;
   border-bottom-color: #e7b26a;
-  font-weight: 700;
 }
 
 .admin-table-container {
@@ -163,6 +171,7 @@
 }
 
 .admin-table-wrapper {
+  position: relative;
   overflow-x: auto;
   width: 100%;
 }
@@ -1494,4 +1503,88 @@ input[type="date"].admin-form-input {
   border-radius: 10px;
   padding: 12px 18px;
   font-size: 0.9rem;
+}
+
+.admin-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.admin-th-sortable:hover {
+  background: #2a2a27;
+  color: #ffca85;
+}
+
+.admin-th-sortable.sorted {
+  color: #f59e0b;
+}
+
+.admin-sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  margin-left: 5px;
+  font-size: 0.72rem;
+  color: #6b7280;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.admin-sort-indicator.active {
+  color: #f59e0b;
+  font-weight: 800;
+}
+
+.admin-tbody-loading {
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.admin-table-loading-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e7b26a, transparent);
+  background-size: 200% 100%;
+  animation: adminTableBar 1s linear infinite;
+  z-index: 5;
+  pointer-events: none;
+}
+
+@keyframes adminTableBar {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.admin-btn-reset-filters {
+  background: transparent;
+  color: #b9b0a7;
+  border: 1px dashed #52524e;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.admin-btn-reset-filters:hover {
+  color: #fca5a5;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.admin-btn-reset-filters:active {
+  transform: scale(0.97);
 }

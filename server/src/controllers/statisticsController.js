@@ -6,8 +6,8 @@ async function getOverview(req, res) {
 }
 
 async function getRevenueChart(req, res) {
-    const { timeRange, startDate, endDate } = req.query;
-    const data = await statisticsService.getRevenueChart({ timeRange, startDate, endDate });
+    const { timeRange, startDate, endDate, groupBy } = req.query;
+    const data = await statisticsService.getRevenueChart({ timeRange, startDate, endDate, groupBy });
     res.json(data);
 }
 
@@ -23,8 +23,8 @@ async function getCategoryDistribution(req, res) {
 }
 
 async function getDashboardSummary(req, res) {
-    const { timeRange, startDate, endDate } = req.query;
-    const data = await statisticsService.getDashboardSummary({ timeRange, startDate, endDate });
+    const { timeRange, startDate, endDate, groupBy } = req.query;
+    const data = await statisticsService.getDashboardSummary({ timeRange, startDate, endDate, groupBy });
     res.json(data);
 }
 

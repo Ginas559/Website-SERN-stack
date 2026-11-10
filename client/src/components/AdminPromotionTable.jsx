@@ -46,6 +46,7 @@ function AdminPromotionTable({
   statusFilter = 'all',
   onSearchChange,
   onStatusFilterChange,
+  onResetFilters,
   onPageChange,
   onOpenCreate,
   onOpenEdit,
@@ -53,6 +54,8 @@ function AdminPromotionTable({
 }) {
   const [localSearch, setLocalSearch] = useState(search)
   const [prevSearch, setPrevSearch] = useState(search)
+  const [sortBy, setSortBy] = useState('id')
+  const [sortOrder, setSortOrder] = useState('desc')
 
   if (search !== prevSearch) {
     setPrevSearch(search)
@@ -79,6 +82,67 @@ function AdminPromotionTable({
     debouncedSearch(val)
   }
 
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(field)
+      setSortOrder(field === 'code' ? 'asc' : 'desc')
+    }
+  }
+
+  const handleResetFilters = () => {
+    setLocalSearch('')
+    debouncedSearch.cancel()
+    setSortBy('id')
+    setSortOrder('desc')
+    if (onResetFilters) {
+      onResetFilters()
+    } else {
+      if (search !== '' && onSearchChange) onSearchChange('')
+      if (statusFilter !== 'all' && onStatusFilterChange) onStatusFilterChange('all')
+      if (page !== 1 && onPageChange) onPageChange(1)
+    }
+  }
+
+  const renderSortIndicator = (field) => {
+    if (sortBy === field) {
+      return (
+        <span className="admin-sort-indicator active">
+          {sortOrder === 'asc' ? '▲' : '▼'}
+        </span>
+      )
+    }
+    return <span className="admin-sort-indicator">↕</span>
+  }
+
+  const sortedPromotions = useMemo(() => {
+    if (!promotions || !Array.isArray(promotions)) return []
+    const list = [...promotions]
+    return list.sort((a, b) => {
+      let valA = a[sortBy]
+      let valB = b[sortBy]
+      if (sortBy === 'code' || sortBy === 'description') {
+        return sortOrder === 'asc'
+          ? String(valA || '').localeCompare(String(valB || ''), 'vi')
+          : String(valB || '').localeCompare(String(valA || ''), 'vi')
+      }
+      if (sortBy === 'expiredAt') {
+        const timeA = valA ? new Date(valA).getTime() : 0
+        const timeB = valB ? new Date(valB).getTime() : 0
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
+      }
+      if (sortBy === 'isDelete') {
+        const numA = a.isDelete ? 1 : 0
+        const numB = b.isDelete ? 1 : 0
+        return sortOrder === 'asc' ? numA - numB : numB - numA
+      }
+      const numA = Number(valA) || 0
+      const numB = Number(valB) || 0
+      return sortOrder === 'asc' ? numA - numB : numB - numA
+    })
+  }, [promotions, sortBy, sortOrder])
+
   return (
     <div className="admin-table-container">
       <div className="admin-toolbar">
@@ -101,6 +165,14 @@ function AdminPromotionTable({
             <option value="exhausted">Hết lượt dùng</option>
             <option value="deleted">Đã ẩn</option>
           </select>
+          <button
+            type="button"
+            className="admin-btn-reset-filters"
+            onClick={handleResetFilters}
+            title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
+          >
+            🔄 Xóa bộ lọc
+          </button>
         </div>
         <button type="button" className="admin-btn-primary" onClick={onOpenCreate}>
           + Thêm mã khuyến mãi
@@ -108,34 +180,84 @@ function AdminPromotionTable({
       </div>
 
       <div className="admin-table-wrapper">
+        {loading && sortedPromotions.length > 0 && <div className="admin-table-loading-bar" />}
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: '60px' }}>ID</th>
-              <th style={{ minWidth: '150px' }}>Mã Voucher</th>
-              <th style={{ minWidth: '140px' }}>Loại & Mức giảm</th>
-              <th style={{ minWidth: '180px' }}>Điều kiện áp dụng</th>
-              <th style={{ width: '130px', textAlign: 'center' }}>Lượt dùng</th>
-              <th style={{ minWidth: '160px' }}>Thời hạn</th>
-              <th style={{ width: '130px', textAlign: 'center' }}>Trạng thái</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'id' ? 'sorted' : ''}`}
+                style={{ width: '75px' }}
+                onClick={() => handleSort('id')}
+                title="Nhấn để sắp xếp theo ID"
+              >
+                ID {renderSortIndicator('id')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'code' ? 'sorted' : ''}`}
+                style={{ minWidth: '190px' }}
+                onClick={() => handleSort('code')}
+                title="Nhấn để sắp xếp theo Mã Voucher"
+              >
+                Mã Voucher {renderSortIndicator('code')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'value' ? 'sorted' : ''}`}
+                style={{ width: '155px' }}
+                onClick={() => handleSort('value')}
+                title="Nhấn để sắp xếp theo Mức giảm"
+              >
+                Loại & Mức giảm {renderSortIndicator('value')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'minimumOrderValue' ? 'sorted' : ''}`}
+                style={{ width: '190px' }}
+                onClick={() => handleSort('minimumOrderValue')}
+                title="Nhấn để sắp xếp theo Điều kiện đơn hàng"
+              >
+                Điều kiện áp dụng {renderSortIndicator('minimumOrderValue')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'usedCount' ? 'sorted' : ''}`}
+                style={{ width: '130px', textAlign: 'center' }}
+                onClick={() => handleSort('usedCount')}
+                title="Nhấn để sắp xếp theo Lượt dùng"
+              >
+                Lượt dùng {renderSortIndicator('usedCount')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'expiredAt' ? 'sorted' : ''}`}
+                style={{ width: '165px' }}
+                onClick={() => handleSort('expiredAt')}
+                title="Nhấn để sắp xếp theo Thời hạn"
+              >
+                Thời hạn {renderSortIndicator('expiredAt')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'isDelete' ? 'sorted' : ''}`}
+                style={{ width: '135px', textAlign: 'center' }}
+                onClick={() => handleSort('isDelete')}
+                title="Nhấn để sắp xếp theo Trạng thái"
+              >
+                Trạng thái {renderSortIndicator('isDelete')}
+              </th>
               <th style={{ width: '140px', textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            {loading ? (
+          <tbody className={loading && sortedPromotions.length > 0 ? 'admin-tbody-loading' : ''}>
+            {loading && sortedPromotions.length === 0 ? (
               <tr>
                 <td colSpan="8" className="admin-table-empty">
                   Đang tải danh sách khuyến mãi...
                 </td>
               </tr>
-            ) : promotions.length === 0 ? (
+            ) : sortedPromotions.length === 0 ? (
               <tr>
                 <td colSpan="8" className="admin-table-empty">
                   Không tìm thấy mã khuyến mãi nào phù hợp.
                 </td>
               </tr>
             ) : (
-              promotions.map((promo) => {
+              sortedPromotions.map((promo) => {
                 const status = getPromotionStatus(promo)
                 const isHidden = Boolean(promo.isDelete)
                 const isPercent = promo.discount_type === 'PERCENT'
@@ -260,4 +382,3 @@ function AdminPromotionTable({
 }
 
 export default memo(AdminPromotionTable)
-
