@@ -308,7 +308,7 @@ function OrderHistoryPage({
           </button>
         </div>
 
-        {loading ? (
+        {loading && orders.length === 0 ? (
           <div className="order-loading-box">
             <div className="order-spinner" />
             <p>Đang tải danh sách đơn hàng...</p>
@@ -327,7 +327,7 @@ function OrderHistoryPage({
             </button>
           </div>
         ) : (
-          <div className="order-cards-list">
+          <div className="order-cards-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
             {orders.map((order) => {
               const statusInfo = statusConfig[order.status] || { label: 'Không xác định', class: 'status-unknown' }
               const ghnInfo = typeof order.ghn_info === 'string'

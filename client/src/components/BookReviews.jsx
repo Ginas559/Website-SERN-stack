@@ -459,7 +459,7 @@ function BookReviews({
             })}
           </div>
 
-          {loading ? (
+          {loading && filteredReviews.length === 0 ? (
             <div className="reviews-empty-box">Đang tải danh sách đánh giá...</div>
           ) : filteredReviews.length === 0 ? (
             <div className="reviews-empty-box">
@@ -471,7 +471,7 @@ function BookReviews({
               </p>
             </div>
           ) : (
-            <div className="reviews-list">
+            <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
               {filteredReviews.map((rev) => {
                 const isAuthor = currentUserId && rev.user_id === currentUserId
                 const isEditing = editingId === rev.id
@@ -652,7 +652,7 @@ function BookReviews({
             </div>
           )}
 
-          {loading ? (
+          {loading && discussions.length === 0 ? (
             <div className="reviews-empty-box">Đang tải danh sách thảo luận...</div>
           ) : discussions.length === 0 ? (
             <div className="reviews-empty-box">
@@ -660,7 +660,7 @@ function BookReviews({
               <p>Chưa có câu hỏi hay thảo luận nào. Hãy là người đầu tiên đặt câu hỏi về cuốn sách này!</p>
             </div>
           ) : (
-            <div className="reviews-list">
+            <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
               {discussions.map((disc) => {
                 const isAuthor = currentUserId && disc.user_id === currentUserId
                 const isEditing = editingId === disc.id

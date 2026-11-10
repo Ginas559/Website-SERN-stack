@@ -38,9 +38,13 @@ function AdminOrderTable({
   search = '',
   statusFilter = 'all',
   paymentMethodFilter = 'all',
+  sortBy = 'createdAt',
+  sortOrder = 'DESC',
   onSearchChange,
   onStatusFilterChange,
   onPaymentMethodFilterChange,
+  onSortChange,
+  onResetFilters,
   onPageChange,
   onUpdateStatus,
 }) {
@@ -50,6 +54,17 @@ function AdminOrderTable({
   const [adminNote, setAdminNote] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
   const [copiedOrderId, setCopiedOrderId] = useState(null)
+
+  const renderSortIndicator = (field) => {
+    if (sortBy === field) {
+      return (
+        <span className="admin-sort-indicator active">
+          {sortOrder?.toUpperCase() === 'ASC' ? '▲' : '▼'}
+        </span>
+      )
+    }
+    return <span className="admin-sort-indicator">↕</span>
+  }
 
   const handleCopyOrderId = useCallback((id) => {
     if (!id) return
@@ -125,25 +140,76 @@ function AdminOrderTable({
             <option value="VNPAY">VNPAY Sandbox</option>
             <option value="BANK">Chuyển khoản</option>
           </select>
+          <button
+            type="button"
+            className="admin-btn-reset-filters"
+            onClick={onResetFilters}
+            title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về mặc định ban đầu"
+          >
+            🔄 Xóa bộ lọc
+          </button>
         </div>
       </div>
 
       <div className="admin-table-wrapper">
+        {loading && orders.length > 0 && <div className="admin-table-loading-bar" />}
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: '150px' }}>Mã đơn</th>
-              <th style={{ minWidth: '180px' }}>Khách hàng</th>
-              <th>Ngày đặt</th>
-              <th style={{ textAlign: 'center' }}>Sản phẩm</th>
-              <th>Tổng tiền</th>
-              <th>Phương thức</th>
-              <th style={{ textAlign: 'center' }}>Trạng thái</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'id' ? 'sorted' : ''}`}
+                style={{ width: '150px' }}
+                onClick={() => onSortChange && onSortChange('id')}
+                title="Nhấn để sắp xếp theo Mã đơn"
+              >
+                Mã đơn {renderSortIndicator('id')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'customer_name' ? 'sorted' : ''}`}
+                style={{ minWidth: '190px' }}
+                onClick={() => onSortChange && onSortChange('customer_name')}
+                title="Nhấn để sắp xếp theo Tên khách hàng"
+              >
+                Khách hàng {renderSortIndicator('customer_name')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'createdAt' ? 'sorted' : ''}`}
+                style={{ width: '155px' }}
+                onClick={() => onSortChange && onSortChange('createdAt')}
+                title="Nhấn để sắp xếp theo Ngày đặt (Mới nhất / Cũ nhất)"
+              >
+                Ngày đặt {renderSortIndicator('createdAt')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'total_quantity' ? 'sorted' : ''}`}
+                style={{ width: '115px', textAlign: 'center' }}
+                onClick={() => onSortChange && onSortChange('total_quantity')}
+                title="Nhấn để sắp xếp theo Số lượng sản phẩm"
+              >
+                Sản phẩm {renderSortIndicator('total_quantity')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'total' ? 'sorted' : ''}`}
+                style={{ width: '135px' }}
+                onClick={() => onSortChange && onSortChange('total')}
+                title="Nhấn để sắp xếp theo Tổng tiền"
+              >
+                Tổng tiền {renderSortIndicator('total')}
+              </th>
+              <th style={{ width: '120px' }}>Phương thức</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'status' ? 'sorted' : ''}`}
+                style={{ width: '145px', textAlign: 'center' }}
+                onClick={() => onSortChange && onSortChange('status')}
+                title="Nhấn để sắp xếp theo Trạng thái đơn"
+              >
+                Trạng thái {renderSortIndicator('status')}
+              </th>
               <th style={{ width: '170px', textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            {loading ? (
+          <tbody className={loading && orders.length > 0 ? 'admin-tbody-loading' : ''}>
+            {loading && orders.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ textAlign: 'center', padding: '40px 0' }}>
                   <div className="admin-spinner" style={{ margin: '0 auto 12px' }} />

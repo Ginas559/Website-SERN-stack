@@ -25,12 +25,17 @@ axiosClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const status = error.response?.status
-    const message = error.response?.data?.message || error.message || 'Đã xảy ra lỗi kết nối máy chủ.'
-    if (status === 403 && typeof message === 'string' && (message.includes('bị khóa') || message.includes('khóa'))) {
+    const baseMessage = error.response?.data?.message || error.message || 'Đã xảy ra lỗi kết nối máy chủ.'
+    const validationErrors = error.response?.data?.errors
+    const firstFieldError = Array.isArray(validationErrors) && validationErrors.length > 0 ? validationErrors[0] : null
+    const message = firstFieldError?.message
+      ? `${baseMessage} (${firstFieldError.field || 'param'}: ${firstFieldError.message})`
+      : baseMessage
+    if (status === 403 && typeof baseMessage === 'string' && (baseMessage.includes('bị khóa') || baseMessage.includes('khóa'))) {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('user')
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('sern:account-blocked', { detail: { message } }))
+        window.dispatchEvent(new CustomEvent('sern:account-blocked', { detail: { message: baseMessage } }))
       }
     }
     return Promise.reject(new Error(message))

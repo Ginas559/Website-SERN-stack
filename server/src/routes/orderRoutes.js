@@ -135,7 +135,7 @@ router.get(
             .bail(),
         query("sortBy")
             .optional()
-            .isIn(["createdAt", "total", "total_quantity", "status"])
+            .isIn(["createdAt", "total", "total_quantity", "status", "customer_name", "id"])
             .withMessage("Trường sắp xếp không hợp lệ.")
             .bail(),
         query("sortOrder")

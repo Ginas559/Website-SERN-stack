@@ -57,6 +57,8 @@ function AdminDashboard() {
   const [orderSearch, setOrderSearch] = useState('')
   const [orderStatusFilter, setOrderStatusFilter] = useState('all')
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all')
+  const [orderSortBy, setOrderSortBy] = useState('createdAt')
+  const [orderSortOrder, setOrderSortOrder] = useState('DESC')
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [orderRefreshTrigger, setOrderRefreshTrigger] = useState(0)
 
@@ -153,6 +155,8 @@ function AdminDashboard() {
       ...(orderSearch.trim() ? { search: orderSearch.trim() } : {}),
       ...(orderStatusFilter !== 'all' ? { status: orderStatusFilter } : {}),
       ...(orderPaymentFilter !== 'all' ? { paymentMethod: orderPaymentFilter } : {}),
+      sortBy: orderSortBy,
+      sortOrder: orderSortOrder,
     })
       .then((res) => {
         if (!isCurrent) return
@@ -169,7 +173,7 @@ function AdminDashboard() {
     return () => {
       isCurrent = false
     }
-  }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderRefreshTrigger, showToast])
+  }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderSortBy, orderSortOrder, orderRefreshTrigger, showToast])
 
   useEffect(() => {
     if (adminTab !== 'promotions') return
@@ -263,6 +267,15 @@ function AdminDashboard() {
     }
   }, [adminTab, reviewPage, reviewSearch, reviewStatusFilter, reviewRateFilter, reviewRefreshTrigger, showToast])
 
+  const handleSelectAdminTab = useCallback((targetTab) => {
+    if (targetTab === adminTab) return
+    if (targetTab === 'orders' && adminOrders.length === 0) setOrdersLoading(true)
+    if (targetTab === 'promotions' && adminPromotions.length === 0) setPromosLoading(true)
+    if (targetTab === 'users' && adminUsers.length === 0) setUsersLoading(true)
+    if (targetTab === 'reviews' && adminReviews.length === 0) setReviewsLoading(true)
+    setAdminTab(targetTab)
+  }, [adminTab, adminOrders.length, adminPromotions.length, adminUsers.length, adminReviews.length])
+
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
     setBookPage(1)
@@ -276,6 +289,16 @@ function AdminDashboard() {
   const handleBookPageChange = (nextPage) => {
     setBookPage(nextPage)
   }
+
+  const handleResetBookFilters = useCallback(() => {
+    setBookSearch('')
+    setBookStatusFilter('all')
+    setBookPage(1)
+  }, [])
+
+  const handleResetCategoryFilters = useCallback(() => {
+    setCategorySearch('')
+  }, [])
 
   const handleSaveBook = async (payload, bookId) => {
     if (bookId) {
@@ -338,6 +361,91 @@ function AdminDashboard() {
     }
   }, [showToast])
 
+  const handleOrderSearchChange = useCallback((val) => {
+    if (val === orderSearch && orderPage === 1) return
+    setOrdersLoading(true)
+    setOrderSearch(val)
+    setOrderPage(1)
+  }, [orderSearch, orderPage])
+
+  const handleOrderStatusChange = useCallback((val) => {
+    if (val === orderStatusFilter && orderPage === 1) return
+    setOrdersLoading(true)
+    setOrderStatusFilter(val)
+    setOrderPage(1)
+  }, [orderStatusFilter, orderPage])
+
+  const handleOrderPaymentChange = useCallback((val) => {
+    if (val === orderPaymentFilter && orderPage === 1) return
+    setOrdersLoading(true)
+    setOrderPaymentFilter(val)
+    setOrderPage(1)
+  }, [orderPaymentFilter, orderPage])
+
+  const handleOrderPageChange = useCallback((nextPage) => {
+    if (nextPage === orderPage) return
+    setOrdersLoading(true)
+    setOrderPage(nextPage)
+  }, [orderPage])
+
+  const handleOrderSortChange = useCallback((field) => {
+    setOrdersLoading(true)
+    if (orderSortBy === field) {
+      setOrderSortOrder((prev) => (prev.toUpperCase() === 'ASC' ? 'DESC' : 'ASC'))
+    } else {
+      setOrderSortBy(field)
+      setOrderSortOrder(field === 'createdAt' || field === 'total' || field === 'total_quantity' ? 'DESC' : 'ASC')
+    }
+    setOrderPage(1)
+  }, [orderSortBy])
+
+  const handleResetOrderFilters = useCallback(() => {
+    const hasChanges =
+      orderSearch !== '' ||
+      orderStatusFilter !== 'all' ||
+      orderPaymentFilter !== 'all' ||
+      orderSortBy !== 'createdAt' ||
+      orderSortOrder !== 'DESC' ||
+      orderPage !== 1
+    if (!hasChanges) return
+    setOrdersLoading(true)
+    setOrderSearch('')
+    setOrderStatusFilter('all')
+    setOrderPaymentFilter('all')
+    setOrderSortBy('createdAt')
+    setOrderSortOrder('DESC')
+    setOrderPage(1)
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderSortBy, orderSortOrder, orderPage])
+
+  const handlePromoSearchChange = useCallback((val) => {
+    if (val === promoSearch && promoPage === 1) return
+    setPromosLoading(true)
+    setPromoSearch(val)
+    setPromoPage(1)
+  }, [promoSearch, promoPage])
+
+  const handlePromoStatusChange = useCallback((val) => {
+    if (val === promoStatusFilter && promoPage === 1) return
+    setPromosLoading(true)
+    setPromoStatusFilter(val)
+    setPromoPage(1)
+  }, [promoStatusFilter, promoPage])
+
+  const handlePromoPageChange = useCallback((nextPage) => {
+    if (nextPage === promoPage) return
+    setPromosLoading(true)
+    setPromoPage(nextPage)
+  }, [promoPage])
+
+  const handleResetPromoFilters = useCallback(() => {
+    const hasChanges = promoSearch !== '' || promoStatusFilter !== 'all' || promoPage !== 1
+    if (!hasChanges) return
+    setPromosLoading(true)
+    setPromoSearch('')
+    setPromoStatusFilter('all')
+    setPromoPage(1)
+  }, [promoSearch, promoStatusFilter, promoPage])
+
   const handleSavePromotion = useCallback(async (payload, promoId) => {
     if (promoId) {
       await discountService.updateDiscount(promoId, payload)
@@ -362,6 +470,56 @@ function AdminDashboard() {
     }
   }, [showToast])
 
+  const handleUserSearchChange = useCallback((val) => {
+    if (val === userSearch && userPage === 1) return
+    setUsersLoading(true)
+    setUserSearch(val)
+    setUserPage(1)
+  }, [userSearch, userPage])
+
+  const handleUserStatusChange = useCallback((val) => {
+    if (val === userStatusFilter && userPage === 1) return
+    setUsersLoading(true)
+    setUserStatusFilter(val)
+    setUserPage(1)
+  }, [userStatusFilter, userPage])
+
+  const handleUserRoleChange = useCallback((val) => {
+    if (val === userRoleFilter && userPage === 1) return
+    setUsersLoading(true)
+    setUserRoleFilter(val)
+    setUserPage(1)
+  }, [userRoleFilter, userPage])
+
+  const handleUserVipChange = useCallback((val) => {
+    if (val === userVipFilter && userPage === 1) return
+    setUsersLoading(true)
+    setUserVipFilter(val)
+    setUserPage(1)
+  }, [userVipFilter, userPage])
+
+  const handleUserPageChange = useCallback((nextPage) => {
+    if (nextPage === userPage) return
+    setUsersLoading(true)
+    setUserPage(nextPage)
+  }, [userPage])
+
+  const handleResetUserFilters = useCallback(() => {
+    const hasChanges =
+      userSearch !== '' ||
+      userStatusFilter !== 'all' ||
+      userRoleFilter !== 'all' ||
+      userVipFilter !== 'all' ||
+      userPage !== 1
+    if (!hasChanges) return
+    setUsersLoading(true)
+    setUserSearch('')
+    setUserStatusFilter('all')
+    setUserRoleFilter('all')
+    setUserVipFilter('all')
+    setUserPage(1)
+  }, [userSearch, userStatusFilter, userRoleFilter, userVipFilter, userPage])
+
   const handleConfirmBlockUser = useCallback(async (userId, reason) => {
     await userService.blockUser(userId, { blockReason: reason })
     showToast('Đã khóa tài khoản người dùng thành công.')
@@ -379,6 +537,47 @@ function AdminDashboard() {
       showToast(err.message || 'Lỗi khi mở khóa người dùng.', 'error')
     }
   }, [showToast])
+
+  const handleReviewSearchChange = useCallback((val) => {
+    if (val === reviewSearch && reviewPage === 1) return
+    setReviewsLoading(true)
+    setReviewSearch(val)
+    setReviewPage(1)
+  }, [reviewSearch, reviewPage])
+
+  const handleReviewStatusChange = useCallback((val) => {
+    if (val === reviewStatusFilter && reviewPage === 1) return
+    setReviewsLoading(true)
+    setReviewStatusFilter(val)
+    setReviewPage(1)
+  }, [reviewStatusFilter, reviewPage])
+
+  const handleReviewRateChange = useCallback((val) => {
+    if (val === reviewRateFilter && reviewPage === 1) return
+    setReviewsLoading(true)
+    setReviewRateFilter(val)
+    setReviewPage(1)
+  }, [reviewRateFilter, reviewPage])
+
+  const handleReviewPageChange = useCallback((nextPage) => {
+    if (nextPage === reviewPage) return
+    setReviewsLoading(true)
+    setReviewPage(nextPage)
+  }, [reviewPage])
+
+  const handleResetReviewFilters = useCallback(() => {
+    const hasChanges =
+      reviewSearch !== '' ||
+      reviewStatusFilter !== 'all' ||
+      reviewRateFilter !== 'all' ||
+      reviewPage !== 1
+    if (!hasChanges) return
+    setReviewsLoading(true)
+    setReviewSearch('')
+    setReviewStatusFilter('all')
+    setReviewRateFilter('all')
+    setReviewPage(1)
+  }, [reviewSearch, reviewStatusFilter, reviewRateFilter, reviewPage])
 
   const handleToggleReviewStatus = useCallback(async (review) => {
     const nextStatus = review.isDelete ? 0 : 1
@@ -417,61 +616,49 @@ function AdminDashboard() {
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setAdminTab('overview')}
+          onClick={() => handleSelectAdminTab('overview')}
         >
           📊 Tổng quan hệ thống
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'books' ? 'active' : ''}`}
-          onClick={() => setAdminTab('books')}
+          onClick={() => handleSelectAdminTab('books')}
         >
           📚 Quản lý Ấn phẩm Sách
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'categories' ? 'active' : ''}`}
-          onClick={() => setAdminTab('categories')}
+          onClick={() => handleSelectAdminTab('categories')}
         >
           🏷️ Quản lý Thể loại Sách
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'orders' ? 'active' : ''}`}
-          onClick={() => {
-            setOrdersLoading(true)
-            setAdminTab('orders')
-          }}
+          onClick={() => handleSelectAdminTab('orders')}
         >
           📦 Quản lý Đơn hàng
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'promotions' ? 'active' : ''}`}
-          onClick={() => {
-            setPromosLoading(true)
-            setAdminTab('promotions')
-          }}
+          onClick={() => handleSelectAdminTab('promotions')}
         >
           🎟️ Quản lý Khuyến mãi
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'users' ? 'active' : ''}`}
-          onClick={() => {
-            setUsersLoading(true)
-            setAdminTab('users')
-          }}
+          onClick={() => handleSelectAdminTab('users')}
         >
           👥 Quản lý Người dùng
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'reviews' ? 'active' : ''}`}
-          onClick={() => {
-            setReviewsLoading(true)
-            setAdminTab('reviews')
-          }}
+          onClick={() => handleSelectAdminTab('reviews')}
         >
           ⭐ Quản lý Đánh giá & Bình luận
         </button>
@@ -479,13 +666,7 @@ function AdminDashboard() {
 
       {adminTab === 'overview' ? (
         <AdminOverviewDashboard
-          onNavigateTab={(targetTab) => {
-            if (targetTab === 'orders') setOrdersLoading(true)
-            if (targetTab === 'users') setUsersLoading(true)
-            if (targetTab === 'promotions') setPromosLoading(true)
-            if (targetTab === 'reviews') setReviewsLoading(true)
-            setAdminTab(targetTab)
-          }}
+          onNavigateTab={handleSelectAdminTab}
         />
       ) : adminTab === 'books' ? (
         <AdminBookTable
@@ -498,6 +679,7 @@ function AdminDashboard() {
           statusFilter={bookStatusFilter}
           onSearchChange={handleBookSearchChange}
           onStatusFilterChange={handleBookStatusChange}
+          onResetFilters={handleResetBookFilters}
           onPageChange={handleBookPageChange}
           onOpenCreate={() => {
             setCurrentBook(null)
@@ -517,6 +699,7 @@ function AdminDashboard() {
           loading={categoriesLoading}
           search={categorySearch}
           onSearchChange={(value) => setCategorySearch(value)}
+          onResetFilters={handleResetCategoryFilters}
           onOpenCreate={() => {
             setCurrentCategory(null)
             setCategoryModalMode('create')
@@ -539,25 +722,14 @@ function AdminDashboard() {
           search={orderSearch}
           statusFilter={orderStatusFilter}
           paymentMethodFilter={orderPaymentFilter}
-          onSearchChange={(val) => {
-            setOrdersLoading(true)
-            setOrderSearch(val)
-            setOrderPage(1)
-          }}
-          onStatusFilterChange={(val) => {
-            setOrdersLoading(true)
-            setOrderStatusFilter(val)
-            setOrderPage(1)
-          }}
-          onPaymentMethodFilterChange={(val) => {
-            setOrdersLoading(true)
-            setOrderPaymentFilter(val)
-            setOrderPage(1)
-          }}
-          onPageChange={(nextPage) => {
-            setOrdersLoading(true)
-            setOrderPage(nextPage)
-          }}
+          sortBy={orderSortBy}
+          sortOrder={orderSortOrder}
+          onSearchChange={handleOrderSearchChange}
+          onStatusFilterChange={handleOrderStatusChange}
+          onPaymentMethodFilterChange={handleOrderPaymentChange}
+          onSortChange={handleOrderSortChange}
+          onResetFilters={handleResetOrderFilters}
+          onPageChange={handleOrderPageChange}
           onUpdateStatus={handleUpdateOrderStatus}
         />
       ) : adminTab === 'promotions' ? (
@@ -569,20 +741,10 @@ function AdminDashboard() {
           loading={promosLoading}
           search={promoSearch}
           statusFilter={promoStatusFilter}
-          onSearchChange={(val) => {
-            setPromosLoading(true)
-            setPromoSearch(val)
-            setPromoPage(1)
-          }}
-          onStatusFilterChange={(val) => {
-            setPromosLoading(true)
-            setPromoStatusFilter(val)
-            setPromoPage(1)
-          }}
-          onPageChange={(nextPage) => {
-            setPromosLoading(true)
-            setPromoPage(nextPage)
-          }}
+          onSearchChange={handlePromoSearchChange}
+          onStatusFilterChange={handlePromoStatusChange}
+          onResetFilters={handleResetPromoFilters}
+          onPageChange={handlePromoPageChange}
           onOpenCreate={() => {
             setCurrentPromo(null)
             setPromoModalMode('create')
@@ -606,30 +768,12 @@ function AdminDashboard() {
           statusFilter={userStatusFilter}
           roleFilter={userRoleFilter}
           vipFilter={userVipFilter}
-          onSearchChange={(val) => {
-            setUsersLoading(true)
-            setUserSearch(val)
-            setUserPage(1)
-          }}
-          onStatusFilterChange={(val) => {
-            setUsersLoading(true)
-            setUserStatusFilter(val)
-            setUserPage(1)
-          }}
-          onRoleFilterChange={(val) => {
-            setUsersLoading(true)
-            setUserRoleFilter(val)
-            setUserPage(1)
-          }}
-          onVipFilterChange={(val) => {
-            setUsersLoading(true)
-            setUserVipFilter(val)
-            setUserPage(1)
-          }}
-          onPageChange={(nextPage) => {
-            setUsersLoading(true)
-            setUserPage(nextPage)
-          }}
+          onSearchChange={handleUserSearchChange}
+          onStatusFilterChange={handleUserStatusChange}
+          onRoleFilterChange={handleUserRoleChange}
+          onVipFilterChange={handleUserVipChange}
+          onResetFilters={handleResetUserFilters}
+          onPageChange={handleUserPageChange}
           onViewDetail={(user) => {
             setUserDetailTarget(user)
             setUserDetailModalOpen(true)
@@ -650,25 +794,11 @@ function AdminDashboard() {
           search={reviewSearch}
           statusFilter={reviewStatusFilter}
           rateFilter={reviewRateFilter}
-          onSearchChange={(val) => {
-            setReviewsLoading(true)
-            setReviewSearch(val)
-            setReviewPage(1)
-          }}
-          onStatusFilterChange={(val) => {
-            setReviewsLoading(true)
-            setReviewStatusFilter(val)
-            setReviewPage(1)
-          }}
-          onRateFilterChange={(val) => {
-            setReviewsLoading(true)
-            setReviewRateFilter(val)
-            setReviewPage(1)
-          }}
-          onPageChange={(nextPage) => {
-            setReviewsLoading(true)
-            setReviewPage(nextPage)
-          }}
+          onSearchChange={handleReviewSearchChange}
+          onStatusFilterChange={handleReviewStatusChange}
+          onRateFilterChange={handleReviewRateChange}
+          onResetFilters={handleResetReviewFilters}
+          onPageChange={handleReviewPageChange}
           onToggleStatus={handleToggleReviewStatus}
         />
       )}

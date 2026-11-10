@@ -277,7 +277,9 @@ async function findAllForAdmin({
         createdAt: "o.createdAt",
         total: "o.total",
         total_quantity: "o.total_quantity",
-        status: "o.status"
+        status: "o.status",
+        customer_name: "u.full_name",
+        id: "o.id"
     };
     const orderCol = allowedSortFields[sortBy] || "o.createdAt";
     const dir = String(sortOrder).toUpperCase() === "ASC" ? "ASC" : "DESC";

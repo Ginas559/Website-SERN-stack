@@ -30,11 +30,14 @@ function AdminReviewTable({
   onSearchChange,
   onStatusFilterChange,
   onRateFilterChange,
+  onResetFilters,
   onPageChange,
   onToggleStatus,
 }) {
   const [localSearch, setLocalSearch] = useState(search)
   const [prevSearch, setPrevSearch] = useState(search)
+  const [sortBy, setSortBy] = useState('id')
+  const [sortOrder, setSortOrder] = useState('desc')
   const [selectedReview, setSelectedReview] = useState(null)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
@@ -63,6 +66,41 @@ function AdminReviewTable({
     debouncedSearch(val)
   }
 
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(field)
+      setSortOrder(field === 'book_title' || field === 'user_name' ? 'asc' : 'desc')
+    }
+  }
+
+  const handleResetFilters = () => {
+    setLocalSearch('')
+    debouncedSearch.cancel()
+    setSortBy('id')
+    setSortOrder('desc')
+    if (onResetFilters) {
+      onResetFilters()
+    } else {
+      if (search !== '' && onSearchChange) onSearchChange('')
+      if (statusFilter !== 'all' && onStatusFilterChange) onStatusFilterChange('all')
+      if (rateFilter !== 'all' && onRateFilterChange) onRateFilterChange('all')
+      if (page !== 1 && onPageChange) onPageChange(1)
+    }
+  }
+
+  const renderSortIndicator = (field) => {
+    if (sortBy === field) {
+      return (
+        <span className="admin-sort-indicator active">
+          {sortOrder === 'asc' ? '▲' : '▼'}
+        </span>
+      )
+    }
+    return <span className="admin-sort-indicator">↕</span>
+  }
+
   const handleActionToggle = async (rev) => {
     setIsUpdatingStatus(true)
     try {
@@ -77,6 +115,38 @@ function AdminReviewTable({
       setIsUpdatingStatus(false)
     }
   }
+
+  const sortedReviews = useMemo(() => {
+    if (!reviews || !Array.isArray(reviews)) return []
+    const list = [...reviews]
+    return list.sort((a, b) => {
+      let valA = a[sortBy]
+      let valB = b[sortBy]
+      if (sortBy === 'book_title' || sortBy === 'user_name') {
+        return sortOrder === 'asc'
+          ? String(valA || '').localeCompare(String(valB || ''), 'vi')
+          : String(valB || '').localeCompare(String(valA || ''), 'vi')
+      }
+      if (sortBy === 'createdAt') {
+        const timeA = valA ? new Date(valA).getTime() : 0
+        const timeB = valB ? new Date(valB).getTime() : 0
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
+      }
+      if (sortBy === 'rate') {
+        const numA = valA !== null && valA !== undefined ? Number(valA) : -1
+        const numB = valB !== null && valB !== undefined ? Number(valB) : -1
+        return sortOrder === 'asc' ? numA - numB : numB - numA
+      }
+      if (sortBy === 'isDelete') {
+        const numA = a.isDelete ? 1 : 0
+        const numB = b.isDelete ? 1 : 0
+        return sortOrder === 'asc' ? numA - numB : numB - numA
+      }
+      const numA = Number(valA) || 0
+      const numB = Number(valB) || 0
+      return sortOrder === 'asc' ? numA - numB : numB - numA
+    })
+  }, [reviews, sortBy, sortOrder])
 
   return (
     <div className="admin-table-container">
@@ -111,122 +181,130 @@ function AdminReviewTable({
             <option value="1">★☆☆☆☆ 1 sao</option>
             <option value="discussion">💬 Thảo luận & Hỏi đáp</option>
           </select>
+          <button
+            type="button"
+            className="admin-btn-reset-filters"
+            onClick={handleResetFilters}
+            title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
+          >
+            🔄 Xóa bộ lọc
+          </button>
         </div>
       </div>
 
       <div className="admin-table-wrapper">
+        {loading && sortedReviews.length > 0 && <div className="admin-table-loading-bar" />}
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: '70px', textAlign: 'center' }}>Mã</th>
-              <th style={{ minWidth: '200px' }}>Tên ấn phẩm</th>
-              <th style={{ minWidth: '160px' }}>Độc giả</th>
-              <th style={{ width: '130px', textAlign: 'center' }}>Đánh giá</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'id' ? 'sorted' : ''}`}
+                style={{ width: '70px', textAlign: 'center' }}
+                onClick={() => handleSort('id')}
+                title="Nhấn để sắp xếp theo Mã"
+              >
+                Mã {renderSortIndicator('id')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'book_title' ? 'sorted' : ''}`}
+                style={{ width: '210px' }}
+                onClick={() => handleSort('book_title')}
+                title="Nhấn để sắp xếp theo Tên ấn phẩm"
+              >
+                Tên ấn phẩm {renderSortIndicator('book_title')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'user_name' ? 'sorted' : ''}`}
+                style={{ width: '170px' }}
+                onClick={() => handleSort('user_name')}
+                title="Nhấn để sắp xếp theo Độc giả"
+              >
+                Độc giả {renderSortIndicator('user_name')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'rate' ? 'sorted' : ''}`}
+                style={{ width: '130px', textAlign: 'center' }}
+                onClick={() => handleSort('rate')}
+                title="Nhấn để sắp xếp theo Điểm đánh giá sao"
+              >
+                Đánh giá {renderSortIndicator('rate')}
+              </th>
               <th style={{ minWidth: '240px' }}>Nội dung nhận xét</th>
-              <th style={{ width: '130px', textAlign: 'center' }}>Trạng thái</th>
-              <th style={{ width: '130px' }}>Thời gian</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'isDelete' ? 'sorted' : ''}`}
+                style={{ width: '130px', textAlign: 'center' }}
+                onClick={() => handleSort('isDelete')}
+                title="Nhấn để sắp xếp theo Trạng thái"
+              >
+                Trạng thái {renderSortIndicator('isDelete')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'createdAt' ? 'sorted' : ''}`}
+                style={{ width: '130px' }}
+                onClick={() => handleSort('createdAt')}
+                title="Nhấn để sắp xếp theo Thời gian (Mới nhất / Cũ nhất)"
+              >
+                Thời gian {renderSortIndicator('createdAt')}
+              </th>
               <th style={{ width: '160px', textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            {loading ? (
+          <tbody className={loading && sortedReviews.length > 0 ? 'admin-tbody-loading' : ''}>
+            {loading && sortedReviews.length === 0 ? (
               <tr>
                 <td colSpan="8" className="admin-table-empty">
                   Đang tải danh sách bài đánh giá...
                 </td>
               </tr>
-            ) : reviews.length === 0 ? (
+            ) : sortedReviews.length === 0 ? (
               <tr>
                 <td colSpan="8" className="admin-table-empty">
-                  Không tìm thấy bài đánh giá nào phù hợp.
+                  Không tìm thấy đánh giá hoặc bình luận nào.
                 </td>
               </tr>
             ) : (
-              reviews.map((rev) => {
+              sortedReviews.map((rev) => {
                 const isHidden = Boolean(rev.isDelete)
                 const isRating = rev.rate !== null && rev.rate !== undefined
 
                 return (
-                  <tr key={rev.id} style={{ opacity: isHidden ? 0.65 : 1 }}>
-                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#e7b26a' }}>
+                  <tr key={rev.id} className={isHidden ? 'admin-row-muted' : ''}>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#e7b26a' }}>
                       #{rev.id}
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600, color: '#fffaf1', lineHeight: 1.35 }}>
-                        {rev.book_title || `Sách #${rev.book_id}`}
+                      <div style={{ fontWeight: '600', color: '#fffaf1' }}>
+                        {rev.book_title || <span style={{ color: '#8c857b' }}>Sách #{rev.book_id}</span>}
                       </div>
-                      <div style={{ fontSize: '0.78rem', color: '#8c857b', marginTop: '2px' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#b9b0a7' }}>
                         ID sách: #{rev.book_id}
                       </div>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {rev.user_avatar ? (
-                          <img
-                            src={rev.user_avatar}
-                            alt=""
-                            style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '50%',
-                              background: '#3d3a35',
-                              color: '#e7b26a',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '12px',
-                              fontWeight: 700
-                            }}
-                          >
-                            {(rev.user_full_name || rev.user_username || 'U').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#f3eadb' }}>
-                            {rev.user_full_name || rev.user_username || 'Người dùng'}
-                          </div>
-                          {rev.user_username && rev.user_full_name ? (
-                            <div style={{ fontSize: '0.75rem', color: '#8c857b' }}>
-                              @{rev.user_username}
-                            </div>
-                          ) : null}
-                        </div>
+                      <div style={{ fontWeight: '600', color: '#e2dacd' }}>
+                        {rev.user_name || 'Khách hàng'}
                       </div>
+                      {rev.user_username ? (
+                        <div style={{ fontSize: '0.78rem', color: '#8c857b' }}>
+                          @{rev.user_username}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {isRating ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                            background: '#362817',
-                            color: '#f59e0b',
-                            border: '1px solid #784c17',
-                            padding: '2px 8px',
-                            borderRadius: '12px',
-                            fontWeight: 700,
-                            fontSize: '0.82rem'
-                          }}
-                        >
-                          {rev.rate} ★
+                        <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                          {'★'.repeat(rev.rate)}{'☆'.repeat(5 - rev.rate)}
+                          <span style={{ fontSize: '0.8rem', marginLeft: '4px', color: '#b9b0a7' }}>
+                            ({rev.rate})
+                          </span>
                         </span>
                       ) : (
                         <span
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px',
-                            background: '#1a2736',
-                            color: '#60a5fa',
-                            border: '1px solid #1e40af',
-                            padding: '2px 8px',
+                            background: '#1e3a5f',
+                            color: '#93c5fd',
+                            padding: '3px 8px',
                             borderRadius: '12px',
-                            fontWeight: 600,
                             fontSize: '0.78rem'
                           }}
                         >
@@ -442,4 +520,3 @@ function AdminReviewTable({
 }
 
 export default memo(AdminReviewTable)
-
