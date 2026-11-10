@@ -23,6 +23,7 @@ import AdminUserTable from './AdminUserTable'
 import AdminUserBlockModal from './AdminUserBlockModal'
 import AdminUserDetailModal from './AdminUserDetailModal'
 import AdminReviewTable from './AdminReviewTable'
+import AdminOverviewDashboard from './AdminOverviewDashboard'
 import orderService from '../services/orderService'
 import discountService from '../services/discountService'
 import userService from '../services/userService'
@@ -42,7 +43,7 @@ function AdminDashboard() {
     loading: categoriesLoading,
   } = useSelector((state) => state.categories)
 
-  const [adminTab, setAdminTab] = useState('books')
+  const [adminTab, setAdminTab] = useState('overview')
   const [bookPage, setBookPage] = useState(1)
   const [bookSearch, setBookSearch] = useState('')
   const [bookStatusFilter, setBookStatusFilter] = useState('all')
@@ -142,31 +143,6 @@ function AdminDashboard() {
   useEffect(() => {
     fetchCategoriesData()
   }, [fetchCategoriesData])
-
-  useEffect(() => {
-    let isCurrent = true
-    orderService.getAdminOrders({ page: 1, limit: 1 })
-      .then((res) => {
-        if (!isCurrent) return
-        setOrderTotal(res.total ?? res.data?.total ?? 0)
-      })
-      .catch(() => {})
-    discountService.getAdminDiscounts({ page: 1, limit: 1 })
-      .then((res) => {
-        if (!isCurrent) return
-        setPromoTotal(res.total ?? res.data?.total ?? 0)
-      })
-      .catch(() => {})
-    userService.getAdminUsers({ page: 1, limit: 1 })
-      .then((res) => {
-        if (!isCurrent) return
-        setUserTotal(res.total ?? res.data?.total ?? 0)
-      })
-      .catch(() => {})
-    return () => {
-      isCurrent = false
-    }
-  }, [])
 
   useEffect(() => {
     if (adminTab !== 'orders') return
@@ -437,34 +413,14 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <div className="admin-stats-grid">
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Tổng số ấn phẩm</div>
-          <div className="admin-stat-value">{bookTotal}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Tổng số thể loại</div>
-          <div className="admin-stat-value">{categories.length}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Tổng số đơn hàng</div>
-          <div className="admin-stat-value">{orderTotal}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Mã khuyến mãi</div>
-          <div className="admin-stat-value">{promoTotal}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Người dùng hệ thống</div>
-          <div className="admin-stat-value">{userTotal}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Đánh giá & Bình luận</div>
-          <div className="admin-stat-value">{reviewTotal}</div>
-        </div>
-      </div>
-
       <div className="admin-navigation-tabs">
+        <button
+          type="button"
+          className={`admin-nav-tab ${adminTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setAdminTab('overview')}
+        >
+          📊 Tổng quan hệ thống
+        </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'books' ? 'active' : ''}`}
@@ -521,7 +477,17 @@ function AdminDashboard() {
         </button>
       </div>
 
-      {adminTab === 'books' ? (
+      {adminTab === 'overview' ? (
+        <AdminOverviewDashboard
+          onNavigateTab={(targetTab) => {
+            if (targetTab === 'orders') setOrdersLoading(true)
+            if (targetTab === 'users') setUsersLoading(true)
+            if (targetTab === 'promotions') setPromosLoading(true)
+            if (targetTab === 'reviews') setReviewsLoading(true)
+            setAdminTab(targetTab)
+          }}
+        />
+      ) : adminTab === 'books' ? (
         <AdminBookTable
           books={books}
           total={bookTotal}
