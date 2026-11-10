@@ -134,10 +134,18 @@ router.get(
             .toInt(),
         query("rate")
             .optional()
-            .isInt({ min: 1, max: 5 })
-            .withMessage("Số sao lọc phải từ 1 đến 5.")
-            .bail()
-            .toInt(),
+            .custom((val) => {
+                if (val === "discussion" || (Number.isInteger(Number(val)) && Number(val) >= 1 && Number(val) <= 5)) {
+                    return true;
+                }
+                throw new Error("Số sao lọc phải từ 1 đến 5 hoặc discussion.");
+            })
+            .bail(),
+        query("type")
+            .optional()
+            .isIn(["all", "reviews", "discussions"])
+            .withMessage("Loại bài viết phải là all, reviews hoặc discussions.")
+            .bail(),
         query("isDelete")
             .optional()
             .isIn(["0", "1", 0, 1])

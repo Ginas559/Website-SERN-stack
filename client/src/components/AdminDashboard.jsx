@@ -22,9 +22,11 @@ import AdminPromotionModal from './AdminPromotionModal'
 import AdminUserTable from './AdminUserTable'
 import AdminUserBlockModal from './AdminUserBlockModal'
 import AdminUserDetailModal from './AdminUserDetailModal'
+import AdminReviewTable from './AdminReviewTable'
 import orderService from '../services/orderService'
 import discountService from '../services/discountService'
 import userService from '../services/userService'
+import reviewService from '../services/reviewService'
 import './AdminDashboard.css'
 
 function AdminDashboard() {
@@ -83,6 +85,16 @@ function AdminDashboard() {
   const [userBlockTarget, setUserBlockTarget] = useState(null)
   const [userDetailModalOpen, setUserDetailModalOpen] = useState(false)
   const [userDetailTarget, setUserDetailTarget] = useState(null)
+
+  const [adminReviews, setAdminReviews] = useState([])
+  const [reviewTotal, setReviewTotal] = useState(0)
+  const [reviewPage, setReviewPage] = useState(1)
+  const [reviewTotalPages, setReviewTotalPages] = useState(1)
+  const [reviewSearch, setReviewSearch] = useState('')
+  const [reviewStatusFilter, setReviewStatusFilter] = useState('all')
+  const [reviewRateFilter, setReviewRateFilter] = useState('all')
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0)
 
   const [bookModalOpen, setBookModalOpen] = useState(false)
   const [bookModalMode, setBookModalMode] = useState('create')
@@ -246,6 +258,35 @@ function AdminDashboard() {
     }
   }, [adminTab, userPage, userSearch, userStatusFilter, userRoleFilter, userVipFilter, userRefreshTrigger, showToast])
 
+  useEffect(() => {
+    if (adminTab !== 'reviews') return
+    let isCurrent = true
+    const queryParams = {
+      page: reviewPage,
+      limit: 10,
+      ...(reviewSearch.trim() ? { search: reviewSearch.trim() } : {}),
+      ...(reviewStatusFilter !== 'all' && Number.isInteger(Number(reviewStatusFilter)) ? { isDelete: Number(reviewStatusFilter) } : {}),
+      ...(reviewRateFilter === 'discussion' ? { rate: 'discussion' } : (reviewRateFilter !== 'all' && Number.isInteger(Number(reviewRateFilter)) ? { rate: Number(reviewRateFilter) } : {})),
+    }
+
+    reviewService.adminGetReviews(queryParams)
+      .then((res) => {
+        if (!isCurrent) return
+        setAdminReviews(res.comments || res.data?.comments || [])
+        setReviewTotal(res.total ?? res.data?.total ?? 0)
+        setReviewTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
+        setReviewsLoading(false)
+      })
+      .catch((err) => {
+        if (!isCurrent) return
+        setReviewsLoading(false)
+        showToast(err.message || 'Không thể tải danh sách đánh giá.', 'error')
+      })
+    return () => {
+      isCurrent = false
+    }
+  }, [adminTab, reviewPage, reviewSearch, reviewStatusFilter, reviewRateFilter, reviewRefreshTrigger, showToast])
+
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
     setBookPage(1)
@@ -363,6 +404,19 @@ function AdminDashboard() {
     }
   }, [showToast])
 
+  const handleToggleReviewStatus = useCallback(async (review) => {
+    const nextStatus = review.isDelete ? 0 : 1
+    try {
+      await reviewService.adminChangeReviewStatus(review.id, nextStatus)
+      showToast(nextStatus === 1 ? 'Đã ẩn bình luận/đánh giá vi phạm.' : 'Đã khôi phục bình luận/đánh giá.')
+      setReviewsLoading(true)
+      setReviewRefreshTrigger((prev) => prev + 1)
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật trạng thái đánh giá.', 'error')
+      throw err
+    }
+  }, [showToast])
+
   const activeCategories = useMemo(() => categories.filter((c) => !c.isDelete), [categories])
 
   return (
@@ -403,6 +457,10 @@ function AdminDashboard() {
         <div className="admin-stat-card">
           <div className="admin-stat-label">Người dùng hệ thống</div>
           <div className="admin-stat-value">{userTotal}</div>
+        </div>
+        <div className="admin-stat-card">
+          <div className="admin-stat-label">Đánh giá & Bình luận</div>
+          <div className="admin-stat-value">{reviewTotal}</div>
         </div>
       </div>
 
@@ -450,6 +508,16 @@ function AdminDashboard() {
           }}
         >
           👥 Quản lý Người dùng
+        </button>
+        <button
+          type="button"
+          className={`admin-nav-tab ${adminTab === 'reviews' ? 'active' : ''}`}
+          onClick={() => {
+            setReviewsLoading(true)
+            setAdminTab('reviews')
+          }}
+        >
+          ⭐ Quản lý Đánh giá & Bình luận
         </button>
       </div>
 
@@ -561,7 +629,7 @@ function AdminDashboard() {
           }}
           onToggleStatus={handleTogglePromotionStatus}
         />
-      ) : (
+      ) : adminTab === 'users' ? (
         <AdminUserTable
           users={adminUsers}
           total={userTotal}
@@ -605,6 +673,37 @@ function AdminDashboard() {
             setUserBlockModalOpen(true)
           }}
           onRestoreUser={handleRestoreUser}
+        />
+      ) : (
+        <AdminReviewTable
+          reviews={adminReviews}
+          total={reviewTotal}
+          page={reviewPage}
+          totalPages={reviewTotalPages}
+          loading={reviewsLoading}
+          search={reviewSearch}
+          statusFilter={reviewStatusFilter}
+          rateFilter={reviewRateFilter}
+          onSearchChange={(val) => {
+            setReviewsLoading(true)
+            setReviewSearch(val)
+            setReviewPage(1)
+          }}
+          onStatusFilterChange={(val) => {
+            setReviewsLoading(true)
+            setReviewStatusFilter(val)
+            setReviewPage(1)
+          }}
+          onRateFilterChange={(val) => {
+            setReviewsLoading(true)
+            setReviewRateFilter(val)
+            setReviewPage(1)
+          }}
+          onPageChange={(nextPage) => {
+            setReviewsLoading(true)
+            setReviewPage(nextPage)
+          }}
+          onToggleStatus={handleToggleReviewStatus}
         />
       )}
 
