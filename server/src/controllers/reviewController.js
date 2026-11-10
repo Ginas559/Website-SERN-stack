@@ -14,8 +14,13 @@ async function createReview(req, res) {
 
 async function getBookReviews(req, res) {
     const { bookId } = req.params;
-    const { page, limit } = req.query;
-    const result = await reviewService.getBookReviews(bookId, { page, limit });
+    const { page, limit, type } = req.query;
+    const result = await reviewService.getBookReviews(bookId, {
+        page,
+        limit,
+        type,
+        userId: req.user?.id || null
+    });
     res.json(result);
 }
 
@@ -44,7 +49,14 @@ async function adminChangeStatus(req, res) {
     res.json(updated);
 }
 
+
+async function getMyReviewedBookIds(req, res) {
+    const bookIds = await reviewService.getMyReviewedBookIds(req.user.id);
+    res.json(bookIds);
+}
+
 module.exports = {
+    getMyReviewedBookIds,
     createReview,
     getBookReviews,
     updateReview,
@@ -52,4 +64,3 @@ module.exports = {
     adminGetReviews,
     adminChangeStatus
 };
-

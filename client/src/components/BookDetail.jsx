@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
+import BookReviews from "./BookReviews";
 import { addToCart } from "../store/slices/cartSlice";
 import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
 
-function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook, onAddToCart }) {
+function BookDetail({
+    book,
+    loading = false,
+    error = "",
+    onRetry,
+    onBack,
+    onSelectBook,
+    onAddToCart,
+    currentUser,
+    onRequireLogin,
+    initialReviewTab = 'reviews',
+    scrollToReviews = false,
+    scrollToOwnReview = false
+}) {
     const dispatch = useDispatch();
     const reduxWishlist = useSelector((state) => state.wishlist);
     const isAuthenticated = Boolean(sessionStorage.getItem('accessToken'));
@@ -30,6 +44,23 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
     const isFavorite = optimisticFavorite !== null
         ? optimisticFavorite
         : (isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasDiscussionTab = searchParams.get('tab') === 'discussion';
+        const hasReviewFocus = searchParams.get('focus') === 'review';
+        const hasReviewHash = window.location.hash === '#book-reviews-section';
+
+        if (hasDiscussionTab || hasReviewFocus || hasReviewHash || scrollToReviews || scrollToOwnReview) {
+            const timer = setTimeout(() => {
+                const section = document.getElementById('book-reviews-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 180);
+            return () => clearTimeout(timer);
+        }
+    }, [book?.id, scrollToReviews, scrollToOwnReview]);
 
     if (loading) {
         return (
@@ -309,6 +340,15 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                     </div>
                 </div>
             </div>
+
+            <BookReviews
+                key={`${book.id}-${initialReviewTab}`}
+                bookId={book.id}
+                currentUser={currentUser}
+                onRequireLogin={onRequireLogin}
+                initialTab={initialReviewTab}
+                scrollToOwnReview={scrollToOwnReview}
+            />
 
             {Array.isArray(book.relatedBooks) && book.relatedBooks.length > 0 ? (
                 <div className="related-section">

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import orderService from '../services/orderService'
+import reviewService, { getMyReviewedBookIds } from '../services/reviewService'
 import './OrderHistory.css'
 
 function formatCurrency(amount) {
@@ -33,7 +34,8 @@ const statusConfig = {
 
 function OrderHistoryPage({
   onContinueShopping,
-  onGoToCart
+  onGoToCart,
+  onSelectBook
 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,72 @@ function OrderHistoryPage({
   const [total, setTotal] = useState(0)
   const [statusFilter, setStatusFilter] = useState('all')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [reviewedBookIds, setReviewedBookIds] = useState(new Set())
+
+  const navigate = (url) => {
+    try {
+      const parsed = new URL(url, window.location.origin)
+      const match = parsed.pathname.match(/\/books\/(\d+)/) || parsed.pathname.match(/\/books\?id=(\d+)/)
+      const targetBookId = match ? Number(match[1]) : (Number(parsed.searchParams.get('bookId')) || null)
+      const isDiscussion = parsed.searchParams.get('tab') === 'discussion'
+      const focusReview = parsed.searchParams.get('focus') === 'review'
+      window.location.hash = parsed.hash || 'book-reviews-section'
+      if (onSelectBook && targetBookId) {
+        onSelectBook(targetBookId, {
+          tab: isDiscussion ? 'discussions' : 'reviews',
+          focus: focusReview ? 'review' : null,
+          scrollToReviews: true,
+          scrollToOwnReview: focusReview
+        })
+      }
+    } catch {
+      return
+    }
+  }
+
+  const [reviewModalBook, setReviewModalBook] = useState(null)
+  const [reviewRate, setReviewRate] = useState(5)
+  const [reviewText, setReviewText] = useState('')
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+  const [reviewFeedback, setReviewFeedback] = useState('')
+
+  const handleOpenReviewModal = (item) => {
+    setReviewModalBook(item)
+    setReviewRate(5)
+    setReviewText('')
+    setReviewFeedback('')
+  }
+
+  const handleSubmitOrderReview = async () => {
+    if (!reviewModalBook) return
+    const bookId = reviewModalBook.book_id || reviewModalBook.id
+    try {
+      setIsSubmittingReview(true)
+      setReviewFeedback('')
+      await reviewService.createReview(bookId, {
+        rate: reviewRate,
+        value: reviewText.trim() || null
+      })
+      showToast('Cảm ơn bạn đã gửi đánh giá cho sản phẩm!', 'success')
+      setReviewModalBook(null)
+      setReviewedBookIds((prev) => new Set([...prev, Number(bookId)]))
+      setOrders((prevOrders) =>
+        prevOrders.map((ord) => ({
+          ...ord,
+          items: Array.isArray(ord.items)
+            ? ord.items.map((it) => {
+                const currentBookId = it.book_id || it.id
+                return currentBookId === bookId ? { ...it, isReviewed: true } : it
+              })
+            : ord.items
+        }))
+      )
+    } catch (err) {
+      setReviewFeedback(err.message || 'Gửi đánh giá thất bại.')
+    } finally {
+      setIsSubmittingReview(false)
+    }
+  }
 
   const [cancelModalOrder, setCancelModalOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
@@ -69,6 +137,15 @@ function OrderHistoryPage({
       setToast(null)
     }, 3200)
   }, [])
+
+  useEffect(() => {
+    getMyReviewedBookIds()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.data || [])
+        setReviewedBookIds(new Set(list.map(Number)))
+      })
+      .catch(() => {})
+  }, [refreshTrigger])
 
   useEffect(() => {
     let isCurrent = true
@@ -281,22 +358,73 @@ function OrderHistoryPage({
                   </div>
 
                   <div className="order-card-items">
-                    {items.map((it) => (
-                      <div key={it.book_id || it.id} className="order-item-row">
-                        <img 
-                          className="order-item-thumb" 
-                          src={it.image || 'https://placehold.co/48x64/20201f/f3eadb?text=Book'} 
-                          alt={it.title || 'Book'} 
-                        />
-                        <div className="order-item-details">
-                          <h4 className="order-item-name">{it.title || `Sách mã #${it.book_id}`}</h4>
-                          <span className="order-item-qty">Số lượng: x{it.quantity}</span>
+                    {items.map((it) => {
+                      const bookId = it.book_id || it.id
+                      const unitPrice = it.price || (it.quantity > 0 ? it.total / it.quantity : it.total)
+                      return (
+                        <div key={bookId} className="order-item-row">
+                          <img 
+                            className={`order-item-thumb ${onSelectBook ? 'clickable' : ''}`}
+                            src={it.image || 'https://placehold.co/48x64/20201f/f3eadb?text=Book'} 
+                            alt={it.title || 'Book'} 
+                            onClick={() => onSelectBook && onSelectBook(bookId)}
+                            title={onSelectBook ? 'Bấm để xem chi tiết và đánh giá cuốn sách này' : undefined}
+                          />
+                          <div className="order-item-details">
+                            <h4 
+                              className={`order-item-name ${onSelectBook ? 'clickable' : ''}`}
+                              onClick={() => onSelectBook && onSelectBook(bookId)}
+                              title={onSelectBook ? 'Bấm để xem chi tiết và đánh giá cuốn sách này' : undefined}
+                            >
+                              {it.title || `Sách mã #${bookId}`}
+                            </h4>
+                            <div className="order-item-meta-row">
+                              <span className="order-item-qty">Số lượng: <strong>x{it.quantity}</strong></span>
+                              <span className="order-item-dot">•</span>
+                              <span className="order-item-unit-price">Đơn giá: {formatCurrency(unitPrice)}</span>
+                            </div>
+                            {order.status === 3 && (() => {
+                              const hasReviewed = reviewedBookIds.has(Number(bookId)) || Boolean(it.isReviewed)
+                              return (
+                                <div className="order-item-actions-row">
+                                  {!hasReviewed ? (
+                                    <button
+                                      type="button"
+                                      className="btn-order-review btn-quick-review"
+                                      onClick={() => handleOpenReviewModal(it)}
+                                      title="Đánh giá nhanh số sao và nhận xét ngay tại đây"
+                                    >
+                                      ⭐ Đánh giá
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="order-history-btn-reviewed"
+                                      onClick={() => navigate(`/books/${bookId}?focus=review#book-reviews-section`)}
+                                      title="Xem bài đánh giá của bạn trên trang sản phẩm"
+                                    >
+                                      ✓ Đã đánh giá
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn-view-book-detail"
+                                    onClick={() => navigate(`/books/${bookId}?tab=discussion#book-reviews-section`)}
+                                    title="Chuyển đến trang chi tiết cuốn sách để xem thảo luận cộng đồng"
+                                  >
+                                    💬 Chi tiết & Thảo luận
+                                  </button>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                          <div className="order-item-price-col">
+                            <span className="order-item-price-label">Thành tiền</span>
+                            <span className="order-item-price">{formatCurrency(it.total)}</span>
+                          </div>
                         </div>
-                        <div className="order-item-price-col">
-                          <span className="order-item-price">{formatCurrency(it.total)}</span>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
                   <div className="order-card-footer">
@@ -397,6 +525,80 @@ function OrderHistoryPage({
           </div>
         )}
       </div>
+
+      {reviewModalBook && (
+        <div className="order-modal-backdrop">
+          <div className="order-modal-box">
+            <h3 className="order-modal-title">Đánh giá sản phẩm</h3>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+              <img 
+                src={reviewModalBook.image || 'https://placehold.co/48x64/20201f/f3eadb?text=Book'} 
+                alt={reviewModalBook.title || 'Book'}
+                style={{ width: '48px', height: '64px', objectFit: 'cover', borderRadius: '4px' }}
+              />
+              <div>
+                <h4 style={{ margin: '0 0 4px 0', fontSize: '0.95rem' }}>{reviewModalBook.title || `Sách mã #${reviewModalBook.book_id || reviewModalBook.id}`}</h4>
+                <span style={{ fontSize: '0.85rem', color: '#8c8273' }}>Đơn hàng đã nhận thành công</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '0.9rem' }}>
+                Chất lượng sản phẩm:
+              </label>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '1.8rem', cursor: 'pointer' }}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <span 
+                    key={s} 
+                    style={{ color: reviewRate >= s ? '#f59e0b' : '#d1d5db', transition: 'color 0.15s' }}
+                    onClick={() => setReviewRate(s)}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="order-modal-field">
+              <label htmlFor="order-review-textarea">Chia sẻ cảm nhận của bạn:</label>
+              <textarea
+                id="order-review-textarea"
+                rows="3"
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                placeholder="Hãy chia sẻ cảm nhận về chất lượng sách, nội dung, giao hàng..."
+                maxLength={1000}
+              />
+            </div>
+
+            {reviewFeedback ? (
+              <div style={{ background: '#2d1818', border: '1px solid #5c2828', borderLeft: '4px solid #f87171', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', marginBottom: '14px', fontWeight: 500 }}>
+                {reviewFeedback}
+              </div>
+            ) : null}
+
+            <div className="order-modal-buttons">
+              <button
+                type="button"
+                className="btn-modal-cancel"
+                onClick={() => setReviewModalBook(null)}
+                disabled={isSubmittingReview}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="btn-reorder"
+                style={{ background: '#c77736', color: '#fff', border: 'none' }}
+                onClick={handleSubmitOrderReview}
+                disabled={isSubmittingReview}
+              >
+                {isSubmittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cancelModalOrder && (
         <div className="order-modal-backdrop">
