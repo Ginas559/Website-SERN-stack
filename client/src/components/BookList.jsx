@@ -5,13 +5,14 @@ function BookList({
     total = 0,
     page = 1,
     totalPages = 1,
-    categories = [],
     filters = {},
     onFilterChange,
     onPageChange,
     onResetFilters,
     onSelectBook,
     loading = false,
+    error = "",
+    onRetry,
 }) {
     const handleInputChange = (field, value) => {
         if (onFilterChange) {
@@ -22,8 +23,8 @@ function BookList({
     const pages = [];
     for (let i = 1; i <= totalPages; i += 1) {
         if (
-            i === 1 || 
-            i === totalPages || 
+            i === 1 ||
+            i === totalPages ||
             (i >= page - 2 && i <= page + 2)
         ) {
             pages.push(i);
@@ -52,19 +53,6 @@ function BookList({
                     value={filters.search || ""}
                     onChange={(e) => handleInputChange("search", e.target.value)}
                 />
-
-                <select
-                    className="filter-select"
-                    value={filters.categoryId || ""}
-                    onChange={(e) => handleInputChange("categoryId", e.target.value)}
-                >
-                    <option value="">Tất cả thể loại</option>
-                    {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                            {cat.name}
-                        </option>
-                    ))}
-                </select>
 
                 <input
                     type="number"
@@ -104,9 +92,17 @@ function BookList({
             </div>
 
             {loading ? (
-                <div className="empty-state">
+                <div className="empty-state" aria-live="polite">
                     <h3>Đang tải danh sách sách...</h3>
                     <p>Vui lòng đợi trong giây lát</p>
+                </div>
+            ) : error ? (
+                <div className="empty-state error-state" role="alert">
+                    <h3>Không thể tải danh sách sách</h3>
+                    <p>{error}</p>
+                    <button type="button" className="filter-btn-reset" onClick={onRetry}>
+                        Thử lại
+                    </button>
                 </div>
             ) : books.length === 0 ? (
                 <div className="empty-state">
@@ -164,4 +160,3 @@ function BookList({
 }
 
 export default BookList;
-

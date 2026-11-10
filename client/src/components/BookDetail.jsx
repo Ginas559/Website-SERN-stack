@@ -1,21 +1,53 @@
 import BookCard from "./BookCard";
 
-function BookDetail({ book, onBack, onSelectBook }) {
-    if (!book) return null;
+function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook }) {
+    if (loading) {
+        return (
+            <div className="books-container">
+                <div className="empty-state" aria-live="polite">
+                    <h3>Đang tải thông tin sách...</h3>
+                    <p>Vui lòng đợi trong giây lát</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="books-container">
+                <div className="empty-state error-state" role="alert">
+                    <h3>Không thể tải thông tin sách</h3>
+                    <p>{error}</p>
+                    <button type="button" className="filter-btn-reset" onClick={onRetry}>
+                        Thử lại
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!book) {
+        return (
+            <div className="books-container">
+                <div className="empty-state" aria-live="polite">
+                    <h3>Đang tải thông tin sách...</h3>
+                    <p>Vui lòng đợi trong giây lát</p>
+                </div>
+            </div>
+        );
+    }
 
     const discount = Number(book.discount) || 0;
     const originalPrice = Number(book.price) || 0;
-    const finalPrice = discount > 0 
-        ? Math.round(originalPrice * (100 - discount) / 100) 
+    const finalPrice = discount > 0
+        ? Math.round(originalPrice * (100 - discount) / 100)
         : originalPrice;
 
     const formatPrice = (val) => Number(val).toLocaleString("vi-VN") + " đ";
 
-    const pubDate = book.publication_date 
+    const pubDate = book.publication_date
         ? new Date(book.publication_date).toLocaleDateString("vi-VN")
         : null;
-
-    const inStock = (Number(book.quantity) || 0) > 0;
 
     return (
         <div className="books-container">
@@ -26,9 +58,9 @@ function BookDetail({ book, onBack, onSelectBook }) {
             <div className="book-detail-card">
                 <div className="detail-cover-wrap">
                     {book.image ? (
-                        <img 
-                            src={book.image} 
-                            alt={book.title} 
+                        <img
+                            src={book.image}
+                            alt={book.title}
                             className="detail-cover"
                             onError={(e) => {
                                 e.target.style.display = "none";
@@ -36,8 +68,8 @@ function BookDetail({ book, onBack, onSelectBook }) {
                             }}
                         />
                     ) : null}
-                    <div 
-                        className="book-cover-placeholder" 
+                    <div
+                        className="book-cover-placeholder"
                         style={{ display: book.image ? "none" : "flex", fontSize: "4rem" }}
                     >
                         📚
@@ -49,11 +81,6 @@ function BookDetail({ book, onBack, onSelectBook }) {
 
                 <div>
                     <div className="detail-badge-group">
-                        {inStock ? (
-                            <span className="detail-badge-stock">Còn hàng ({book.quantity} cuốn)</span>
-                        ) : (
-                            <span className="detail-badge-out">Tạm hết hàng</span>
-                        )}
                         {Array.isArray(book.categories) ? book.categories.map((c) => (
                             <span key={c.id} className="detail-badge">{c.name}</span>
                         )) : null}
@@ -70,7 +97,7 @@ function BookDetail({ book, onBack, onSelectBook }) {
                     </div>
 
                     {pubDate ? (
-                        <div style={{ marginBottom: "14px", color: "#83796e", fontSize: "0.9rem" }}>
+                        <div className="detail-publication-date">
                             Ngày xuất bản: {pubDate}
                         </div>
                     ) : null}
@@ -86,9 +113,9 @@ function BookDetail({ book, onBack, onSelectBook }) {
                     <h2 className="related-title">Sách cùng thể loại gợi ý</h2>
                     <div className="books-grid">
                         {book.relatedBooks.map((relBook) => (
-                            <BookCard 
-                                key={relBook.id} 
-                                book={relBook} 
+                            <BookCard
+                                key={relBook.id}
+                                book={relBook}
                                 onSelectBook={onSelectBook}
                             />
                         ))}
@@ -100,4 +127,3 @@ function BookDetail({ book, onBack, onSelectBook }) {
 }
 
 export default BookDetail;
-
