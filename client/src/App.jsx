@@ -47,7 +47,14 @@ function App() {
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
   const [selectedBookId, setSelectedBookId] = useState(null)
+  const [bookViewOptions, setBookViewOptions] = useState(null)
   const [checkoutData, setCheckoutData] = useState({ items: [], total: 0 })
+
+  const handleSelectBook = (id, options = null) => {
+    setSelectedBookId(id)
+    setBookViewOptions(options)
+    setActiveTab('books')
+  }
   const [isPaymentReturn, setIsPaymentReturn] = useState(hasInitialPaymentReturn)
   const cartState = useSelector((state) => state.cart)
   const wishlistState = useSelector((state) => state.wishlist)
@@ -303,6 +310,7 @@ function App() {
         <OrderHistoryPage 
           onContinueShopping={() => setActiveTab('books')}
           onGoToCart={() => setActiveTab('cart')}
+          onSelectBook={handleSelectBook}
         />
       ) : activeTab === 'cart' ? (
         <CartPage 
@@ -315,14 +323,19 @@ function App() {
       ) : activeTab === 'wishlist' ? (
         <WishlistPage 
           onContinueShopping={() => setActiveTab('books')} 
-          onSelectBook={(id) => { setSelectedBookId(id); setActiveTab('books'); }}
+          onSelectBook={handleSelectBook}
         />
       ) : activeTab === 'books' ? (
         selectedBookId && selectedBook ? (
           <BookDetail 
             book={selectedBook} 
-            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); }} 
-            onSelectBook={(id) => setSelectedBookId(id)}
+            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); setBookViewOptions(null); }} 
+            onSelectBook={handleSelectBook}
+            currentUser={user}
+            onRequireLogin={() => { setActiveTab('account'); setMode('login'); }}
+            initialReviewTab={bookViewOptions?.tab}
+            scrollToReviews={Boolean(bookViewOptions?.scrollToReviews || bookViewOptions?.scrollToDiscussions || bookViewOptions?.scrollToOwnReview)}
+            scrollToOwnReview={Boolean(bookViewOptions?.scrollToOwnReview)}
           />
         ) : (
           <BookList 
@@ -335,7 +348,7 @@ function App() {
             onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); }}
             onPageChange={(nextPage) => setPage(nextPage)}
             onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); }}
-            onSelectBook={(id) => setSelectedBookId(id)}
+            onSelectBook={handleSelectBook}
           />
         )
       ) : user ? (

@@ -20,10 +20,22 @@ function protect(req, res, next) {
     }
 }
 
+function optionalAuth(req, res, next) {
+    const header = req.headers.authorization;
+    if (header && header.startsWith("Bearer ")) {
+        try {
+            req.user = verifyAccessToken(header.slice(7));
+        } catch {
+            req.user = null;
+        }
+    }
+    next();
+}
+
 function restrictTo(...roles) {
     return (req, res, next) => roles.includes("Admin") && req.user.isAdmin
         ? next()
         : next(new AppError("Bạn không có quyền thực hiện thao tác này.", 403));
 }
 
-module.exports = { protect, restrictTo, refreshCookieOptions };
+module.exports = { protect, optionalAuth, restrictTo, refreshCookieOptions };

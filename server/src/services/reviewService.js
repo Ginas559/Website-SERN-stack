@@ -16,7 +16,7 @@ function validateValue(value) {
     const trimmed = String(value).trim();
     if (!trimmed) return null;
     if (trimmed.length > 1000) {
-        throw new AppError("Nội dung đánh giá không được vượt quá 1000 ký tự.", 400);
+        throw new AppError("Nội dung không được vượt quá 1000 ký tự.", 400);
     }
     return trimmed;
 }
@@ -29,16 +29,19 @@ function validateBookId(bookId) {
     return numId;
 }
 
-async function checkUserPurchased(userId, bookId) {
-    if (!userId || !bookId) return false;
+async function checkUserPurchaseStatus(userId, bookId) {
+    if (!userId || !bookId) {
+        return { canReview: false, status: "guest", hasPurchased: false };
+    }
     const pool = await connectDB();
     const query = `
-        SELECT TOP 1 1 AS hasPurchased
+        SELECT 
+            COUNT(CASE WHEN o.status = 3 THEN 1 END) AS deliveredCount,
+            COUNT(CASE WHEN o.status IN (0, 1, 2) THEN 1 END) AS pendingCount,
+            COUNT(CASE WHEN o.status = 4 THEN 1 END) AS cancelledCount
         FROM dbo.orders o
         JOIN dbo.order_details od ON o.id = od.order_id
-        WHERE o.user_id = @userId 
-          AND od.book_id = @bookId 
-          AND o.status IN (1, 2, 3)
+        WHERE o.user_id = @userId AND od.book_id = @bookId
     `;
 
     const result = await new sql.Request(pool)
@@ -46,44 +49,71 @@ async function checkUserPurchased(userId, bookId) {
         .input("bookId", sql.Int, Number(bookId))
         .query(query);
 
-    return Boolean(result.recordset[0]?.hasPurchased);
+    const row = result.recordset[0] || {};
+    const deliveredCount = row.deliveredCount || 0;
+    const pendingCount = row.pendingCount || 0;
+
+    if (deliveredCount > 0) {
+        return { canReview: true, status: "delivered", hasPurchased: true };
+    }
+    if (pendingCount > 0) {
+        return { canReview: false, status: "pending", hasPurchased: false };
+    }
+    return { canReview: false, status: "not_purchased", hasPurchased: false };
 }
 
-async function createReview({ bookId, userId, rate, value }) {
+async function createReview({ userId, bookId, rate, value }) {
     if (!userId) {
-        throw new AppError("Vui lòng đăng nhập để đánh giá sách.", 401);
+        throw new AppError("Vui lòng đăng nhập để gửi phản hồi.", 401);
     }
 
     const validBookId = validateBookId(bookId);
-    const validRate = validateRate(rate);
-    const validValue = validateValue(value);
-
     const book = await bookModel.findById(validBookId);
     if (!book || book.isDelete === 1) {
         throw new AppError("Sách không tồn tại hoặc đã ngừng kinh doanh.", 404);
     }
 
-    const existingReview = await commentModel.findUserReview(validBookId, userId, { includeDeleted: false });
-    if (existingReview) {
-        throw new AppError("Bạn đã có bài đánh giá cho cuốn sách này rồi.", 409);
+    const purchaseStatus = await checkUserPurchaseStatus(userId, validBookId);
+
+    const isRatingReview = rate !== null && rate !== undefined && rate !== "";
+    let validRate = null;
+
+    if (isRatingReview) {
+        if (!purchaseStatus.canReview) {
+            if (purchaseStatus.status === "pending") {
+                throw new AppError("Đơn hàng của bạn đang được xử lý hoặc đang trên đường giao. Bạn có thể đánh giá sau khi nhận sách thành công nhé!", 403);
+            }
+            throw new AppError("Chỉ độc giả đã mua và nhận sách thành công tại BookWeb mới có thể gửi đánh giá chất lượng.", 403);
+        }
+
+        validRate = validateRate(rate);
+
+        const existingRating = await commentModel.findUserReview(userId, validBookId);
+        if (existingRating) {
+            throw new AppError("Bạn đã có bài đánh giá cho cuốn sách này rồi.", 409);
+        }
+    } else {
+        if (!value || !String(value).trim()) {
+            throw new AppError("Vui lòng nhập nội dung câu hỏi hoặc thảo luận.", 400);
+        }
     }
 
-    const isPurchased = await checkUserPurchased(userId, validBookId);
+    const validValue = validateValue(value);
 
     const created = await commentModel.create({
-        bookId: validBookId,
         userId,
+        bookId: validBookId,
         rate: validRate,
         value: validValue
     });
 
     return {
         ...created,
-        isPurchased
+        isPurchased: purchaseStatus.hasPurchased
     };
 }
 
-async function getBookReviews(bookId, { page = 1, limit = 10 } = {}) {
+async function getBookReviews(bookId, { page = 1, limit = 10, type = "all", userId = null } = {}) {
     const validBookId = validateBookId(bookId);
 
     const book = await bookModel.findById(validBookId);
@@ -91,9 +121,10 @@ async function getBookReviews(bookId, { page = 1, limit = 10 } = {}) {
         throw new AppError("Sách không tồn tại hoặc đã ngừng kinh doanh.", 404);
     }
 
-    const [reviewsResult, summary] = await Promise.all([
-        commentModel.findByBookId(validBookId, { page, limit }),
-        commentModel.getBookRatingSummary(validBookId)
+    const [reviewsResult, summary, purchaseStatus] = await Promise.all([
+        commentModel.findByBookId(validBookId, { page, limit, type }),
+        commentModel.getBookRatingSummary(validBookId),
+        userId ? checkUserPurchaseStatus(userId, validBookId) : Promise.resolve({ canReview: false, status: "guest", hasPurchased: false })
     ]);
 
     const userIds = [...new Set(reviewsResult.comments.map((c) => c.user_id).filter(Boolean))];
@@ -106,7 +137,7 @@ async function getBookReviews(bookId, { page = 1, limit = 10 } = {}) {
             FROM dbo.orders o
             JOIN dbo.order_details od ON o.id = od.order_id
             WHERE od.book_id = @bookId
-              AND o.status IN (1, 2, 3)
+              AND o.status = 3
               AND o.user_id IN (${userIds.map((_, i) => `@u${i}`).join(", ")})
         `;
         const req = new sql.Request(pool).input("bookId", sql.Int, validBookId);
@@ -124,6 +155,7 @@ async function getBookReviews(bookId, { page = 1, limit = 10 } = {}) {
     return {
         comments: enrichedComments,
         summary,
+        purchaseStatus,
         total: reviewsResult.total,
         page: reviewsResult.page,
         limit: reviewsResult.limit,
@@ -143,31 +175,47 @@ async function updateReview(id, userId, { rate, value }) {
 
     const existing = await commentModel.findById(numId, { includeDeleted: true });
     if (!existing) {
-        throw new AppError("Không tìm thấy bài đánh giá.", 404);
+        throw new AppError("Không tìm thấy bài viết.", 404);
     }
 
     if (existing.user_id !== userId) {
-        throw new AppError("Bạn không có quyền chỉnh sửa bài đánh giá này.", 403);
+        throw new AppError("Bạn không có quyền chỉnh sửa bài viết này.", 403);
     }
 
     if (existing.isDelete === 1) {
-        throw new AppError("Không thể chỉnh sửa bài đánh giá đã bị ẩn.", 400);
+        throw new AppError("Không thể chỉnh sửa bài viết đã bị ẩn.", 400);
     }
 
-    const validRate = rate !== undefined ? validateRate(rate) : existing.rate;
-    const validValue = value !== undefined ? validateValue(value) : existing.value;
+    let nextRate = existing.rate;
+    if (rate !== undefined) {
+        if (rate !== null && rate !== "") {
+            const purchaseStatus = await checkUserPurchaseStatus(userId, existing.book_id);
+            if (!purchaseStatus.canReview) {
+                throw new AppError("Bạn chỉ có thể chấm điểm đánh giá sau khi đã mua và nhận sách thành công.", 403);
+            }
+            nextRate = validateRate(rate);
+        } else {
+            nextRate = null;
+        }
+    }
 
-    if (validRate === existing.rate && validValue === existing.value) {
+    const nextValue = value !== undefined ? validateValue(value) : existing.value;
+
+    if (nextRate === null && (!nextValue || !nextValue.trim())) {
+        throw new AppError("Nội dung thảo luận không được để trống.", 400);
+    }
+
+    if (nextRate === existing.rate && nextValue === existing.value) {
         return existing;
     }
 
     const updated = await commentModel.update(numId, userId, {
-        rate: validRate,
-        value: validValue
+        rate: nextRate,
+        value: nextValue
     });
 
     if (!updated) {
-        throw new AppError("Bài đánh giá đã thay đổi hoặc không thể cập nhật.", 409);
+        throw new AppError("Bài viết đã thay đổi hoặc không thể cập nhật.", 409);
     }
 
     return updated;
@@ -175,33 +223,33 @@ async function updateReview(id, userId, { rate, value }) {
 
 async function deleteReview(id, userId) {
     if (!userId) {
-        throw new AppError("Vui lòng đăng nhập để xóa bài đánh giá.", 401);
+        throw new AppError("Vui lòng đăng nhập để xóa bài viết.", 401);
     }
 
     const numId = Number(id);
     if (!Number.isInteger(numId) || numId <= 0) {
-        throw new AppError("ID đánh giá không hợp lệ.", 400);
+        throw new AppError("ID không hợp lệ.", 400);
     }
 
     const existing = await commentModel.findById(numId, { includeDeleted: true });
     if (!existing) {
-        throw new AppError("Không tìm thấy bài đánh giá.", 404);
+        throw new AppError("Không tìm thấy bài viết.", 404);
     }
 
     if (existing.user_id !== userId) {
-        throw new AppError("Bạn không có quyền xóa bài đánh giá này.", 403);
+        throw new AppError("Bạn không có quyền xóa bài viết này.", 403);
     }
 
     if (existing.isDelete === 1) {
-        return { message: "Bài đánh giá đã được xóa thành công." };
+        return { message: "Bài viết đã được xóa thành công." };
     }
 
     const deleted = await commentModel.changeStatus(numId, 1);
     if (!deleted) {
-        throw new AppError("Trạng thái bài đánh giá đã thay đổi, vui lòng thử lại.", 409);
+        throw new AppError("Trạng thái bài viết đã thay đổi, vui lòng thử lại.", 409);
     }
 
-    return { message: "Xóa bài đánh giá thành công." };
+    return { message: "Xóa bài viết thành công." };
 }
 
 async function adminGetReviews(query = {}) {
@@ -232,12 +280,23 @@ async function adminChangeReviewStatus(id, isDelete) {
     return updated;
 }
 
+
+async function getMyReviewedBookIds(userId) {
+    if (!userId) return [];
+    const pool = await connectDB();
+    const res = await new sql.Request(pool)
+        .input("userId", sql.Char(36), userId)
+        .query("SELECT DISTINCT book_id FROM dbo.comments WHERE user_id = @userId AND isDelete = 0 AND rate IS NOT NULL");
+    return res.recordset.map((r) => r.book_id);
+}
+
 module.exports = {
+    getMyReviewedBookIds,
     createReview,
     getBookReviews,
     updateReview,
     deleteReview,
     adminGetReviews,
-    adminChangeReviewStatus
+    adminChangeReviewStatus,
+    checkUserPurchaseStatus
 };
-

@@ -306,11 +306,19 @@ function AdminDashboard() {
     }
   }
 
-  const handleUpdateOrderStatus = useCallback(async (orderId, newStatus, note) => {
-    await orderService.updateOrderStatus(orderId, { status: newStatus, note })
-    showToast('Cập nhật trạng thái đơn hàng thành công!')
-    setOrdersLoading(true)
-    setOrderRefreshTrigger((prev) => prev + 1)
+  const handleUpdateOrderStatus = useCallback(async (orderId, payload, legacyNote) => {
+    try {
+      const body = typeof payload === 'object' && payload !== null
+        ? payload
+        : { status: payload, note: legacyNote }
+      await orderService.updateOrderStatus(orderId, body)
+      showToast('Cập nhật trạng thái đơn hàng thành công!')
+      setOrdersLoading(true)
+      setOrderRefreshTrigger((prev) => prev + 1)
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật trạng thái đơn hàng.', 'error')
+      throw err
+    }
   }, [showToast])
 
   const handleSavePromotion = useCallback(async (payload, promoId) => {

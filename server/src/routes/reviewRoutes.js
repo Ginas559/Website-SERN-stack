@@ -2,13 +2,15 @@ const express = require("express");
 const { body, param, query } = require("express-validator");
 const controller = require("../controllers/reviewController");
 const validate = require("../middleware/validateMiddleware");
-const authenticate = require("../middleware/authMiddleware");
-const authorizeAdmin = require("../middleware/adminMiddleware");
+const { protect, optionalAuth, restrictTo } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+router.get("/reviews/my-reviewed-books", protect, controller.getMyReviewedBookIds);
+
 router.get(
     "/books/:bookId/reviews",
+    optionalAuth,
     [
         param("bookId")
             .isInt({ min: 1 })
@@ -26,7 +28,12 @@ router.get(
             .isInt({ min: 1, max: 50 })
             .withMessage("Số lượng mỗi trang phải từ 1 đến 50.")
             .bail()
-            .toInt()
+            .toInt(),
+        query("type")
+            .optional()
+            .isIn(["all", "reviews", "discussions"])
+            .withMessage("Loại bài viết phải là all, reviews hoặc discussions.")
+            .bail()
     ],
     validate,
     controller.getBookReviews
@@ -34,7 +41,7 @@ router.get(
 
 router.post(
     "/books/:bookId/reviews",
-    authenticate,
+    protect,
     [
         param("bookId")
             .isInt({ min: 1 })
@@ -42,9 +49,7 @@ router.post(
             .bail()
             .toInt(),
         body("rate")
-            .notEmpty()
-            .withMessage("Vui lòng chọn số sao đánh giá.")
-            .bail()
+            .optional({ nullable: true })
             .isInt({ min: 1, max: 5 })
             .withMessage("Số sao đánh giá phải từ 1 đến 5.")
             .bail()
@@ -64,7 +69,7 @@ router.post(
 
 router.put(
     "/reviews/:id",
-    authenticate,
+    protect,
     [
         param("id")
             .isInt({ min: 1 })
@@ -72,7 +77,7 @@ router.put(
             .bail()
             .toInt(),
         body("rate")
-            .optional()
+            .optional({ nullable: true })
             .isInt({ min: 1, max: 5 })
             .withMessage("Số sao đánh giá phải từ 1 đến 5.")
             .bail()
@@ -92,7 +97,7 @@ router.put(
 
 router.delete(
     "/reviews/:id",
-    authenticate,
+    protect,
     [
         param("id")
             .isInt({ min: 1 })
@@ -106,8 +111,8 @@ router.delete(
 
 router.get(
     "/admin/reviews",
-    authenticate,
-    authorizeAdmin,
+    protect,
+    restrictTo("Admin"),
     [
         query("page")
             .optional()
@@ -152,8 +157,8 @@ router.get(
 
 router.patch(
     "/admin/reviews/:id/status",
-    authenticate,
-    authorizeAdmin,
+    protect,
+    restrictTo("Admin"),
     [
         param("id")
             .isInt({ min: 1 })
@@ -174,4 +179,3 @@ router.patch(
 );
 
 module.exports = router;
-

@@ -1,11 +1,22 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
+import BookReviews from "./BookReviews";
 import { addToCart } from "../store/slices/cartSlice";
 import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
 
-function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
+function BookDetail({
+    book,
+    onBack,
+    onSelectBook,
+    onAddToCart,
+    currentUser,
+    onRequireLogin,
+    initialReviewTab = 'reviews',
+    scrollToReviews = false,
+    scrollToOwnReview = false
+}) {
     const dispatch = useDispatch();
     const reduxWishlist = useSelector((state) => state.wishlist);
     const isAuthenticated = Boolean(localStorage.getItem('accessToken'));
@@ -30,6 +41,24 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
     const isFavorite = optimisticFavorite !== null
         ? optimisticFavorite
         : (isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal);
+
+    
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasDiscussionTab = searchParams.get('tab') === 'discussion';
+        const hasReviewFocus = searchParams.get('focus') === 'review';
+        const hasReviewHash = window.location.hash === '#book-reviews-section';
+
+        if (hasDiscussionTab || hasReviewFocus || hasReviewHash || scrollToReviews) {
+            const timer = setTimeout(() => {
+                const section = document.getElementById('book-reviews-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 180);
+            return () => clearTimeout(timer);
+        }
+    }, [book?.id, scrollToReviews]);
 
     if (!book) return null;
 
@@ -281,6 +310,17 @@ function BookDetail({ book, onBack, onSelectBook, onAddToCart }) {
                         {book.description || "Chưa có mô tả chi tiết cho ấn phẩm sách này."}
                     </div>
                 </div>
+            </div>
+
+            <div id="book-reviews-section">
+            <BookReviews 
+                key={`${book.id}-${initialReviewTab}`}
+                bookId={book.id} 
+                currentUser={currentUser} 
+                onRequireLogin={onRequireLogin}
+                initialTab={initialReviewTab}
+                scrollToOwnReview={scrollToOwnReview}
+            />
             </div>
 
             {Array.isArray(book.relatedBooks) && book.relatedBooks.length > 0 ? (

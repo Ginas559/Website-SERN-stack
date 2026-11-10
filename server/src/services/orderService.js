@@ -460,12 +460,21 @@ async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {
     const orderIds = result.orders.map((o) => o.id);
     const allItems = await orderItemModel.findByOrderIds(orderIds);
 
+    const pool = await connectDB();
+    const reviewedRes = await new sql.Request(pool)
+        .input("userId", sql.Char(36), userId)
+        .query("SELECT DISTINCT book_id FROM dbo.comments WHERE user_id = @userId AND isDelete = 0 AND rate IS NOT NULL");
+    const reviewedBookIds = new Set(reviewedRes.recordset.map((r) => Number(r.book_id)));
+
     const itemsByOrderId = new Map();
     for (const item of allItems) {
         if (!itemsByOrderId.has(item.order_id)) {
             itemsByOrderId.set(item.order_id, []);
         }
-        itemsByOrderId.get(item.order_id).push(item);
+        itemsByOrderId.get(item.order_id).push({
+            ...item,
+            isReviewed: reviewedBookIds.has(Number(item.book_id))
+        });
     }
 
     const enrichedOrders = result.orders.map((order) => {
