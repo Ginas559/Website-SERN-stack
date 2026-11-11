@@ -1,6 +1,14 @@
 import { useState } from 'react'
 
 function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
+  const activeCategoryIds = new Set(categories.map((category) => category.id))
+  const linkedHiddenCategories = mode === 'edit' && book
+    ? (book.categories || []).filter((category) => (
+      category.isDelete === true
+      || category.isDelete === 1
+      || !activeCategoryIds.has(category.id)
+    ))
+    : []
   const [formData, setFormData] = useState({
     title: mode === 'edit' && book ? (book.title || '') : '',
     author: mode === 'edit' && book ? (book.author || '') : '',
@@ -11,10 +19,15 @@ function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
     publication_date: mode === 'edit' && book && book.publication_date ? book.publication_date.slice(0, 10) : '',
     image: mode === 'edit' && book ? (book.image || '') : '',
     description: mode === 'edit' && book ? (book.description || '') : '',
-    categoryIds: mode === 'edit' && book ? (book.categories || []).map((c) => c.id) : [],
+    categoryIds: mode === 'edit' && book
+      ? (book.categories || [])
+        .filter((category) => activeCategoryIds.has(category.id))
+        .map((category) => category.id)
+      : [],
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [categorySelectionChanged, setCategorySelectionChanged] = useState(false)
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -22,6 +35,7 @@ function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
   }
 
   const handleCategoryToggle = (catId) => {
+    setCategorySelectionChanged(true)
     setFormData((prev) => {
       const exists = prev.categoryIds.includes(catId)
       const nextCategoryIds = exists
@@ -75,7 +89,7 @@ function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
         publication_date: formData.publication_date || null,
         image: formData.image.trim() || null,
         description: formData.description.trim() || null,
-        categoryIds: formData.categoryIds,
+        ...(mode !== 'edit' || categorySelectionChanged ? { categoryIds: formData.categoryIds } : {}),
       }
       await onSave(payload, book?.id)
       onClose()
@@ -191,6 +205,12 @@ function BookModalContent({ mode, book, categories = [], onClose, onSave }) {
           <div className="admin-form-group">
             <label>Phân loại thể loại</label>
             <div className="admin-category-selector">
+              {linkedHiddenCategories.length > 0 && (
+                <div className="admin-text-muted">
+                  Đang liên kết với thể loại đã ẩn: {linkedHiddenCategories.map((category) => category.name).join(', ')}.
+                  Các liên kết này được giữ nguyên nếu bạn không thay đổi phân loại.
+                </div>
+              )}
               {categories.length === 0 ? (
                 <span className="admin-text-muted">Chưa có thể loại nào trong hệ thống.</span>
               ) : (
