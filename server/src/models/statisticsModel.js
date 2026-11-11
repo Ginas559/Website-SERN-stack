@@ -27,6 +27,7 @@ async function getOverviewMetrics() {
             COUNT(1) AS totalBooks,
             COUNT(CASE WHEN quantity = 0 THEN 1 END) AS outOfStockBooks,
             COUNT(CASE WHEN quantity > 0 AND quantity <= 10 THEN 1 END) AS lowStockBooks,
+            COUNT(CASE WHEN quantity > 10 THEN 1 END) AS inStockBooks,
             COALESCE(SUM(quantity), 0) AS totalInventoryQuantity
         FROM dbo.books
         WHERE isDelete = 0
@@ -104,6 +105,7 @@ async function getOverviewMetrics() {
         },
         books: {
             total: b.totalBooks || 0,
+            inStock: b.inStockBooks || 0,
             outOfStock: b.outOfStockBooks || 0,
             lowStock: b.lowStockBooks || 0,
             totalInventory: b.totalInventoryQuantity || 0
@@ -246,10 +248,87 @@ async function getCategoryDistribution() {
         LEFT JOIN dbo.orders o ON od.order_id = o.id
         WHERE c.isDelete = 0
         GROUP BY c.id, c.name
-        ORDER BY bookCount DESC, totalSold DESC
+        ORDER BY bookCount DESC, totalSold DESC, c.id ASC
     `;
 
     const res = await pool.request().query(query);
+    return res.recordset;
+}
+
+async function getPromotionAnalytics({ startDate = null, endDate = null } = {}) {
+    const pool = await connectDB();
+    const adoptionReq = pool.request();
+
+    let whereClause = "";
+    if (startDate && endDate) {
+        whereClause = "WHERE createdAt >= @startDate AND createdAt <= @endDate";
+        adoptionReq.input("startDate", sql.DateTime, new Date(startDate));
+        adoptionReq.input("endDate", sql.DateTime, new Date(endDate));
+    } else if (startDate) {
+        whereClause = "WHERE createdAt >= @startDate";
+        adoptionReq.input("startDate", sql.DateTime, new Date(startDate));
+    }
+
+    const topPromotionsQuery = `
+        SELECT TOP 8
+            id,
+            code,
+            discount_type,
+            value,
+            minimumOrderValue,
+            maxDiscountValue,
+            quantity,
+            usedCount,
+            startDate,
+            expiredAt
+        FROM dbo.discounts
+        WHERE isDelete = 0
+        ORDER BY usedCount DESC, id ASC
+    `;
+
+    const adoptionQuery = `
+        SELECT
+            COUNT(1) AS totalOrders,
+            COUNT(CASE WHEN discount IS NOT NULL THEN 1 END) AS ordersWithPromo,
+            COUNT(CASE WHEN discount IS NULL THEN 1 END) AS ordersWithoutPromo,
+            COALESCE(SUM(CASE WHEN status = 3 AND discount IS NOT NULL THEN total ELSE 0 END), 0) AS promoRevenue,
+            COALESCE(SUM(CASE WHEN status = 3 AND discount IS NULL THEN total ELSE 0 END), 0) AS regularRevenue
+        FROM dbo.orders
+        ${whereClause}
+    `;
+
+    const [promosRes, adoptionRes] = await Promise.all([
+        pool.request().query(topPromotionsQuery),
+        adoptionReq.query(adoptionQuery)
+    ]);
+
+    return {
+        promotions: promosRes.recordset,
+        adoption: adoptionRes.recordset[0] || {}
+    };
+}
+
+async function getTopRatedBooks({ limit = 5 } = {}) {
+    const pool = await connectDB();
+    const safeLimit = Math.max(1, Math.min(20, Number(limit) || 5));
+
+    const req = pool.request().input("limit", sql.Int, safeLimit);
+    const query = `
+        SELECT TOP (@limit)
+            b.id,
+            b.title,
+            b.author,
+            b.image,
+            COUNT(c.id) AS reviewCount,
+            CAST(ROUND(AVG(CAST(c.rate AS FLOAT)), 1) AS FLOAT) AS avgRating
+        FROM dbo.comments c
+        JOIN dbo.books b ON c.book_id = b.id
+        WHERE c.isDelete = 0 AND c.rate IS NOT NULL AND b.isDelete = 0
+        GROUP BY b.id, b.title, b.author, b.image
+        ORDER BY avgRating DESC, reviewCount DESC, b.id ASC
+    `;
+
+    const res = await req.query(query);
     return res.recordset;
 }
 
@@ -283,6 +362,7 @@ module.exports = {
     getUsersTimeSeries,
     getTopSellingBooks,
     getCategoryDistribution,
+    getPromotionAnalytics,
+    getTopRatedBooks,
     getRecentOrders
 };
-

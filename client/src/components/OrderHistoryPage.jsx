@@ -53,7 +53,6 @@ function OrderHistoryPage({
       const targetBookId = match ? Number(match[1]) : (Number(parsed.searchParams.get('bookId')) || null)
       const isDiscussion = parsed.searchParams.get('tab') === 'discussion'
       const focusReview = parsed.searchParams.get('focus') === 'review'
-      window.location.hash = parsed.hash || 'book-reviews-section'
       if (onSelectBook && targetBookId) {
         onSelectBook(targetBookId, {
           tab: isDiscussion ? 'discussions' : 'reviews',

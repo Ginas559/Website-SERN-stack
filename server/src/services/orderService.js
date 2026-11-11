@@ -240,7 +240,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     }
 }
 
-async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } = {}) {
+async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, currentStatus = null } = {}) {
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -252,6 +252,10 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
 
     if (!isAdmin && order.user_id !== userId) {
         throw new AppError("Bạn không có quyền hủy đơn hàng này.", 403);
+    }
+
+    if (currentStatus !== null && currentStatus !== undefined && order.status !== Number(currentStatus)) {
+        throw new AppError("Trạng thái đơn hàng đã thay đổi trước đó, vui lòng tải lại danh sách.", 409);
     }
 
     if (order.status === 4) {
@@ -271,7 +275,8 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
     await transaction.begin();
 
     try {
-        const updatedOrder = await orderModel.updateStatus(orderId, 4, order.status, transaction);
+        const expectedCancelStatus = currentStatus !== null && currentStatus !== undefined ? Number(currentStatus) : order.status;
+        const updatedOrder = await orderModel.updateStatus(orderId, 4, expectedCancelStatus, transaction);
 
         let ghnInfoObj = {};
         try {
@@ -335,12 +340,16 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
         throw new AppError("Không tìm thấy đơn hàng.", 404);
     }
 
+    if (currentStatus !== null && currentStatus !== undefined && order.status !== Number(currentStatus)) {
+        throw new AppError("Trạng thái đơn hàng đã thay đổi trước đó, vui lòng tải lại danh sách.", 409);
+    }
+
     if (order.status === safeNext) {
         return parseOrderJsonFields(order);
     }
 
     if (safeNext === 4) {
-        return await cancelOrder(orderId, null, { isAdmin: true, reason: note });
+        return await cancelOrder(orderId, null, { isAdmin: true, reason: note, currentStatus });
     }
 
     if (order.status === 4) {
