@@ -30,7 +30,7 @@ import userService from '../services/userService'
 import reviewService from '../services/reviewService'
 import './AdminDashboard.css'
 
-function AdminDashboard() {
+function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
   const dispatch = useDispatch()
   const {
     adminBooks: books,
@@ -43,7 +43,8 @@ function AdminDashboard() {
     loading: categoriesLoading,
   } = useSelector((state) => state.categories)
 
-  const [adminTab, setAdminTab] = useState('overview')
+  const [internalAdminTab, setInternalAdminTab] = useState('overview')
+  const adminTab = activeAdminTab || internalAdminTab
   const [bookPage, setBookPage] = useState(1)
   const [bookSearch, setBookSearch] = useState('')
   const [bookStatusFilter, setBookStatusFilter] = useState('all')
@@ -59,7 +60,7 @@ function AdminDashboard() {
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all')
   const [orderSortBy, setOrderSortBy] = useState('createdAt')
   const [orderSortOrder, setOrderSortOrder] = useState('DESC')
-  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersLoading, setOrdersLoading] = useState(() => (activeAdminTab || 'overview') === 'orders')
   const [orderRefreshTrigger, setOrderRefreshTrigger] = useState(0)
 
   const [adminPromotions, setAdminPromotions] = useState([])
@@ -68,7 +69,7 @@ function AdminDashboard() {
   const [promoTotalPages, setPromoTotalPages] = useState(1)
   const [promoSearch, setPromoSearch] = useState('')
   const [promoStatusFilter, setPromoStatusFilter] = useState('all')
-  const [promosLoading, setPromosLoading] = useState(false)
+  const [promosLoading, setPromosLoading] = useState(() => (activeAdminTab || 'overview') === 'promotions')
   const [promoRefreshTrigger, setPromoRefreshTrigger] = useState(0)
   const [promoModalOpen, setPromoModalOpen] = useState(false)
   const [promoModalMode, setPromoModalMode] = useState('create')
@@ -82,7 +83,7 @@ function AdminDashboard() {
   const [userStatusFilter, setUserStatusFilter] = useState('all')
   const [userRoleFilter, setUserRoleFilter] = useState('all')
   const [userVipFilter, setUserVipFilter] = useState('all')
-  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersLoading, setUsersLoading] = useState(() => (activeAdminTab || 'overview') === 'users')
   const [userRefreshTrigger, setUserRefreshTrigger] = useState(0)
   const [userBlockModalOpen, setUserBlockModalOpen] = useState(false)
   const [userBlockTarget, setUserBlockTarget] = useState(null)
@@ -96,7 +97,7 @@ function AdminDashboard() {
   const [reviewSearch, setReviewSearch] = useState('')
   const [reviewStatusFilter, setReviewStatusFilter] = useState('all')
   const [reviewRateFilter, setReviewRateFilter] = useState('all')
-  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsLoading, setReviewsLoading] = useState(() => (activeAdminTab || 'overview') === 'reviews')
   const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0)
 
   const [bookModalOpen, setBookModalOpen] = useState(false)
@@ -273,8 +274,12 @@ function AdminDashboard() {
     if (targetTab === 'promotions' && adminPromotions.length === 0) setPromosLoading(true)
     if (targetTab === 'users' && adminUsers.length === 0) setUsersLoading(true)
     if (targetTab === 'reviews' && adminReviews.length === 0) setReviewsLoading(true)
-    setAdminTab(targetTab)
-  }, [adminTab, adminOrders.length, adminPromotions.length, adminUsers.length, adminReviews.length])
+    if (onAdminTabChange) {
+      onAdminTabChange(targetTab)
+    } else {
+      setInternalAdminTab(targetTab)
+    }
+  }, [adminTab, adminOrders.length, adminPromotions.length, adminUsers.length, adminReviews.length, onAdminTabChange])
 
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
@@ -321,6 +326,9 @@ function AdminDashboard() {
       fetchCategoriesData()
     } catch (err) {
       showToast(err.message || err || 'Lỗi khi cập nhật trạng thái sách.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || err).includes('thay đổi')) {
+        fetchBooksData()
+      }
     }
   }
 
@@ -343,6 +351,9 @@ function AdminDashboard() {
       fetchCategoriesData()
     } catch (err) {
       showToast(err.message || err || 'Lỗi khi cập nhật trạng thái thể loại.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || err).includes('thay đổi')) {
+        fetchCategoriesData()
+      }
     }
   }
 
@@ -357,6 +368,9 @@ function AdminDashboard() {
       setOrderRefreshTrigger((prev) => prev + 1)
     } catch (err) {
       showToast(err.message || 'Lỗi khi cập nhật trạng thái đơn hàng.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || '').includes('thay đổi')) {
+        setOrderRefreshTrigger((prev) => prev + 1)
+      }
       throw err
     }
   }, [showToast])
@@ -467,6 +481,9 @@ function AdminDashboard() {
       setPromoRefreshTrigger((prev) => prev + 1)
     } catch (err) {
       showToast(err.message || 'Lỗi khi cập nhật trạng thái khuyến mãi.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || '').includes('thay đổi')) {
+        setPromoRefreshTrigger((prev) => prev + 1)
+      }
     }
   }, [showToast])
 
@@ -535,6 +552,9 @@ function AdminDashboard() {
       setUserRefreshTrigger((prev) => prev + 1)
     } catch (err) {
       showToast(err.message || 'Lỗi khi mở khóa người dùng.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || '').includes('thay đổi')) {
+        setUserRefreshTrigger((prev) => prev + 1)
+      }
     }
   }, [showToast])
 
@@ -588,6 +608,9 @@ function AdminDashboard() {
       setReviewRefreshTrigger((prev) => prev + 1)
     } catch (err) {
       showToast(err.message || 'Lỗi khi cập nhật trạng thái đánh giá.', 'error')
+      if (err?.response?.status === 409 || String(err?.message || '').includes('thay đổi')) {
+        setReviewRefreshTrigger((prev) => prev + 1)
+      }
       throw err
     }
   }, [showToast])
@@ -804,7 +827,7 @@ function AdminDashboard() {
       )}
 
       <AdminBookModal
-        isOpen={bookModalOpen}
+        isOpen={adminTab === 'books' && bookModalOpen}
         mode={bookModalMode}
         book={currentBook}
         categories={activeCategories}
@@ -813,7 +836,7 @@ function AdminDashboard() {
       />
 
       <AdminCategoryModal
-        isOpen={categoryModalOpen}
+        isOpen={adminTab === 'categories' && categoryModalOpen}
         mode={categoryModalMode}
         category={currentCategory}
         onClose={() => setCategoryModalOpen(false)}
@@ -821,7 +844,7 @@ function AdminDashboard() {
       />
 
       <AdminPromotionModal
-        isOpen={promoModalOpen}
+        isOpen={adminTab === 'promotions' && promoModalOpen}
         mode={promoModalMode}
         promotion={currentPromo}
         onClose={() => setPromoModalOpen(false)}
@@ -829,7 +852,7 @@ function AdminDashboard() {
       />
 
       <AdminUserBlockModal
-        isOpen={userBlockModalOpen}
+        isOpen={adminTab === 'users' && userBlockModalOpen}
         user={userBlockTarget}
         onClose={() => {
           setUserBlockModalOpen(false)
@@ -839,7 +862,7 @@ function AdminDashboard() {
       />
 
       <AdminUserDetailModal
-        isOpen={userDetailModalOpen}
+        isOpen={adminTab === 'users' && userDetailModalOpen}
         user={userDetailTarget}
         onClose={() => {
           setUserDetailModalOpen(false)

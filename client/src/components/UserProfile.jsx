@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import userService from '../services/userService';
 import discountService from '../services/discountService';
+import axiosClient from '../services/axiosClient';
 import './UserProfile.css';
 
 function formatCurrency(amount) {
@@ -49,6 +50,38 @@ const UserProfile = memo(function UserProfile({
     }, [user]);
 
     useEffect(() => {
+        if (!user?.id) return;
+        let isCurrent = true;
+        userService.getProfile()
+            .then((res) => {
+                if (!isCurrent) return;
+                const fresh = res?.data || res;
+                if (fresh && fresh.id) {
+                    const existing = (() => {
+                        try {
+                            return JSON.parse(localStorage.getItem('user') || 'null') || {};
+                        } catch {
+                            return {};
+                        }
+                    })();
+                    const merged = { ...existing, ...fresh };
+                    try {
+                        localStorage.setItem('user', JSON.stringify(merged));
+                    } catch {
+                        return;
+                    }
+                    if (onProfileUpdated) {
+                        onProfileUpdated(merged);
+                    }
+                }
+            })
+            .catch(() => {});
+        return () => {
+            isCurrent = false;
+        };
+    }, [user?.id, onProfileUpdated]);
+
+    useEffect(() => {
         let isCurrent = true;
         if (activeTab === 'vouchers') {
             discountService.getActiveDiscounts({ page: 1, limit: 20 })
@@ -79,14 +112,10 @@ const UserProfile = memo(function UserProfile({
 
     const handleCopyCode = useCallback((code) => {
         if (!code) return;
-        const markSuccess = () => {
-            setCopiedCode(code);
-            setTimeout(() => setCopiedCode(''), 2000);
-        };
+        setCopiedCode(code);
+        setTimeout(() => setCopiedCode(''), 2000);
         if (navigator?.clipboard?.writeText) {
-            navigator.clipboard.writeText(code).then(markSuccess).catch(markSuccess);
-        } else {
-            markSuccess();
+            navigator.clipboard.writeText(code).catch(() => {});
         }
     }, []);
 
@@ -147,20 +176,7 @@ const UserProfile = memo(function UserProfile({
 
         setPasswordLoading(true);
         try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-            const accessToken = localStorage.getItem('accessToken');
-            const resp = await fetch(`${API_URL}/auth/change-password`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${accessToken}`
-                },
-                body: JSON.stringify(passwordForm)
-            });
-            const data = await resp.json();
-            if (!resp.ok) {
-                throw new Error(data?.message || 'Đổi mật khẩu thất bại.');
-            }
+            await axiosClient.post('/auth/change-password', passwordForm);
 
             setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
             triggerFeedback('Đổi mật khẩu thành công! Vui lòng đăng nhập lại.', 'success');

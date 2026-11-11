@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import './App.css'
 import './components/BooksPage.css'
@@ -14,14 +14,55 @@ import UserProfile from './components/UserProfile'
 import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
 import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
+import { parseRouteFromSearch, sanitizeRoute, syncBrowserUrl, isPaymentReturnUrl } from './utils/navigationHistory'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
 if (resetToken) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
-const hasInitialPaymentReturn = typeof window !== 'undefined' && (
-  window.location.search.includes('vnp_SecureHash') ||
-  window.location.pathname.includes('/payment/vnpay-return')
-)
+const hasInitialPaymentReturn = typeof window !== 'undefined' && isPaymentReturnUrl(window.location.pathname, window.location.search)
+
+function createEmptyAuthForm(token = '') {
+  return {
+    username: '',
+    fullName: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: '',
+    confirmPassword: '',
+    currentPassword: '',
+    newPassword: '',
+    token,
+  }
+}
+
+function readStoredUser() {
+  try {
+    if (!localStorage.getItem('accessToken')) return null
+    return JSON.parse(localStorage.getItem('user') || 'null')
+  } catch {
+    return null
+  }
+}
+
+function isUserAdmin(userObj) {
+  return Boolean(userObj && (userObj.isAdmin || userObj.role === 'Admin' || userObj.role === 'admin'))
+}
+
+function getInitialRoute(storedUser) {
+  if (hasInitialPaymentReturn) {
+    return { tab: 'books', bookId: null, adminTab: 'overview' }
+  }
+  const parsed = parseRouteFromSearch(window.location.search)
+  if (resetToken && !new URLSearchParams(window.location.search).get('tab')) {
+    parsed.tab = 'account'
+  }
+  return sanitizeRoute(parsed, {
+    isAdmin: isUserAdmin(storedUser),
+    hasUser: Boolean(storedUser),
+    hasCheckoutItems: false,
+  })
+}
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
@@ -41,33 +82,83 @@ function App() {
     totalPages,
     selectedBook,
     loading: booksLoading,
+    error: bookError,
   } = useSelector((state) => state.books)
 
-  const [activeTab, setActiveTab] = useState('books')
+  const [user, setUser] = useState(() => readStoredUser())
+  const [initialRoute] = useState(() => getInitialRoute(readStoredUser()))
+  const [activeTab, setActiveTab] = useState(initialRoute.tab)
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
-  const [selectedBookId, setSelectedBookId] = useState(null)
+  const [selectedBookId, setSelectedBookId] = useState(initialRoute.bookId)
+  const [adminTab, setAdminTab] = useState(initialRoute.adminTab)
   const [bookViewOptions, setBookViewOptions] = useState(null)
   const [checkoutData, setCheckoutData] = useState({ items: [], total: 0 })
-
-  const handleSelectBook = (id, options = null) => {
-    setSelectedBookId(id)
-    setBookViewOptions(options)
-    setActiveTab('books')
-  }
   const [isPaymentReturn, setIsPaymentReturn] = useState(hasInitialPaymentReturn)
+  const completedCheckoutRef = useRef(false)
   const cartState = useSelector((state) => state.cart)
   const wishlistState = useSelector((state) => state.wishlist)
+  const isAdmin = isUserAdmin(user)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
-  const [form, setForm] = useState({
-    username: '', fullName: '', email: '', phone: '', address: '',
-    password: '', confirmPassword: '', currentPassword: '', newPassword: '', token: resetToken,
-  })
+  const [form, setForm] = useState(() => createEmptyAuthForm(resetToken))
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
+
+  const applyRouteState = useCallback((route, viewOptions = null) => {
+    setActiveTab(route.tab)
+    setSelectedBookId(route.bookId)
+    setAdminTab(route.adminTab)
+    setBookViewOptions(viewOptions)
+    if (!route.bookId) {
+      dispatch(setSelectedBook(null))
+    }
+  }, [dispatch])
+
+  const clearAuthenticatedSession = useCallback(() => {
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('user')
+    setUser(null)
+    setCheckoutData({ items: [], total: 0 })
+    completedCheckoutRef.current = false
+    setForm(createEmptyAuthForm())
+    dispatch(clearCartState())
+    dispatch(clearWishlistState())
+  }, [dispatch])
+
+  const navigateTo = useCallback((nextRoute, options = {}) => {
+    const {
+      replace = false,
+      viewOptions = null,
+      allowCheckout = false,
+    } = options
+    const leavingCompletedCheckout = activeTab === 'checkout' && completedCheckoutRef.current && nextRoute?.tab !== 'checkout'
+    if (leavingCompletedCheckout) {
+      completedCheckoutRef.current = false
+      setCheckoutData({ items: [], total: 0 })
+    }
+    const leavingPaymentReturn = isPaymentReturn
+    if (leavingPaymentReturn) {
+      setIsPaymentReturn(false)
+    }
+    const liveUser = readStoredUser()
+    if (!liveUser && user) {
+      clearAuthenticatedSession()
+    }
+    const effectiveUser = liveUser || null
+    const authorized = sanitizeRoute(nextRoute, {
+      isAdmin: isUserAdmin(effectiveUser),
+      hasUser: Boolean(effectiveUser),
+      hasCheckoutItems: allowCheckout || checkoutData.items.length > 0,
+    })
+    applyRouteState(authorized, viewOptions)
+    syncBrowserUrl(authorized, { replace: replace || leavingCompletedCheckout || leavingPaymentReturn })
+  }, [activeTab, user, checkoutData.items.length, isPaymentReturn, applyRouteState, clearAuthenticatedSession])
+
+  const handleSelectBook = useCallback((id, options = null) => {
+    navigateTo({ tab: 'books', bookId: Number(id) }, { viewOptions: options })
+  }, [navigateTo])
 
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
   const changeMode = (nextMode) => {
@@ -100,30 +191,127 @@ function App() {
   }, [selectedBookId, dispatch])
 
   useEffect(() => {
+    if (isPaymentReturn) return
+    syncBrowserUrl(initialRoute, { replace: true })
+  }, [isPaymentReturn, initialRoute])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isPaymentReturnUrl(window.location.pathname, window.location.search)) {
+        setIsPaymentReturn(true)
+        return
+      }
+      if (isPaymentReturn) {
+        setIsPaymentReturn(false)
+      }
+      const hadCompletedCheckout = completedCheckoutRef.current
+      if (hadCompletedCheckout) {
+        completedCheckoutRef.current = false
+        setCheckoutData({ items: [], total: 0 })
+      }
+      const liveUser = readStoredUser()
+      if (!liveUser && user) {
+        clearAuthenticatedSession()
+      } else if (liveUser && liveUser.id !== user?.id) {
+        setUser(liveUser)
+      }
+      const parsed = parseRouteFromSearch(window.location.search)
+      const authorized = sanitizeRoute(parsed, {
+        isAdmin: isUserAdmin(liveUser),
+        hasUser: Boolean(liveUser),
+        hasCheckoutItems: hadCompletedCheckout ? false : checkoutData.items.length > 0,
+      })
+      applyRouteState(authorized)
+      if (
+        authorized.tab !== parsed.tab ||
+        authorized.bookId !== parsed.bookId ||
+        authorized.adminTab !== parsed.adminTab
+      ) {
+        syncBrowserUrl(authorized, { replace: true })
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [isPaymentReturn, user, checkoutData.items.length, applyRouteState, clearAuthenticatedSession])
+
+  useEffect(() => {
+    const handleStorageSync = (event) => {
+      if (event.key !== null && event.key !== 'accessToken' && event.key !== 'user') return
+      const liveUser = readStoredUser()
+      if (!liveUser || liveUser.id !== user?.id) {
+        if (!liveUser) {
+          clearAuthenticatedSession()
+        } else {
+          setUser(liveUser)
+          setCheckoutData({ items: [], total: 0 })
+          completedCheckoutRef.current = false
+          dispatch(fetchCart())
+          dispatch(fetchWishlist())
+        }
+        const sanitized = sanitizeRoute({ tab: activeTab, bookId: selectedBookId, adminTab }, {
+          isAdmin: isUserAdmin(liveUser),
+          hasUser: Boolean(liveUser),
+          hasCheckoutItems: false,
+        })
+        applyRouteState(sanitized)
+        if (!isPaymentReturnUrl(window.location.pathname, window.location.search)) {
+          syncBrowserUrl(sanitized, { replace: true })
+        }
+        if (!liveUser) setMode('login')
+      }
+    }
+
+    window.addEventListener('storage', handleStorageSync)
+    return () => {
+      window.removeEventListener('storage', handleStorageSync)
+    }
+  }, [activeTab, selectedBookId, adminTab, user, dispatch, applyRouteState, clearAuthenticatedSession])
+
+  useEffect(() => {
     if (localStorage.getItem('accessToken')) {
       dispatch(fetchCart())
       dispatch(fetchWishlist())
     }
   }, [dispatch])
 
+  const forceToLoginWithError = useCallback((errorMsg) => {
+    clearAuthenticatedSession()
+    const nextRoute = { tab: 'account', bookId: null, adminTab: 'overview' }
+    applyRouteState(nextRoute)
+    syncBrowserUrl(nextRoute, { replace: true })
+    setMode('login')
+    setError(errorMsg)
+  }, [applyRouteState, clearAuthenticatedSession])
+
   useEffect(() => {
     const handleAccountBlocked = (event) => {
       const blockMsg = event?.detail?.message || 'Tài khoản của bạn đã bị khóa bởi Quản trị viên.'
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('user')
-      setUser(null)
-      dispatch(clearCartState())
-      dispatch(clearWishlistState())
-      setActiveTab('account')
-      setMode('login')
-      setError(blockMsg)
+      forceToLoginWithError(blockMsg)
+    }
+
+    const handleSessionExpired = (event) => {
+      const expiredMsg = event?.detail?.message || 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'
+      forceToLoginWithError(expiredMsg)
+    }
+
+    const handleSessionRefreshed = (event) => {
+      if (event?.detail?.user) {
+        setUser(event.detail.user)
+      }
     }
 
     window.addEventListener('sern:account-blocked', handleAccountBlocked)
+    window.addEventListener('sern:session-expired', handleSessionExpired)
+    window.addEventListener('sern:session-refreshed', handleSessionRefreshed)
     return () => {
       window.removeEventListener('sern:account-blocked', handleAccountBlocked)
+      window.removeEventListener('sern:session-expired', handleSessionExpired)
+      window.removeEventListener('sern:session-refreshed', handleSessionRefreshed)
     }
-  }, [dispatch])
+  }, [forceToLoginWithError])
 
   async function submit(event) {
     event.preventDefault()
@@ -153,7 +341,7 @@ function App() {
         setUser(null)
         setMode('login')
         setForm({ ...form, password: '', confirmPassword: '', currentPassword: '', newPassword: '', token: '' })
-        if (mode === 'reset') window.history.replaceState({}, '', window.location.pathname)
+        if (mode === 'reset') syncBrowserUrl({ tab: 'account', bookId: null, adminTab: 'overview' }, { replace: true })
         setMessage(data.message)
       } else if (mode === 'register') {
         setMode('login')
@@ -163,6 +351,7 @@ function App() {
         setUser(data.user)
         localStorage.setItem('accessToken', data.accessToken)
         localStorage.setItem('user', JSON.stringify(data.user))
+        setForm(createEmptyAuthForm())
         dispatch(syncGuestCart())
         dispatch(syncGuestWishlist())
         setMessage('Đăng nhập thành công.')
@@ -176,14 +365,16 @@ function App() {
 
   function logout() {
     request('/auth/logout', { method: 'POST' }).catch(() => {})
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('user')
-    setUser(null)
-    dispatch(clearCartState())
-    dispatch(clearWishlistState())
-    setActiveTab('books')
+    clearAuthenticatedSession()
+    const nextRoute = { tab: 'books', bookId: null, adminTab: 'overview' }
+    applyRouteState(nextRoute)
+    syncBrowserUrl(nextRoute, { replace: false })
     setMessage('Bạn đã đăng xuất.')
   }
+
+  const handleProfileUpdated = useCallback((updated) => {
+    setUser(updated)
+  }, [])
 
   const guestCartCount = (() => {
     try {
@@ -205,14 +396,13 @@ function App() {
 
   const cartBadgeCount = user ? (cartState.totalQuantity || cartState.items.length) : guestCartCount
   const wishlistBadgeCount = user ? (wishlistState.totalItems || wishlistState.items.length) : guestWishlistCount
-  const isAdmin = Boolean(user && (user.isAdmin || user.role === 'Admin' || user.role === 'admin'))
 
   return (
     <div>
       <header className="app-navbar">
         <div 
           className="app-brand" 
-          onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+          onClick={() => navigateTo({ tab: 'books', bookId: null })}
         >
           SERN BOOKSTORE
         </div>
@@ -220,21 +410,21 @@ function App() {
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('books'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+            onClick={() => navigateTo({ tab: 'books', bookId: null })}
           >
             Cửa hàng sách
           </button>
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('cart'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+            onClick={() => navigateTo({ tab: 'cart' })}
           >
             🛒 Giỏ hàng {cartBadgeCount > 0 ? `(${cartBadgeCount})` : ''}
           </button>
           <button 
             type="button" 
             className={`nav-btn ${activeTab === 'wishlist' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('wishlist'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+            onClick={() => navigateTo({ tab: 'wishlist' })}
           >
             ❤️ Yêu thích {wishlistBadgeCount > 0 ? `(${wishlistBadgeCount})` : ''}
           </button>
@@ -242,7 +432,7 @@ function App() {
             <button 
               type="button" 
               className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('orders'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+              onClick={() => navigateTo({ tab: 'orders' })}
             >
               📦 Đơn mua
             </button>
@@ -251,7 +441,7 @@ function App() {
             <button 
               type="button" 
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('admin'); setSelectedBookId(null); dispatch(setSelectedBook(null)); }}
+              onClick={() => navigateTo({ tab: 'admin', adminTab: 'overview' })}
             >
               Quản trị
             </button>
@@ -259,7 +449,7 @@ function App() {
           <button 
             type="button" 
             className={`nav-btn nav-btn-account ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => setActiveTab('account')}
+            onClick={() => navigateTo({ tab: 'account' })}
           >
             👤 {user?.fullName || user?.username || 'Tài khoản'}
           </button>
@@ -269,35 +459,23 @@ function App() {
       {isPaymentReturn ? (
         <PaymentResult 
           searchString={window.location.search}
-          onViewOrders={() => {
-            setIsPaymentReturn(false)
-            try {
-              window.history.replaceState({}, document.title, window.location.pathname)
-            } catch {
-              return
-            }
-            setActiveTab('orders')
-          }}
-          onContinueShopping={() => {
-            setIsPaymentReturn(false)
-            try {
-              window.history.replaceState({}, document.title, window.location.pathname)
-            } catch {
-              return
-            }
-            setActiveTab('books')
-          }}
+          onViewOrders={() => navigateTo({ tab: 'orders' }, { replace: true })}
+          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null }, { replace: true })}
         />
       ) : activeTab === 'admin' && isAdmin ? (
-        <AdminDashboard />
+        <AdminDashboard
+          activeAdminTab={adminTab}
+          onAdminTabChange={(nextAdminTab) => navigateTo({ tab: 'admin', adminTab: nextAdminTab })}
+        />
       ) : activeTab === 'checkout' ? (
         <CheckoutPage 
           checkoutItems={checkoutData.items}
           currentUser={user}
-          onBackToCart={() => setActiveTab('cart')}
-          onContinueShopping={() => { setActiveTab('books'); setSelectedBookId(null); }}
-          onViewOrders={() => setActiveTab('orders')}
+          onBackToCart={() => navigateTo({ tab: 'cart' })}
+          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null })}
+          onViewOrders={() => navigateTo({ tab: 'orders' })}
           onOrderCompleted={() => {
+            completedCheckoutRef.current = true
             dispatch(clearCartState())
             try {
               localStorage.removeItem('guestCart')
@@ -308,35 +486,62 @@ function App() {
         />
       ) : activeTab === 'orders' ? (
         <OrderHistoryPage 
-          onContinueShopping={() => setActiveTab('books')}
-          onGoToCart={() => setActiveTab('cart')}
+          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null })}
+          onGoToCart={() => navigateTo({ tab: 'cart' })}
           onSelectBook={handleSelectBook}
         />
       ) : activeTab === 'cart' ? (
         <CartPage 
-          onContinueShopping={() => setActiveTab('books')} 
+          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null })} 
           onCheckout={(items, total) => {
+            completedCheckoutRef.current = false
             setCheckoutData({ items, total })
-            setActiveTab('checkout')
+            navigateTo({ tab: 'checkout' }, { allowCheckout: items.length > 0 })
           }}
         />
       ) : activeTab === 'wishlist' ? (
         <WishlistPage 
-          onContinueShopping={() => setActiveTab('books')} 
+          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null })} 
           onSelectBook={handleSelectBook}
         />
       ) : activeTab === 'books' ? (
-        selectedBookId && selectedBook ? (
-          <BookDetail 
-            book={selectedBook} 
-            onBack={() => { setSelectedBookId(null); dispatch(setSelectedBook(null)); setBookViewOptions(null); }} 
-            onSelectBook={handleSelectBook}
-            currentUser={user}
-            onRequireLogin={() => { setActiveTab('account'); setMode('login'); }}
-            initialReviewTab={bookViewOptions?.tab}
-            scrollToReviews={Boolean(bookViewOptions?.scrollToReviews || bookViewOptions?.scrollToDiscussions || bookViewOptions?.scrollToOwnReview)}
-            scrollToOwnReview={Boolean(bookViewOptions?.scrollToOwnReview)}
-          />
+        selectedBookId ? (
+          selectedBook && Number(selectedBook.id) === Number(selectedBookId) ? (
+            <BookDetail 
+              book={selectedBook} 
+              onBack={() => navigateTo({ tab: 'books', bookId: null })} 
+              onSelectBook={handleSelectBook}
+              currentUser={user}
+              onRequireLogin={() => { navigateTo({ tab: 'account' }); setMode('login'); }}
+              initialReviewTab={bookViewOptions?.tab}
+              scrollToReviews={Boolean(bookViewOptions?.scrollToReviews || bookViewOptions?.scrollToDiscussions || bookViewOptions?.scrollToOwnReview)}
+              scrollToOwnReview={Boolean(bookViewOptions?.scrollToOwnReview)}
+            />
+          ) : (
+            <div className="books-page">
+              <div className="empty-state">
+                {booksLoading ? (
+                  <>
+                    <h3>Đang tải chi tiết sách...</h3>
+                    <p>Vui lòng chờ trong giây lát.</p>
+                  </>
+                ) : (
+                  <>
+                    <h3>Không tìm thấy thông tin sách</h3>
+                    <p>{bookError || 'Ấn phẩm không tồn tại hoặc đã ngừng phát hành.'}</p>
+                    <button
+                      type="button"
+                      className="btn-reset"
+                      style={{ marginTop: 16 }}
+                      onClick={() => navigateTo({ tab: 'books', bookId: null })}
+                    >
+                      Quay lại cửa hàng sách
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )
         ) : (
           <BookList 
             books={books}
@@ -355,7 +560,7 @@ function App() {
         <UserProfile 
           user={user} 
           onLogout={logout} 
-          onProfileUpdated={(updated) => setUser(updated)} 
+          onProfileUpdated={handleProfileUpdated} 
         />
       ) : (
         <main className="page">

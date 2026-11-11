@@ -1,4 +1,5 @@
 import { useState, memo } from 'react'
+import { buildMonotoneSplinePath, buildMonotoneAreaPath } from '../utils/chartGeometry'
 import './AdminAnalyticsCharts.css'
 
 function formatVND(value) {
@@ -66,7 +67,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
 
   const revWidth = 820
   const revHeight = 250
-  const revPad = { top: 20, right: 24, bottom: 32, left: 62 }
+  const revPad = { top: 20, right: 48, bottom: 32, left: 62 }
   const revPlotW = revWidth - revPad.left - revPad.right
   const revPlotH = revHeight - revPad.top - revPad.bottom
 
@@ -80,29 +81,42 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
   }, 0)
   const revMax = getNiceScaleMax(maxRevRaw, true)
 
+  const maxCompletedRaw = chartData.reduce((mx, d) => Math.max(mx, Number(d.completedOrdersCount) || 0), 0)
+  const completedMax = getNiceScaleMax(maxCompletedRaw, false)
+
   const getRevX = (idx) => {
     if (len <= 1) return revPad.left + revPlotW / 2
     return revPad.left + (idx / (len - 1)) * revPlotW
   }
   const getRevY = (val) => revPad.top + revPlotH - (Math.min(Number(val) || 0, revMax) / revMax) * revPlotH
+  const getCompletedY = (val) => revPad.top + revPlotH - (Math.min(Number(val) || 0, completedMax) / completedMax) * revPlotH
 
-  const totalLinePoints = chartData.map((d, i) => `${getRevX(i)},${getRevY(Number(d.revenue) || 0)}`).join(' ')
-  const codLinePoints = chartData.map((d, i) => `${getRevX(i)},${getRevY(Number(d.codRevenue) || 0)}`).join(' ')
-  const vnpayLinePoints = chartData.map((d, i) => `${getRevX(i)},${getRevY(Number(d.vnpayRevenue) || 0)}`).join(' ')
-  const shippingLinePoints = chartData.map((d, i) => `${getRevX(i)},${getRevY(Number(d.shippingRevenue) || 0)}`).join(' ')
-  const pendingLinePoints = chartData.map((d, i) => `${getRevX(i)},${getRevY(Number(d.pendingRevenue) || 0)}`).join(' ')
+  const revBaseY = revPad.top + revPlotH
+  const comboBarW = Math.max(8, Math.min(24, (revPlotW / Math.max(1, len)) * 0.42))
 
-  const areaPath = len > 0
-    ? `M ${getRevX(0)},${revPad.top + revPlotH} ` +
-      chartData.map((d, i) => `L ${getRevX(i)},${getRevY(Number(d.revenue) || 0)}`).join(' ') +
-      ` L ${getRevX(len - 1)},${revPad.top + revPlotH} Z`
-    : ''
+  const totalPoints = chartData.map((d, i) => ({ x: getRevX(i), y: getRevY(Number(d.revenue) || 0) }))
+  const codPoints = chartData.map((d, i) => ({ x: getRevX(i), y: getRevY(Number(d.codRevenue) || 0) }))
+  const vnpayPoints = chartData.map((d, i) => ({ x: getRevX(i), y: getRevY(Number(d.vnpayRevenue) || 0) }))
+  const shippingPoints = chartData.map((d, i) => ({ x: getRevX(i), y: getRevY(Number(d.shippingRevenue) || 0) }))
+  const pendingPoints = chartData.map((d, i) => ({ x: getRevX(i), y: getRevY(Number(d.pendingRevenue) || 0) }))
+
+  const totalCurvePath = buildMonotoneSplinePath(totalPoints)
+  const codCurvePath = buildMonotoneSplinePath(codPoints)
+  const vnpayCurvePath = buildMonotoneSplinePath(vnpayPoints)
+  const shippingCurvePath = buildMonotoneSplinePath(shippingPoints)
+  const pendingCurvePath = buildMonotoneSplinePath(pendingPoints)
+  const totalAreaPath = buildMonotoneAreaPath(totalPoints, revBaseY)
 
   const barWidth = 520
   const barHeight = 230
-  const barPad = { top: 20, right: 16, bottom: 32, left: 38 }
+  const barPad = { top: 20, right: 20, bottom: 32, left: 38 }
   const barPlotW = barWidth - barPad.left - barPad.right
   const barPlotH = barHeight - barPad.top - barPad.bottom
+
+  const userPad = { top: 20, right: 42, bottom: 32, left: 38 }
+  const userPlotW = barWidth - userPad.left - userPad.right
+  const userPlotH = barHeight - userPad.top - userPad.bottom
+  const userBaseY = userPad.top + userPlotH
 
   const maxOrdersRaw = chartData.reduce((mx, d) => Math.max(mx, Number(d.ordersCount) || 0), 0)
   const ordersMax = getNiceScaleMax(maxOrdersRaw, false)
@@ -110,12 +124,30 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
   const maxUsersRaw = chartData.reduce((mx, d) => Math.max(mx, Number(d.newUsersCount) || 0), 0)
   const usersMax = getNiceScaleMax(maxUsersRaw, false)
 
+  const cumulativeUsers = chartData.reduce((acc, d) => {
+    const prev = acc.length > 0 ? acc[acc.length - 1] : 0
+    acc.push(prev + (Number(d.newUsersCount) || 0))
+    return acc
+  }, [])
+  const totalCumUsers = cumulativeUsers.length > 0 ? cumulativeUsers[cumulativeUsers.length - 1] : 0
+  const cumUsersMax = getNiceScaleMax(totalCumUsers, false)
+
+  const userSlotW = len > 0 ? userPlotW / len : userPlotW
+  const getUserX = (idx) => (len <= 1 ? userPad.left + userPlotW / 2 : userPad.left + userSlotW * idx + userSlotW / 2)
+  const getUserDailyY = (val) => userBaseY - (Math.min(Number(val) || 0, usersMax) / usersMax) * userPlotH
+  const getUserCumY = (val) => userBaseY - (Math.min(Number(val) || 0, cumUsersMax) / cumUsersMax) * userPlotH
+
+  const cumUserPoints = chartData.map((_, i) => ({ x: getUserX(i), y: getUserCumY(cumulativeUsers[i] || 0) }))
+  const cumUserLinePath = buildMonotoneSplinePath(cumUserPoints)
+  const cumUserAreaPath = buildMonotoneAreaPath(cumUserPoints, userBaseY)
+
   const slotW = len > 0 ? barPlotW / len : barPlotW
   const colW = Math.max(6, Math.min(28, slotW * 0.58))
 
   const activeRevItem = hoverRevIdx !== null && hoverRevIdx < len ? chartData[hoverRevIdx] : null
   const activeOrderItem = hoverOrderIdx !== null && hoverOrderIdx < len ? chartData[hoverOrderIdx] : null
   const activeUserItem = hoverUserIdx !== null && hoverUserIdx < len ? chartData[hoverUserIdx] : null
+  const activeUserCumulative = hoverUserIdx !== null && hoverUserIdx < len ? (cumulativeUsers[hoverUserIdx] || 0) : 0
 
   return (
     <div className="analytics-charts-section">
@@ -191,9 +223,14 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
 
         <div className="chart-legend-row">
           {revenueMode === 'total' ? (
-            <span className="chart-legend-item">
-              <span className="legend-dot gold" /> Doanh thu hoàn thành
-            </span>
+            <>
+              <span className="chart-legend-item">
+                <span className="legend-dot gold" /> Doanh thu hoàn thành (Trục trái)
+              </span>
+              <span className="chart-legend-item">
+                <span className="legend-bar blue" /> Số đơn hoàn thành (Trục phải)
+              </span>
+            </>
           ) : revenueMode === 'split' ? (
             <>
               <span className="chart-legend-item">
@@ -225,7 +262,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
               <div className="chart-tooltip-row">
                 <span>Đã chốt thành công:</span>
                 <span className="chart-tooltip-val" style={{ color: '#e7b26a' }}>
-                  {formatVND(activeRevItem.revenue)}
+                  {formatVND(activeRevItem.revenue)} ({activeRevItem.completedOrdersCount || 0} đơn)
                 </span>
               </div>
               <div className="chart-tooltip-row">
@@ -265,14 +302,19 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
             >
               <defs>
                 <linearGradient id="goldAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#e7b26a" stopOpacity="0.38" />
+                  <stop offset="0%" stopColor="#e7b26a" stopOpacity="0.34" />
                   <stop offset="100%" stopColor="#e7b26a" stopOpacity="0.02" />
+                </linearGradient>
+                <linearGradient id="comboBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.38" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.08" />
                 </linearGradient>
               </defs>
 
               {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
                 const y = revPad.top + revPlotH * (1 - ratio)
                 const val = Math.round(revMax * ratio)
+                const rightVal = Math.round(completedMax * ratio)
                 return (
                   <g key={ratio}>
                     <line
@@ -285,21 +327,46 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                     <text x={revPad.left - 10} y={y + 4} textAnchor="end" className="chart-axis-text">
                       {formatCompactVND(val)}
                     </text>
+                    {revenueMode === 'total' ? (
+                      <text x={revPad.left + revPlotW + 8} y={y + 4} textAnchor="start" className="chart-axis-text right">
+                        {rightVal}
+                      </text>
+                    ) : null}
                   </g>
                 )
               })}
 
               {revenueMode === 'total' ? (
                 <>
-                  {areaPath ? <path d={areaPath} fill="url(#goldAreaGrad)" /> : null}
+                  {chartData.map((d, i) => {
+                    const completedCount = Number(d.completedOrdersCount) || 0
+                    if (completedCount <= 0) return null
+                    const x = getRevX(i)
+                    const yTop = getCompletedY(completedCount)
+                    const hBar = Math.max(0, revBaseY - yTop)
+                    return (
+                      <rect
+                        key={`combo-bar-${d.date}`}
+                        x={x - comboBarW / 2}
+                        y={yTop}
+                        width={comboBarW}
+                        height={hBar}
+                        rx={3}
+                        fill="url(#comboBarGrad)"
+                        className={`chart-combo-bar ${hoverRevIdx === i ? 'active' : ''}`}
+                      />
+                    )
+                  })}
+                  {totalAreaPath ? <path d={totalAreaPath} fill="url(#goldAreaGrad)" /> : null}
                   {len > 1 ? (
-                    <polyline
+                    <path
                       fill="none"
                       stroke="#e7b26a"
                       strokeWidth="2.6"
                       strokeLinejoin="round"
                       strokeLinecap="round"
-                      points={totalLinePoints}
+                      d={totalCurvePath}
+                      className="chart-line-path"
                     />
                   ) : null}
                   {chartData.map((d, i) => (
@@ -318,19 +385,21 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                 <>
                   {len > 1 ? (
                     <>
-                      <polyline
+                      <path
                         fill="none"
                         stroke="#f59e0b"
                         strokeWidth="2.4"
                         strokeLinejoin="round"
-                        points={codLinePoints}
+                        d={codCurvePath}
+                        className="chart-line-path"
                       />
-                      <polyline
+                      <path
                         fill="none"
                         stroke="#10b981"
                         strokeWidth="2.4"
                         strokeLinejoin="round"
-                        points={vnpayLinePoints}
+                        d={vnpayCurvePath}
+                        className="chart-line-path"
                       />
                     </>
                   ) : null}
@@ -359,27 +428,30 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                 <>
                   {len > 1 ? (
                     <>
-                      <polyline
+                      <path
                         fill="none"
                         stroke="#10b981"
                         strokeWidth="2.5"
                         strokeLinejoin="round"
-                        points={totalLinePoints}
+                        d={totalCurvePath}
+                        className="chart-line-path"
                       />
-                      <polyline
+                      <path
                         fill="none"
                         stroke="#3b82f6"
                         strokeWidth="2.3"
                         strokeLinejoin="round"
-                        points={shippingLinePoints}
+                        d={shippingCurvePath}
+                        className="chart-line-path"
                       />
-                      <polyline
+                      <path
                         fill="none"
                         stroke="#a855f7"
                         strokeWidth="2.2"
                         strokeDasharray="5 3"
                         strokeLinejoin="round"
-                        points={pendingLinePoints}
+                        d={pendingCurvePath}
+                        className="chart-line-path"
                       />
                     </>
                   ) : null}
@@ -604,7 +676,8 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
           </div>
 
           <div className="chart-legend-row">
-            <span className="chart-legend-item"><span className="legend-dot purple" /> Khách hàng mới kích hoạt</span>
+            <span className="chart-legend-item"><span className="legend-dot purple" /> Mới trong kỳ (Trục trái)</span>
+            <span className="chart-legend-item"><span className="legend-line dashed-gold" /> Tích lũy trong kỳ (Trục phải)</span>
           </div>
 
           <div className="chart-svg-wrapper">
@@ -615,6 +688,12 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                   <span>Độc giả mới:</span>
                   <span className="chart-tooltip-val" style={{ color: '#c084fc' }}>
                     {activeUserItem.newUsersCount || 0} người dùng
+                  </span>
+                </div>
+                <div className="chart-tooltip-row">
+                  <span>Tích lũy trong kỳ:</span>
+                  <span className="chart-tooltip-val" style={{ color: '#e7b26a' }}>
+                    {activeUserCumulative} tài khoản
                   </span>
                 </div>
               </div>
@@ -631,59 +710,80 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                 onMouseLeave={() => setHoverUserIdx(null)}
               >
                 <defs>
-                  <linearGradient id="purpleBarGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#c084fc" />
-                    <stop offset="100%" stopColor="#7e22ce" />
+                  <linearGradient id="purpleCumAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0.02" />
                   </linearGradient>
                 </defs>
 
                 {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-                  const y = barPad.top + barPlotH * (1 - ratio)
+                  const y = userPad.top + userPlotH * (1 - ratio)
                   const val = Math.round(usersMax * ratio)
+                  const cumVal = Math.round(cumUsersMax * ratio)
                   return (
                     <g key={ratio}>
                       <line
-                        x1={barPad.left}
+                        x1={userPad.left}
                         y1={y}
-                        x2={barPad.left + barPlotW}
+                        x2={userPad.left + userPlotW}
                         y2={y}
                         className="chart-grid-line"
                       />
-                      <text x={barPad.left - 8} y={y + 4} textAnchor="end" className="chart-axis-text">
+                      <text x={userPad.left - 8} y={y + 4} textAnchor="end" className="chart-axis-text">
                         {val}
+                      </text>
+                      <text x={userPad.left + userPlotW + 8} y={y + 4} textAnchor="start" className="chart-axis-text right-gold">
+                        {cumVal}
                       </text>
                     </g>
                   )
                 })}
 
+                {cumUserAreaPath ? <path d={cumUserAreaPath} fill="url(#purpleCumAreaGrad)" /> : null}
+                {len > 1 ? (
+                  <path
+                    fill="none"
+                    stroke="#e7b26a"
+                    strokeWidth="2"
+                    strokeDasharray="4 3"
+                    d={cumUserLinePath}
+                    className="chart-cum-line"
+                  />
+                ) : null}
+
                 {chartData.map((d, i) => {
-                  const newUsers = d.newUsersCount || 0
-                  const xCenter = barPad.left + slotW * i + slotW / 2
-                  const barX = xCenter - colW / 2
-                  const hUser = (newUsers / usersMax) * barPlotH
-                  const yUser = barPad.top + barPlotH - hUser
+                  const newUsers = Number(d.newUsersCount) || 0
+                  const xCenter = getUserX(i)
+                  const yUser = getUserDailyY(newUsers)
                   const showLabel = i % labelStep === 0 || i === len - 1
 
                   return (
                     <g key={`usr-${d.date}`} onMouseEnter={() => setHoverUserIdx(i)}>
                       <rect
-                        x={barPad.left + slotW * i}
-                        y={barPad.top}
-                        width={slotW}
-                        height={barPlotH}
+                        x={len <= 1 ? userPad.left : userPad.left + userSlotW * i}
+                        y={userPad.top}
+                        width={len <= 1 ? userPlotW : userSlotW}
+                        height={userPlotH}
                         className={`chart-hover-column ${hoverUserIdx === i ? 'active' : ''}`}
                       />
-                      {hUser > 0 ? (
-                        <rect
-                          x={barX}
-                          y={yUser}
-                          width={colW}
-                          height={hUser}
-                          fill="url(#purpleBarGrad)"
-                          rx={4}
-                          className="chart-bar-rect"
+                      {newUsers > 0 ? (
+                        <line
+                          x1={xCenter}
+                          y1={userBaseY}
+                          x2={xCenter}
+                          y2={yUser}
+                          className={`chart-lollipop-stem ${hoverUserIdx === i ? 'active' : ''}`}
                         />
                       ) : null}
+                      <circle
+                        cx={xCenter}
+                        cy={yUser}
+                        r={hoverUserIdx === i ? 6 : (newUsers > 0 ? 4.4 : 2.5)}
+                        fill={newUsers > 0 ? '#c084fc' : '#524a3f'}
+                        stroke="#1a1917"
+                        strokeWidth="1.6"
+                        className="chart-lollipop-dot"
+                      />
                       {showLabel ? (
                         <text x={xCenter} y={barHeight - 8} textAnchor="middle" className="chart-axis-text">
                           {formatAxisLabel(d.date, groupBy)}
@@ -702,4 +802,3 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
 }
 
 export default memo(AdminAnalyticsCharts)
-

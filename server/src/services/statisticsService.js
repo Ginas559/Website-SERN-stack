@@ -9,13 +9,9 @@ function parseStrictDate(dateStr, fieldName) {
         throw new AppError(`Tham số ${fieldName} phải là chuỗi ngày YYYY-MM-DD.`, 400);
     }
     const trimmed = dateStr.trim();
-    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/);
     if (!match) {
-        const parsed = new Date(trimmed);
-        if (isNaN(parsed.getTime())) {
-            throw new AppError(`Định dạng ${fieldName} không hợp lệ (cần YYYY-MM-DD).`, 400);
-        }
-        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
+        throw new AppError(`Định dạng ${fieldName} không hợp lệ (cần YYYY-MM-DD).`, 400);
     }
     const year = Number(match[1]);
     const month = Number(match[2]);
@@ -25,6 +21,24 @@ function parseStrictDate(dateStr, fieldName) {
         throw new AppError(`Ngày ${fieldName} (${trimmed}) không tồn tại trên lịch.`, 400);
     }
     return localDate;
+}
+
+function parsePositiveIntLimit(limit, maxLimit, defaultLimit = 5, fieldLabel = "limit") {
+    if (limit === undefined || limit === null || limit === "") {
+        return defaultLimit;
+    }
+    if (typeof limit !== "number" && typeof limit !== "string") {
+        throw new AppError(`Giới hạn (${fieldLabel}) phải là số nguyên từ 1 đến ${maxLimit}.`, 400);
+    }
+    const str = String(limit).trim();
+    if (!/^\d+$/.test(str)) {
+        throw new AppError(`Giới hạn (${fieldLabel}) phải là số nguyên từ 1 đến ${maxLimit}.`, 400);
+    }
+    const parsed = Number(str);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > maxLimit) {
+        throw new AppError(`Giới hạn (${fieldLabel}) phải là số nguyên từ 1 đến ${maxLimit}.`, 400);
+    }
+    return parsed;
 }
 
 function formatDateStr(date) {
@@ -231,10 +245,7 @@ async function getRevenueChart({ timeRange = "7days", startDate = null, endDate 
 }
 
 async function getTopBooks({ limit = 5 }) {
-    const parsedLimit = limit === undefined || limit === null || limit === "" ? 5 : Number(limit);
-    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
-        throw new AppError("Giới hạn số sách (limit) phải là số nguyên từ 1 đến 50.", 400);
-    }
+    const parsedLimit = parsePositiveIntLimit(limit, 50, 5, "số sách");
     return await statisticsModel.getTopSellingBooks({ limit: parsedLimit });
 }
 
@@ -250,21 +261,108 @@ async function getCategoryDistribution() {
     }));
 }
 
+async function getPromotionAnalytics({ timeRange = null, startDate = null, endDate = null } = {}) {
+    let rangeBounds = { start: null, end: null };
+    if (timeRange || startDate || endDate) {
+        rangeBounds = resolveDateRange(timeRange || "7days", startDate, endDate);
+    }
+
+    const { promotions, adoption } = await statisticsModel.getPromotionAnalytics({
+        startDate: rangeBounds.start,
+        endDate: rangeBounds.end
+    });
+
+    const now = new Date();
+    const enrichedPromotions = promotions.map((p) => {
+        const qty = Number(p.quantity) || 0;
+        const used = Number(p.usedCount) || 0;
+        let status = "active";
+        if (p.expiredAt && new Date(p.expiredAt) < now) {
+            status = "expired";
+        } else if (p.startDate && new Date(p.startDate) > now) {
+            status = "scheduled";
+        } else if (used >= qty) {
+            status = "exhausted";
+        }
+        return {
+            ...p,
+            remaining: Math.max(0, qty - used),
+            usageRate: qty > 0 ? Number(Math.min(100, (used / qty) * 100).toFixed(1)) : 0,
+            status
+        };
+    });
+
+    const totalOrders = Number(adoption.totalOrders) || 0;
+    const ordersWithPromo = Number(adoption.ordersWithPromo) || 0;
+    const ordersWithoutPromo = Number(adoption.ordersWithoutPromo) || 0;
+
+    return {
+        adoption: {
+            totalOrders,
+            ordersWithPromo,
+            ordersWithoutPromo,
+            promoRate: totalOrders > 0 ? Number(((ordersWithPromo / totalOrders) * 100).toFixed(1)) : 0,
+            promoRevenue: Number(adoption.promoRevenue) || 0,
+            regularRevenue: Number(adoption.regularRevenue) || 0
+        },
+        topPromotions: enrichedPromotions
+    };
+}
+
+async function getReviewAnalytics({ limit = 5, preloadedReviews = null } = {}) {
+    const parsedLimit = parsePositiveIntLimit(limit, 20, 5, "số sách đánh giá");
+
+    const [reviewsSummary, topRatedBooks] = await Promise.all([
+        preloadedReviews ? Promise.resolve(preloadedReviews) : getOverview().then((ov) => ov.reviews),
+        statisticsModel.getTopRatedBooks({ limit: parsedLimit })
+    ]);
+
+    const totalRatings = Number(reviewsSummary?.totalRatings) || 0;
+    const totalDiscussions = Number(reviewsSummary?.totalDiscussions) || 0;
+    const totalPosts = totalRatings + totalDiscussions;
+    const breakdown = reviewsSummary?.ratingBreakdown || {};
+
+    const stars = [5, 4, 3, 2, 1].map((star) => {
+        const count = Number(breakdown[star]) || 0;
+        return {
+            star,
+            count,
+            percentage: totalRatings > 0 ? Number(((count / totalRatings) * 100).toFixed(1)) : 0
+        };
+    });
+
+    return {
+        totalRatings,
+        totalDiscussions,
+        totalPosts,
+        averageRate: Number(reviewsSummary?.averageRate) || 0,
+        ratingShare: totalPosts > 0 ? Number(((totalRatings / totalPosts) * 100).toFixed(1)) : 0,
+        discussionShare: totalPosts > 0 ? Number(((totalDiscussions / totalPosts) * 100).toFixed(1)) : 0,
+        stars,
+        topRatedBooks
+    };
+}
+
 async function getDashboardSummary({ timeRange = "7days", startDate = null, endDate = null, groupBy = null }) {
-    const [overview, revenueChart, topBooks, categories, recentOrders] = await Promise.all([
+    const [overview, revenueChart, topBooks, categories, recentOrders, promotionAnalytics] = await Promise.all([
         getOverview(),
         getRevenueChart({ timeRange, startDate, endDate, groupBy }),
         getTopBooks({ limit: 5 }),
         getCategoryDistribution(),
-        statisticsModel.getRecentOrders({ limit: 5 })
+        statisticsModel.getRecentOrders({ limit: 5 }),
+        getPromotionAnalytics({ timeRange, startDate, endDate })
     ]);
+
+    const reviewAnalytics = await getReviewAnalytics({ limit: 5, preloadedReviews: overview.reviews });
 
     return {
         overview,
         revenueChart,
         topBooks,
         categories,
-        recentOrders
+        recentOrders,
+        promotionAnalytics,
+        reviewAnalytics
     };
 }
 
@@ -273,6 +371,8 @@ module.exports = {
     getRevenueChart,
     getTopBooks,
     getCategoryDistribution,
+    getPromotionAnalytics,
+    getReviewAnalytics,
     getDashboardSummary
 };
 

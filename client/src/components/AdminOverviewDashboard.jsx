@@ -1,11 +1,21 @@
 import { useState, useEffect, memo } from 'react'
 import statisticsService from '../services/statisticsService'
+import { buildCircularSegments } from '../utils/chartGeometry'
 import AdminAnalyticsCharts from './AdminAnalyticsCharts'
+import AdminCatalogAnalyticsCharts from './AdminCatalogAnalyticsCharts'
 import './AdminOverviewDashboard.css'
 
 function formatVND(value) {
   const num = Number(value) || 0
   return `${num.toLocaleString('vi-VN')} đ`
+}
+
+function formatCompactMoney(value) {
+  const num = Number(value) || 0
+  if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}tỷ`
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}tr`
+  if (num >= 1000) return `${Math.round(num / 1000)}k`
+  return String(num)
 }
 
 function formatDate(dateStr) {
@@ -142,15 +152,44 @@ function AdminOverviewDashboard({ onNavigateTab }) {
   const recentOrders = dashboardData?.recentOrders || []
 
   const totalOrdersCount = orders.total || 0
-  const calcPct = (cnt) => (totalOrdersCount > 0 ? ((cnt / totalOrdersCount) * 100).toFixed(1) : '0')
+  const calcPct = (cnt) => (totalOrdersCount > 0 ? ((cnt / totalOrdersCount) * 100).toFixed(1) : '0.0')
 
-  const pipeline = [
-    { name: 'Hoàn thành', count: orders.completed || 0, cls: 'completed' },
-    { name: 'Đang giao', count: orders.shipping || 0, cls: 'shipping' },
-    { name: 'Đã thanh toán', count: orders.paid || 0, cls: 'paid' },
-    { name: 'Chờ xác nhận', count: orders.pending || 0, cls: 'pending' },
-    { name: 'Đã hủy', count: orders.cancelled || 0, cls: 'cancelled' }
+  const completedOrdersCount = Number(orders.completed) || 0
+  const cancelledOrdersCount = Number(orders.cancelled) || 0
+  const activeOrdersCount = Math.max(0, totalOrdersCount - cancelledOrdersCount)
+
+  const orderLifecycleStages = [
+    { key: 'pending', name: 'Chờ xác nhận', shortLabel: 'Chờ duyệt', count: Number(orders.pending) || 0, color: '#eab308' },
+    { key: 'paid', name: 'Đã thanh toán', shortLabel: 'Đã TT', count: Number(orders.paid) || 0, color: '#f59e0b' },
+    { key: 'shipping', name: 'Đang giao', shortLabel: 'Đang giao', count: Number(orders.shipping) || 0, color: '#3b82f6' },
+    { key: 'completed', name: 'Hoàn thành', shortLabel: 'Hoàn thành', count: completedOrdersCount, color: '#10b981' },
+    { key: 'cancelled', name: 'Đã hủy', shortLabel: 'Đã hủy', count: cancelledOrdersCount, color: '#ef4444' }
   ]
+  const maxOrderStageCount = Math.max(4, ...orderLifecycleStages.map((st) => st.count))
+
+  const codOrdersCount = Number(orders.byPaymentMethod?.cod) || 0
+  const vnpayOrdersCount = Number(orders.byPaymentMethod?.vnpay) || 0
+  const codRevVal = Number(revenue.cod) || 0
+  const vnpayRevVal = Number(revenue.vnpay) || 0
+  const payRingRadius = 34
+  const payRingCirc = 2 * Math.PI * payRingRadius
+  const orderMethodSlices = buildCircularSegments(
+    [
+      { key: 'cod', label: 'COD', value: codOrdersCount, color: '#f59e0b' },
+      { key: 'vnpay', label: 'VNPAY', value: vnpayOrdersCount, color: '#10b981' },
+    ],
+    payRingRadius
+  )
+  const revMethodSlices = buildCircularSegments(
+    [
+      { key: 'cod', label: 'COD', value: codRevVal, color: '#f59e0b' },
+      { key: 'vnpay', label: 'VNPAY', value: vnpayRevVal, color: '#10b981' },
+    ],
+    payRingRadius
+  )
+  const avgCompletedOrderValue = completedOrdersCount > 0
+    ? Math.round((Number(revenue.total) || 0) / completedOrdersCount)
+    : 0
 
   return (
     <div className="admin-overview-container">
@@ -283,10 +322,22 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
       <AdminAnalyticsCharts revenueChart={dashboardData?.revenueChart} loading={loading} />
 
+      <AdminCatalogAnalyticsCharts
+        categories={dashboardData?.categories}
+        topBooks={topBooks}
+        booksOverview={books}
+        reviewAnalytics={dashboardData?.reviewAnalytics}
+        reviewsOverview={reviews}
+        promotionAnalytics={dashboardData?.promotionAnalytics}
+        promotionsOverview={promotions}
+        loading={loading}
+        onNavigateTab={onNavigateTab}
+      />
+
       <div className="overview-two-col-grid">
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">🚚 Tình Trạng Luồng Đơn Hàng</h3>
+            <h3 className="overview-panel-title">🚚 Trạng Thái Xử Lý Đơn Hàng</h3>
             {onNavigateTab ? (
               <button
                 type="button"
@@ -298,79 +349,164 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             ) : null}
           </div>
 
-          <div className="pipeline-list">
-            {pipeline.map((item) => {
-              const pct = calcPct(item.count)
+          <div className="order-health-stacked-strip">
+            {totalOrdersCount > 0 ? orderLifecycleStages.map((st) => (
+              st.count > 0 ? (
+                <div
+                  key={st.key}
+                  style={{ width: `${(st.count / totalOrdersCount) * 100}%`, backgroundColor: st.color }}
+                  title={`${st.name}: ${st.count} đơn (${calcPct(st.count)}%)`}
+                />
+              ) : null
+            )) : null}
+          </div>
+
+          <svg viewBox="0 0 460 142" className="order-stage-svg">
+            {[0, 0.5, 1].map((ratio) => {
+              const y = 22 + 86 * (1 - ratio)
               return (
-                <div key={item.name} className="pipeline-item">
-                  <div className="pipeline-item-top">
-                    <span className="pipeline-status-name">{item.name}</span>
-                    <div>
-                      <span className="pipeline-count">{item.count}</span>
-                      <span className="pipeline-pct">({pct}%)</span>
-                    </div>
-                  </div>
-                  <div className="pipeline-bar-track">
-                    <div
-                      className={`pipeline-bar-fill ${item.cls}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
+                <g key={ratio}>
+                  <line x1={32} y1={y} x2={446} y2={y} className="chart-grid-line" />
+                  <text x={26} y={y + 4} textAnchor="end" className="chart-axis-text">
+                    {Math.round(maxOrderStageCount * ratio)}
+                  </text>
+                </g>
               )
             })}
+
+            {orderLifecycleStages.map((st, idx) => {
+              const plotW = 414
+              const slotW = plotW / orderLifecycleStages.length
+              const barW = 34
+              const x = 32 + idx * slotW + (slotW - barW) / 2
+              const cx = x + barW / 2
+              const barH = st.count > 0 ? Math.max(6, (st.count / maxOrderStageCount) * 86) : 0
+              const yBar = 108 - barH
+              return (
+                <g key={st.key}>
+                  <rect
+                    x={x}
+                    y={22}
+                    width={barW}
+                    height={86}
+                    rx={6}
+                    fill="#1a1917"
+                  />
+                  {barH > 0 ? (
+                    <rect
+                      x={x}
+                      y={yBar}
+                      width={barW}
+                      height={barH}
+                      rx={6}
+                      fill={st.color}
+                      className="order-stage-bar"
+                    />
+                  ) : null}
+                  <text x={cx} y={st.count > 0 ? yBar - 6 : 102} textAnchor="middle" className="order-stage-count">
+                    {st.count} ({calcPct(st.count)}%)
+                  </text>
+                  <text x={cx} y={128} textAnchor="middle" className="order-stage-label">
+                    {st.shortLabel}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+
+          <div className="order-stage-summary-row">
+            <span>Tiếp nhận: <strong>{totalOrdersCount} đơn</strong></span>
+            <span>Đơn hiệu lực: <strong style={{ color: '#60a5fa' }}>{activeOrdersCount} ({calcPct(activeOrdersCount)}%)</strong></span>
+            <span>Hoàn thành: <strong style={{ color: '#10b981' }}>{completedOrdersCount} ({calcPct(completedOrdersCount)}%)</strong></span>
           </div>
         </div>
 
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">⭐ Đánh Giá & Hoạt Động Khuyến Mãi</h3>
+            <h3 className="overview-panel-title">💳 Kênh Thanh Toán & Giá Trị Đơn (AOV)</h3>
             {onNavigateTab ? (
               <button
                 type="button"
                 className="overview-panel-action-btn"
-                onClick={() => onNavigateTab('reviews')}
+                onClick={() => onNavigateTab('orders')}
               >
-                Xem đánh giá →
+                Chi tiết kênh →
               </button>
             ) : null}
           </div>
 
-          <div className="mini-stats-grid">
-            <div className="mini-stat-box">
-              <span className="mini-stat-box-title">Điểm Sao Trung Bình</span>
-              <div className="mini-stat-box-value" style={{ color: '#f59e0b' }}>
-                {reviews.averageRate || '0.0'} ★
+          <div className="payment-duals-grid">
+            <div className="payment-donut-card">
+              <svg viewBox="0 0 92 92" className="payment-donut-svg">
+                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#2e2b26" strokeWidth="12" />
+                {(codOrdersCount + vnpayOrdersCount) > 0 ? orderMethodSlices.map((sl) => (
+                  sl.segLen > 0 ? (
+                    <circle
+                      key={sl.key}
+                      cx="46"
+                      cy="46"
+                      r={payRingRadius}
+                      fill="none"
+                      stroke={sl.color}
+                      strokeWidth="12"
+                      strokeDasharray={`${sl.segLen} ${Math.max(0, payRingCirc - sl.segLen)}`}
+                      strokeDashoffset={-sl.offset}
+                      transform="rotate(-90 46 46)"
+                    />
+                  ) : null
+                )) : null}
+                <text x="46" y="44" textAnchor="middle" className="payment-donut-num">{codOrdersCount + vnpayOrdersCount}</text>
+                <text x="46" y="57" textAnchor="middle" className="payment-donut-sub">đơn</text>
+              </svg>
+              <div className="payment-donut-meta">
+                <span className="payment-donut-title">Số lượng đơn</span>
+                <span>🟡 COD: <strong>{codOrdersCount}</strong> ({orderMethodSlices[0]?.percentage || 0}%)</span>
+                <span>🟢 VNPAY: <strong>{vnpayOrdersCount}</strong> ({orderMethodSlices[1]?.percentage || 0}%)</span>
               </div>
-              <span className="mini-stat-box-desc">
-                Từ {reviews.totalRatings || 0} bài chấm điểm
-              </span>
             </div>
 
-            <div className="mini-stat-box">
-              <span className="mini-stat-box-title">Hỏi Đáp & Thảo Luận</span>
-              <div className="mini-stat-box-value" style={{ color: '#3b82f6' }}>
-                {reviews.totalDiscussions || 0}
+            <div className="payment-donut-card">
+              <svg viewBox="0 0 92 92" className="payment-donut-svg">
+                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#2e2b26" strokeWidth="12" />
+                {(codRevVal + vnpayRevVal) > 0 ? revMethodSlices.map((sl) => (
+                  sl.segLen > 0 ? (
+                    <circle
+                      key={sl.key}
+                      cx="46"
+                      cy="46"
+                      r={payRingRadius}
+                      fill="none"
+                      stroke={sl.color}
+                      strokeWidth="12"
+                      strokeDasharray={`${sl.segLen} ${Math.max(0, payRingCirc - sl.segLen)}`}
+                      strokeDashoffset={-sl.offset}
+                      transform="rotate(-90 46 46)"
+                    />
+                  ) : null
+                )) : null}
+                <text x="46" y="44" textAnchor="middle" className="payment-donut-num">{formatCompactMoney(codRevVal + vnpayRevVal)}</text>
+                <text x="46" y="57" textAnchor="middle" className="payment-donut-sub">VNĐ</text>
+              </svg>
+              <div className="payment-donut-meta">
+                <span className="payment-donut-title">Doanh thu đã chốt</span>
+                <span>🟡 COD: <strong>{revMethodSlices[0]?.percentage || 0}%</strong></span>
+                <span>🟢 VNPAY: <strong>{revMethodSlices[1]?.percentage || 0}%</strong></span>
               </div>
-              <span className="mini-stat-box-desc">Câu hỏi từ cộng đồng</span>
             </div>
+          </div>
 
-            <div className="mini-stat-box">
-              <span className="mini-stat-box-title">Voucher Đang Chạy</span>
-              <div className="mini-stat-box-value" style={{ color: '#10b981' }}>
-                {promotions.active || 0}
-              </div>
-              <span className="mini-stat-box-desc">
-                Tổng {promotions.total || 0} mã ưu đãi
-              </span>
+          <div className="payment-aov-strip">
+            <div className="payment-aov-box">
+              <span>Giá trị đơn TB (AOV)</span>
+              <strong style={{ color: '#e7b26a' }}>{formatVND(avgCompletedOrderValue)}</strong>
             </div>
-
-            <div className="mini-stat-box">
-              <span className="mini-stat-box-title">Lượt Áp Dụng Mã</span>
-              <div className="mini-stat-box-value" style={{ color: '#8b5cf6' }}>
-                {promotions.totalUsed || 0}
-              </div>
-              <span className="mini-stat-box-desc">Đã tiết kiệm cho khách</span>
+            <div className="payment-aov-box">
+              <span>Tỷ lệ hoàn thành</span>
+              <strong style={{ color: '#10b981' }}>{calcPct(completedOrdersCount)}%</strong>
+            </div>
+            <div className="payment-aov-box">
+              <span>Giá trị đơn đã hủy</span>
+              <strong style={{ color: '#ef4444' }}>{formatVND(revenue.cancelled)}</strong>
             </div>
           </div>
         </div>
@@ -392,7 +528,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
           </div>
 
           <div className="top-books-list">
-            {loading ? (
+            {loading && topBooks.length === 0 ? (
               <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
                 Đang nạp top sách bán chạy...
               </div>
@@ -441,7 +577,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
           </div>
 
           <div className="recent-orders-list">
-            {loading ? (
+            {loading && recentOrders.length === 0 ? (
               <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
                 Đang nạp đơn hàng gần đây...
               </div>

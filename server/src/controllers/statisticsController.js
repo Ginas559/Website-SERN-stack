@@ -22,6 +22,18 @@ async function getCategoryDistribution(req, res) {
     res.json(data);
 }
 
+async function getPromotionAnalytics(req, res) {
+    const { timeRange, startDate, endDate } = req.query;
+    const data = await statisticsService.getPromotionAnalytics({ timeRange, startDate, endDate });
+    res.json(data);
+}
+
+async function getReviewAnalytics(req, res) {
+    const { limit } = req.query;
+    const data = await statisticsService.getReviewAnalytics({ limit });
+    res.json(data);
+}
+
 async function getDashboardSummary(req, res) {
     const { timeRange, startDate, endDate, groupBy } = req.query;
     const data = await statisticsService.getDashboardSummary({ timeRange, startDate, endDate, groupBy });
@@ -33,6 +45,8 @@ module.exports = {
     getRevenueChart,
     getTopBooks,
     getCategoryDistribution,
+    getPromotionAnalytics,
+    getReviewAnalytics,
     getDashboardSummary
 };
 
