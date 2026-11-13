@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import debounce from 'lodash.debounce'
 import './App.css'
 import './components/BooksPage.css'
 import BookList from './components/BookList'
@@ -11,12 +12,15 @@ import CheckoutPage from './components/CheckoutPage'
 import PaymentResult from './components/PaymentResult'
 import OrderHistoryPage from './components/OrderHistoryPage'
 import UserProfile from './components/UserProfile'
-import { fetchBooks, fetchBookById, setSelectedBook } from './store/slices/bookSlice'
-import { fetchCart, syncGuestCart, clearCartState } from './store/slices/cartSlice'
+import { fetchBooks, fetchBookById, invalidateBooks } from './store/slices/bookSlice'
+import { fetchPublicCategories } from './store/slices/categorySlice'
+import { fetchCart, syncGuestCart, clearCartState, invalidateCart } from './store/slices/cartSlice'
 import { fetchWishlist, syncGuestWishlist, clearWishlistState } from './store/slices/wishlistSlice'
 import { parseRouteFromSearch, sanitizeRoute, syncBrowserUrl, isPaymentReturnUrl } from './utils/navigationHistory'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+const MAX_PRICE_FILTER = 2147483647
+const DEFAULT_BOOK_FILTERS = { search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }
 const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('resetToken') || ''
 if (resetToken) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
 const hasInitialPaymentReturn = typeof window !== 'undefined' && isPaymentReturnUrl(window.location.pathname, window.location.search)
@@ -80,16 +84,23 @@ function App() {
     books,
     total,
     totalPages,
+    priceRange,
     selectedBook,
+    booksQueryKey,
+    booksNeedsReload,
+    selectedBookAttemptedId,
+    selectedBookNeedsReload,
     loading: booksLoading,
     error: bookError,
   } = useSelector((state) => state.books)
+  const { publicCategories, publicFetchStatus } = useSelector((state) => state.categories)
 
   const [user, setUser] = useState(() => readStoredUser())
   const [initialRoute] = useState(() => getInitialRoute(readStoredUser()))
   const [activeTab, setActiveTab] = useState(initialRoute.tab)
   const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' })
+  const [filters, setFilters] = useState(DEFAULT_BOOK_FILTERS)
+  const [queryFilters, setQueryFilters] = useState(DEFAULT_BOOK_FILTERS)
   const [selectedBookId, setSelectedBookId] = useState(initialRoute.bookId)
   const [adminTab, setAdminTab] = useState(initialRoute.adminTab)
   const [bookViewOptions, setBookViewOptions] = useState(null)
@@ -111,10 +122,7 @@ function App() {
     setSelectedBookId(route.bookId)
     setAdminTab(route.adminTab)
     setBookViewOptions(viewOptions)
-    if (!route.bookId) {
-      dispatch(setSelectedBook(null))
-    }
-  }, [dispatch])
+  }, [])
 
   const clearAuthenticatedSession = useCallback(() => {
     localStorage.removeItem('accessToken')
@@ -167,28 +175,85 @@ function App() {
     setError('')
   }
 
+  const debouncedApplyFilters = useMemo(
+    () => debounce((nextFilters) => {
+      setQueryFilters(nextFilters)
+      setPage(1)
+    }, 350),
+    []
+  )
+
+  useEffect(() => {
+    return () => {
+      debouncedApplyFilters.cancel()
+    }
+  }, [debouncedApplyFilters])
+
+  const handleFilterChange = useCallback((nextFilters, { immediate = false } = {}) => {
+    setFilters(nextFilters)
+    if (immediate) {
+      debouncedApplyFilters.cancel()
+      setQueryFilters(nextFilters)
+      setPage(1)
+      return
+    }
+    debouncedApplyFilters(nextFilters)
+  }, [debouncedApplyFilters])
+
+  const handleResetFilters = useCallback(() => {
+    debouncedApplyFilters.cancel()
+    setFilters({ ...DEFAULT_BOOK_FILTERS })
+    setQueryFilters({ ...DEFAULT_BOOK_FILTERS })
+    setPage(1)
+  }, [debouncedApplyFilters])
+
   const loadBooks = useCallback(() => {
     if (activeTab !== 'books' || selectedBookId) return
+    const trimmedSearch = typeof queryFilters.search === 'string' ? queryFilters.search.trim() : ''
+    const hasMin = queryFilters.minPrice !== '' && queryFilters.minPrice !== null && queryFilters.minPrice !== undefined
+    const hasMax = queryFilters.maxPrice !== '' && queryFilters.maxPrice !== null && queryFilters.maxPrice !== undefined
+    const minVal = hasMin ? Number(queryFilters.minPrice) : null
+    const maxVal = hasMax ? Number(queryFilters.maxPrice) : null
+    if (
+      (hasMin && (!Number.isInteger(minVal) || minVal < 0 || minVal > MAX_PRICE_FILTER)) ||
+      (hasMax && (!Number.isInteger(maxVal) || maxVal < 0 || maxVal > MAX_PRICE_FILTER)) ||
+      (minVal !== null && maxVal !== null && minVal > maxVal)
+    ) {
+      return
+    }
     const query = {
       page,
       limit: 8,
-      ...(filters.search ? { search: filters.search } : {}),
-      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
-      ...(filters.minPrice ? { minPrice: filters.minPrice } : {}),
-      ...(filters.maxPrice ? { maxPrice: filters.maxPrice } : {}),
-      ...(filters.sort ? { sort: filters.sort } : {}),
+      ...(trimmedSearch ? { search: trimmedSearch } : {}),
+      ...(queryFilters.categoryId ? { categoryId: queryFilters.categoryId } : {}),
+      ...(hasMin ? { minPrice: minVal } : {}),
+      ...(hasMax ? { maxPrice: maxVal } : {}),
+      ...(queryFilters.sort ? { sort: queryFilters.sort } : {}),
+    }
+    const queryKey = JSON.stringify(query)
+    if (!booksNeedsReload && booksQueryKey === queryKey) {
+      return
     }
     dispatch(fetchBooks(query))
-  }, [activeTab, page, filters, selectedBookId, dispatch])
+  }, [activeTab, page, queryFilters, selectedBookId, booksQueryKey, booksNeedsReload, dispatch])
 
   useEffect(() => {
     loadBooks()
   }, [loadBooks])
 
   useEffect(() => {
+    if (activeTab === 'books' && !selectedBookId && publicFetchStatus === 'idle') {
+      dispatch(fetchPublicCategories())
+    }
+  }, [activeTab, selectedBookId, publicFetchStatus, dispatch])
+
+  useEffect(() => {
     if (!selectedBookId) return
+    if (!selectedBookNeedsReload && Number(selectedBookAttemptedId) === Number(selectedBookId)) {
+      return
+    }
     dispatch(fetchBookById(selectedBookId))
-  }, [selectedBookId, dispatch])
+  }, [selectedBookId, selectedBookAttemptedId, selectedBookNeedsReload, dispatch])
 
   useEffect(() => {
     if (isPaymentReturn) return
@@ -459,8 +524,16 @@ function App() {
       {isPaymentReturn ? (
         <PaymentResult 
           searchString={window.location.search}
-          onViewOrders={() => navigateTo({ tab: 'orders' }, { replace: true })}
-          onContinueShopping={() => navigateTo({ tab: 'books', bookId: null }, { replace: true })}
+          onViewOrders={() => {
+            dispatch(invalidateCart())
+            dispatch(invalidateBooks())
+            navigateTo({ tab: 'orders' }, { replace: true })
+          }}
+          onContinueShopping={() => {
+            dispatch(invalidateCart())
+            dispatch(invalidateBooks())
+            navigateTo({ tab: 'books', bookId: null }, { replace: true })
+          }}
         />
       ) : activeTab === 'admin' && isAdmin ? (
         <AdminDashboard
@@ -477,6 +550,7 @@ function App() {
           onOrderCompleted={() => {
             completedCheckoutRef.current = true
             dispatch(clearCartState())
+            dispatch(invalidateBooks())
             try {
               localStorage.removeItem('guestCart')
             } catch {
@@ -548,11 +622,14 @@ function App() {
             total={total}
             page={page}
             totalPages={totalPages}
+            categories={publicCategories}
+            priceRange={priceRange}
             filters={filters}
+            error={bookError}
             loading={booksLoading}
-            onFilterChange={(nextFilters) => { setFilters(nextFilters); setPage(1); }}
+            onFilterChange={handleFilterChange}
             onPageChange={(nextPage) => setPage(nextPage)}
-            onResetFilters={() => { setFilters({ search: '', categoryId: '', minPrice: '', maxPrice: '', sort: 'newest' }); setPage(1); }}
+            onResetFilters={handleResetFilters}
             onSelectBook={handleSelectBook}
           />
         )

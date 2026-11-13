@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   fetchAdminBooks,
   createBook,
   updateBook,
   updateBookStatus,
+  invalidateBooks,
 } from '../store/slices/bookSlice'
 import {
   fetchCategories,
@@ -18,6 +19,7 @@ import AdminCategoryTable from './AdminCategoryTable'
 import AdminCategoryModal from './AdminCategoryModal'
 import AdminOrderTable from './AdminOrderTable'
 import AdminPromotionTable from './AdminPromotionTable'
+import AdminShippingPolicyCard from './AdminShippingPolicyCard'
 import AdminPromotionModal from './AdminPromotionModal'
 import AdminUserTable from './AdminUserTable'
 import AdminUserBlockModal from './AdminUserBlockModal'
@@ -36,11 +38,14 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     adminBooks: books,
     adminTotal: bookTotal,
     adminTotalPages: bookTotalPages,
+    adminBooksQueryKey,
+    adminBooksNeedsReload,
     loading: booksLoading,
   } = useSelector((state) => state.books)
   const {
     categories,
     loading: categoriesLoading,
+    adminFetchStatus: categoriesFetchStatus,
   } = useSelector((state) => state.categories)
 
   const [internalAdminTab, setInternalAdminTab] = useState('overview')
@@ -108,6 +113,11 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
   const [categoryModalMode, setCategoryModalMode] = useState('create')
   const [currentCategory, setCurrentCategory] = useState(null)
 
+  const loadedOrderKeyRef = useRef(null)
+  const loadedPromoKeyRef = useRef(null)
+  const loadedUserKeyRef = useRef(null)
+  const loadedReviewKeyRef = useRef(null)
+
   const [toast, setToast] = useState(null)
 
   const showToast = useCallback((text, type = 'success') => {
@@ -117,8 +127,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     }, 3500)
   }, [])
 
-  const fetchBooksData = useCallback(() => {
-    const query = {
+  const fetchBooksData = useCallback((customQuery = null) => {
+    const query = customQuery || {
       page: bookPage,
       limit: 10,
       ...(bookSearch.trim() ? { search: bookSearch.trim() } : {}),
@@ -140,17 +150,28 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
   }, [dispatch, showToast])
 
   useEffect(() => {
-    fetchBooksData()
-  }, [fetchBooksData])
+    if (adminTab !== 'books') return
+    const query = {
+      page: bookPage,
+      limit: 10,
+      ...(bookSearch.trim() ? { search: bookSearch.trim() } : {}),
+      ...(bookStatusFilter === '0' || bookStatusFilter === '1' ? { isDelete: bookStatusFilter } : {}),
+    }
+    const queryKey = JSON.stringify(query)
+    if (!adminBooksNeedsReload && adminBooksQueryKey === queryKey) return
+    fetchBooksData(query)
+  }, [adminTab, bookPage, bookSearch, bookStatusFilter, adminBooksQueryKey, adminBooksNeedsReload, fetchBooksData])
 
   useEffect(() => {
+    if (adminTab !== 'books' && adminTab !== 'categories') return
+    if (categoriesFetchStatus !== 'idle') return
     fetchCategoriesData()
-  }, [fetchCategoriesData])
+  }, [adminTab, categoriesFetchStatus, fetchCategoriesData])
 
   useEffect(() => {
     if (adminTab !== 'orders') return
     let isCurrent = true
-    orderService.getAdminOrders({
+    const queryParams = {
       page: orderPage,
       limit: 10,
       ...(orderSearch.trim() ? { search: orderSearch.trim() } : {}),
@@ -158,9 +179,14 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       ...(orderPaymentFilter !== 'all' ? { paymentMethod: orderPaymentFilter } : {}),
       sortBy: orderSortBy,
       sortOrder: orderSortOrder,
-    })
+    }
+    const cacheKey = JSON.stringify({ ...queryParams, refreshTrigger: orderRefreshTrigger })
+    if (loadedOrderKeyRef.current === cacheKey) return
+
+    orderService.getAdminOrders(queryParams)
       .then((res) => {
         if (!isCurrent) return
+        loadedOrderKeyRef.current = cacheKey
         setAdminOrders(res.orders || res.data?.orders || [])
         setOrderTotal(res.total ?? res.data?.total ?? 0)
         setOrderTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
@@ -190,10 +216,13 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       queryParams.status = promoStatusFilter
       queryParams.isDelete = 0
     }
+    const cacheKey = JSON.stringify({ ...queryParams, refreshTrigger: promoRefreshTrigger })
+    if (loadedPromoKeyRef.current === cacheKey) return
 
     discountService.getAdminDiscounts(queryParams)
       .then((res) => {
         if (!isCurrent) return
+        loadedPromoKeyRef.current = cacheKey
         setAdminPromotions(res.discounts || res.data?.discounts || [])
         setPromoTotal(res.total ?? res.data?.total ?? 0)
         setPromoTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
@@ -220,10 +249,13 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       ...(userRoleFilter === 'admin' ? { isAdmin: 1 } : userRoleFilter === 'customer' ? { isAdmin: 0 } : {}),
       ...(userVipFilter !== 'all' ? { isVip: userVipFilter } : {}),
     }
+    const cacheKey = JSON.stringify({ ...queryParams, refreshTrigger: userRefreshTrigger })
+    if (loadedUserKeyRef.current === cacheKey) return
 
     userService.getAdminUsers(queryParams)
       .then((res) => {
         if (!isCurrent) return
+        loadedUserKeyRef.current = cacheKey
         setAdminUsers(res.users || res.data?.users || [])
         setUserTotal(res.total ?? res.data?.total ?? 0)
         setUserTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
@@ -249,10 +281,13 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       ...(reviewStatusFilter !== 'all' && Number.isInteger(Number(reviewStatusFilter)) ? { isDelete: Number(reviewStatusFilter) } : {}),
       ...(reviewRateFilter === 'discussion' ? { rate: 'discussion' } : (reviewRateFilter !== 'all' && Number.isInteger(Number(reviewRateFilter)) ? { rate: Number(reviewRateFilter) } : {})),
     }
+    const cacheKey = JSON.stringify({ ...queryParams, refreshTrigger: reviewRefreshTrigger })
+    if (loadedReviewKeyRef.current === cacheKey) return
 
     reviewService.adminGetReviews(queryParams)
       .then((res) => {
         if (!isCurrent) return
+        loadedReviewKeyRef.current = cacheKey
         setAdminReviews(res.comments || res.data?.comments || [])
         setReviewTotal(res.total ?? res.data?.total ?? 0)
         setReviewTotalPages(res.totalPages ?? res.data?.totalPages ?? 1)
@@ -270,16 +305,16 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
 
   const handleSelectAdminTab = useCallback((targetTab) => {
     if (targetTab === adminTab) return
-    if (targetTab === 'orders' && adminOrders.length === 0) setOrdersLoading(true)
-    if (targetTab === 'promotions' && adminPromotions.length === 0) setPromosLoading(true)
-    if (targetTab === 'users' && adminUsers.length === 0) setUsersLoading(true)
-    if (targetTab === 'reviews' && adminReviews.length === 0) setReviewsLoading(true)
+    if (targetTab === 'orders' && !loadedOrderKeyRef.current) setOrdersLoading(true)
+    if (targetTab === 'promotions' && !loadedPromoKeyRef.current) setPromosLoading(true)
+    if (targetTab === 'users' && !loadedUserKeyRef.current) setUsersLoading(true)
+    if (targetTab === 'reviews' && !loadedReviewKeyRef.current) setReviewsLoading(true)
     if (onAdminTabChange) {
       onAdminTabChange(targetTab)
     } else {
       setInternalAdminTab(targetTab)
     }
-  }, [adminTab, adminOrders.length, adminPromotions.length, adminUsers.length, adminReviews.length, onAdminTabChange])
+  }, [adminTab, onAdminTabChange])
 
   const handleBookSearchChange = (value) => {
     setBookSearch(value)
@@ -314,7 +349,6 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       showToast('Thêm ấn phẩm mới thành công!')
     }
     fetchBooksData()
-    fetchCategoriesData()
   }
 
   const handleToggleBookStatus = async (book) => {
@@ -323,7 +357,6 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       await dispatch(updateBookStatus({ id: book.id, isDelete: nextStatus })).unwrap()
       showToast(nextStatus === 1 ? 'Đã ẩn ấn phẩm khỏi cửa hàng.' : 'Đã khôi phục ấn phẩm mở bán.')
       fetchBooksData()
-      fetchCategoriesData()
     } catch (err) {
       showToast(err.message || err || 'Lỗi khi cập nhật trạng thái sách.', 'error')
       if (err?.response?.status === 409 || String(err?.message || err).includes('thay đổi')) {
@@ -363,6 +396,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
         ? payload
         : { status: payload, note: legacyNote }
       await orderService.updateOrderStatus(orderId, body)
+      dispatch(invalidateBooks())
       showToast('Cập nhật trạng thái đơn hàng thành công!')
       setOrdersLoading(true)
       setOrderRefreshTrigger((prev) => prev + 1)
@@ -373,7 +407,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       }
       throw err
     }
-  }, [showToast])
+  }, [dispatch, showToast])
 
   const handleOrderSearchChange = useCallback((val) => {
     if (val === orderSearch && orderPage === 1) return
@@ -639,51 +673,58 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'overview' ? 'active' : ''}`}
+          title="Tổng quan hệ thống"
           onClick={() => handleSelectAdminTab('overview')}
         >
-          📊 Tổng quan hệ thống
+          📊 Tổng quan
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'books' ? 'active' : ''}`}
+          title="Quản lý Ấn phẩm Sách"
           onClick={() => handleSelectAdminTab('books')}
         >
-          📚 Quản lý Ấn phẩm Sách
+          📚 Sách
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'categories' ? 'active' : ''}`}
+          title="Quản lý Thể loại Sách"
           onClick={() => handleSelectAdminTab('categories')}
         >
-          🏷️ Quản lý Thể loại Sách
+          🏷️ Thể loại
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'orders' ? 'active' : ''}`}
+          title="Quản lý Đơn hàng"
           onClick={() => handleSelectAdminTab('orders')}
         >
-          📦 Quản lý Đơn hàng
+          📦 Đơn hàng
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'promotions' ? 'active' : ''}`}
+          title="Quản lý Khuyến mãi"
           onClick={() => handleSelectAdminTab('promotions')}
         >
-          🎟️ Quản lý Khuyến mãi
+          🎟️ Khuyến mãi
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'users' ? 'active' : ''}`}
+          title="Quản lý Người dùng"
           onClick={() => handleSelectAdminTab('users')}
         >
-          👥 Quản lý Người dùng
+          👥 Người dùng
         </button>
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'reviews' ? 'active' : ''}`}
+          title="Quản lý Đánh giá & Bình luận"
           onClick={() => handleSelectAdminTab('reviews')}
         >
-          ⭐ Quản lý Đánh giá & Bình luận
+          ⭐ Đánh giá &amp; Bình luận
         </button>
       </div>
 
@@ -756,7 +797,9 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onUpdateStatus={handleUpdateOrderStatus}
         />
       ) : adminTab === 'promotions' ? (
-        <AdminPromotionTable
+        <>
+          <AdminShippingPolicyCard onShowToast={showToast} />
+          <AdminPromotionTable
           promotions={adminPromotions}
           total={promoTotal}
           page={promoPage}
@@ -778,8 +821,9 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
             setPromoModalMode('edit')
             setPromoModalOpen(true)
           }}
-          onToggleStatus={handleTogglePromotionStatus}
-        />
+            onToggleStatus={handleTogglePromotionStatus}
+          />
+        </>
       ) : adminTab === 'users' ? (
         <AdminUserTable
           users={adminUsers}

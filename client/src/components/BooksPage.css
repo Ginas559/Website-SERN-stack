@@ -62,6 +62,156 @@
     background: #665d53;
 }
 
+.price-slider-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding-top: 12px;
+    margin-top: 2px;
+    border-top: 1px solid #3d3d3a;
+}
+
+.price-slider-label {
+    font-size: 0.88rem;
+    color: #b9b0a7;
+    font-weight: 600;
+}
+
+.price-slider-value {
+    color: #e7b26a;
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: rgba(231, 178, 106, 0.12);
+    border: 1px solid rgba(231, 178, 106, 0.35);
+    border-radius: 999px;
+    padding: 4px 12px;
+}
+
+.price-slider-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.price-slider-bound {
+    font-size: 0.82rem;
+    color: #b9b0a7;
+    font-weight: 600;
+    min-width: max-content;
+}
+
+.price-slider-track-wrap {
+    position: relative;
+    width: 220px;
+    max-width: 100%;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.price-slider-rail {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #3d3d3a;
+}
+
+.price-slider-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e7b26a, #c77736);
+}
+
+.price-range-input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: transparent;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.price-range-input:focus {
+    outline: none;
+}
+
+.price-range-input::-webkit-slider-runnable-track {
+    height: 6px;
+    background: transparent;
+}
+
+.price-range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: #fffaf1;
+    border: 3px solid #e7b26a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    cursor: grab;
+    pointer-events: auto;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.price-range-input::-webkit-slider-thumb:hover,
+.price-range-input:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.12);
+    border-color: #c77736;
+}
+
+.price-range-input::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.18);
+    border-color: #c77736;
+}
+
+.price-range-input::-moz-range-track {
+    height: 6px;
+    background: transparent;
+}
+
+.price-range-input::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fffaf1;
+    border: 3px solid #e7b26a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    cursor: grab;
+    pointer-events: auto;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.price-range-input::-moz-range-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.18);
+    border-color: #c77736;
+}
+
+.filter-feedback {
+    background: rgba(179, 59, 50, 0.16);
+    border: 1px solid #b33b32;
+    color: #fca5a5;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: -16px 0 24px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
 .books-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -461,6 +611,7 @@
 
 @media (max-width: 520px) {
     .books-grid { grid-template-columns: 1fr; }
+    .price-slider-track-wrap { width: 150px; }
 }
 
 .app-nav-links {

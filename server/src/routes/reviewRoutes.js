@@ -4,6 +4,9 @@ const controller = require("../controllers/reviewController");
 const validate = require("../middleware/validateMiddleware");
 const { protect, optionalAuth, restrictTo } = require("../middleware/authMiddleware");
 
+const MAX_INT32 = 2147483647;
+const MAX_PAGE = 1000000;
+
 const router = express.Router();
 
 router.get("/reviews/my-reviewed-books", protect, controller.getMyReviewedBookIds);
@@ -13,13 +16,13 @@ router.get(
     optionalAuth,
     [
         param("bookId")
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID sách phải là số nguyên dương.")
             .bail()
             .toInt(),
         query("page")
             .optional()
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_PAGE })
             .withMessage("Trang phải là số nguyên lớn hơn 0.")
             .bail()
             .toInt(),
@@ -33,7 +36,13 @@ router.get(
             .optional()
             .isIn(["all", "reviews", "discussions"])
             .withMessage("Loại bài viết phải là all, reviews hoặc discussions.")
+            .bail(),
+        query("rate")
+            .optional()
+            .isInt({ min: 1, max: 5 })
+            .withMessage("Số sao đánh giá phải là số nguyên từ 1 đến 5.")
             .bail()
+            .toInt()
     ],
     validate,
     controller.getBookReviews
@@ -44,8 +53,14 @@ router.post(
     protect,
     [
         param("bookId")
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID sách phải là số nguyên dương.")
+            .bail()
+            .toInt(),
+        body("parentId")
+            .optional({ nullable: true })
+            .isInt({ min: 1, max: MAX_INT32 })
+            .withMessage("ID bình luận gốc phải là số nguyên dương.")
             .bail()
             .toInt(),
         body("rate")
@@ -72,7 +87,7 @@ router.put(
     protect,
     [
         param("id")
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID đánh giá phải là số nguyên dương.")
             .bail()
             .toInt(),
@@ -100,7 +115,7 @@ router.delete(
     protect,
     [
         param("id")
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID đánh giá phải là số nguyên dương.")
             .bail()
             .toInt()
@@ -116,7 +131,7 @@ router.get(
     [
         query("page")
             .optional()
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_PAGE })
             .withMessage("Trang phải là số nguyên lớn hơn 0.")
             .bail()
             .toInt(),
@@ -128,7 +143,7 @@ router.get(
             .toInt(),
         query("bookId")
             .optional()
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID sách phải là số nguyên dương.")
             .bail()
             .toInt(),
@@ -169,7 +184,7 @@ router.patch(
     restrictTo("Admin"),
     [
         param("id")
-            .isInt({ min: 1 })
+            .isInt({ min: 1, max: MAX_INT32 })
             .withMessage("ID đánh giá phải là số nguyên dương.")
             .bail()
             .toInt(),

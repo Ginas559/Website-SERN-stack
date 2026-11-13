@@ -3,9 +3,11 @@ const bookModel = require("../models/bookModel");
 const AppError = require("../utils/AppError");
 const categoryModel = require("../models/categoryModel");
 
+const MAX_INT32 = 2147483647;
+
 function validateBookId(id) {
     const bookId = Number(id);
-    if (!Number.isInteger(bookId) || bookId <= 0) {
+    if (!Number.isInteger(bookId) || bookId <= 0 || bookId > MAX_INT32) {
         throw new AppError("ID sách không hợp lệ.", 400);
     }
     return bookId;
@@ -207,7 +209,13 @@ async function getBookById(id) {
 }
 
 async function getClientBooks(options = {}) {
-    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const parsedPage = options.page === undefined || options.page === null || options.page === ""
+        ? 1
+        : Number(options.page);
+    if (!Number.isInteger(parsedPage) || parsedPage < 1 || parsedPage > MAX_INT32) {
+        throw new AppError("Số trang không hợp lệ.", 400);
+    }
+    const page = parsedPage;
     const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
 
     let minPrice = null;
@@ -215,14 +223,14 @@ async function getClientBooks(options = {}) {
 
     if (options.minPrice !== undefined && options.minPrice !== null && options.minPrice !== "") {
         minPrice = Number(options.minPrice);
-        if (Number.isNaN(minPrice) || minPrice < 0) {
+        if (!Number.isInteger(minPrice) || minPrice < 0 || minPrice > MAX_INT32) {
             throw new AppError("Giá tối thiểu không hợp lệ.", 400);
         }
     }
 
     if (options.maxPrice !== undefined && options.maxPrice !== null && options.maxPrice !== "") {
         maxPrice = Number(options.maxPrice);
-        if (Number.isNaN(maxPrice) || maxPrice < 0) {
+        if (!Number.isInteger(maxPrice) || maxPrice < 0 || maxPrice > MAX_INT32) {
             throw new AppError("Giá tối đa không hợp lệ.", 400);
         }
     }
@@ -234,7 +242,7 @@ async function getClientBooks(options = {}) {
     let categoryId = null;
     if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
         categoryId = Number(options.categoryId);
-        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0 || categoryId > MAX_INT32) {
             throw new AppError("ID thể loại không hợp lệ.", 400);
         }
     }
@@ -257,10 +265,7 @@ async function getClientBooks(options = {}) {
 }
 
 async function getClientBookDetail(id, relatedLimit = 4) {
-    const bookId = Number(id);
-    if (!bookId || !Number.isInteger(bookId) || bookId <= 0) {
-        throw new AppError("ID sách không hợp lệ.", 400);
-    }
+    const bookId = validateBookId(id);
     const book = await bookModel.findById(bookId);
     if (!book || book.isDelete) {
         throw new AppError("Không tìm thấy ấn phẩm sách yêu cầu.", 404);

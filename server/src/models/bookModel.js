@@ -224,12 +224,23 @@ async function findAll({
     }
 
 
+    const priceRangeCondition = includeDeleted ? "" : "WHERE isDelete = 0";
+    const priceRangeResult = await pool.request().query(
+        `SELECT ISNULL(MIN(price), 0) AS minPrice, ISNULL(MAX(price), 0) AS maxPrice FROM dbo.books ${priceRangeCondition}`
+    );
+    const rawMaxPrice = Number(priceRangeResult.recordset[0]?.maxPrice) || 0;
+    const roundedMaxPrice = rawMaxPrice > 0 ? Math.ceil(rawMaxPrice / 10000) * 10000 : 500000;
+
     return {
         books,
         total,
         page: sanitizedPage,
         limit: sanitizedLimit,
         totalPages: Math.ceil(total / sanitizedLimit) || 1,
+        priceRange: {
+            min: 0,
+            max: roundedMaxPrice,
+        },
     };
 }
 

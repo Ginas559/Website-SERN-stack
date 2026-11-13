@@ -2,6 +2,14 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import orderService from '../services/orderService';
 import discountService from '../services/discountService';
 import userService from '../services/userService';
+import {
+    useShippingRule,
+    loadShippingRule,
+    calculateDiscountedUnitPrice,
+    calculateSelectedItemsTotals,
+    calculateShippingFee,
+    getPaymentMethodLabel
+} from '../utils/pricing';
 import './Checkout.css';
 
 function formatCurrency(amount) {
@@ -107,21 +115,14 @@ function CheckoutPage({
         setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    const { selectedCount, subtotal } = useMemo(() => {
-        let count = 0;
-        let sum = 0;
-        items.forEach((item) => {
-            const finalPrice = item.discount > 0 
-                ? Math.round(item.price * (100 - item.discount) / 100) 
-                : item.price;
-            const qty = Math.max(1, Number(item.quantity) || 1);
-            count += qty;
-            sum += finalPrice * qty;
-        });
-        return { selectedCount: count, subtotal: sum };
-    }, [items]);
+    const shippingRule = useShippingRule();
 
-    const shippingFee = subtotal >= 250000 || subtotal === 0 ? 0 : 25000;
+    const { selectedCount, subtotal } = useMemo(
+        () => calculateSelectedItemsTotals(items),
+        [items]
+    );
+
+    const shippingFee = calculateShippingFee(subtotal, shippingRule);
     const finalTotal = Math.max(0, subtotal + shippingFee - appliedDiscount);
 
     const handleApplyCoupon = useCallback(async (e, overrideCode) => {
@@ -141,8 +142,7 @@ function CheckoutPage({
         try {
             const res = await discountService.validatePromotion({
                 code,
-                subtotal,
-                shippingFee
+                subtotal
             });
             setAppliedCoupon(res);
             setAppliedDiscount(Number(res.discountAmount) || 0);
@@ -155,7 +155,7 @@ function CheckoutPage({
         } finally {
             setIsValidatingCoupon(false);
         }
-    }, [couponInput, subtotal, shippingFee, triggerToast]);
+    }, [couponInput, subtotal, triggerToast]);
 
     const handleRemoveCoupon = useCallback(() => {
         setAppliedCoupon(null);
@@ -219,6 +219,7 @@ function CheckoutPage({
             couponCode: activeCouponCode,
             setAsDefaultAddress: saveAsDefaultAddress,
             saveAsDefaultAddress: saveAsDefaultAddress,
+            expectedShippingFee: shippingFee,
             selectedBookIds: items.map((it) => Number(it.book_id || it.id))
         };
 
@@ -250,16 +251,27 @@ function CheckoutPage({
                     phone: phoneTrimmed,
                     address: form.address.trim(),
                     total: createdOrder.total ?? finalTotal,
-                    paymentMethod: paymentMethod === 'COD' 
-                        ? 'Thanh toán khi nhận hàng (COD)' 
-                        : paymentMethod === 'VNPAY' 
-                            ? 'Cổng thanh toán VNPAY' 
-                            : 'Chuyển khoản ngân hàng',
+                    paymentMethod: getPaymentMethodLabel(paymentMethod, 'checkout'),
                     itemsCount: selectedCount
                 });
             })
             .catch((err) => {
                 setIsSubmitting(false);
+                const status = err?.status || err?.response?.status;
+                if (status === 409) {
+                    loadShippingRule({ force: true });
+                    if (activeCouponCode) {
+                        discountService.validatePromotion({ code: activeCouponCode, subtotal })
+                            .then((res) => {
+                                setAppliedCoupon(res);
+                                setAppliedDiscount(Number(res.discountAmount) || 0);
+                            })
+                            .catch(() => {
+                                setAppliedCoupon(null);
+                                setAppliedDiscount(0);
+                            });
+                    }
+                }
                 triggerToast(err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.', 'warning');
             });
     };
@@ -478,20 +490,6 @@ function CheckoutPage({
                                     </div>
                                 </label>
 
-                                <label className={`payment-option-label ${paymentMethod === 'BANK' ? 'selected' : ''}`}>
-                                    <input 
-                                        type="radio" 
-                                        name="paymentMethod" 
-                                        value="BANK"
-                                        checked={paymentMethod === 'BANK'}
-                                        onChange={() => setPaymentMethod('BANK')}
-                                        className="payment-radio"
-                                    />
-                                    <div className="payment-option-text">
-                                        <span className="payment-title">Chuyển khoản trực tiếp</span>
-                                        <span className="payment-desc">Chuyển khoản trực tiếp qua tài khoản ngân hàng chính thức của SERN Bookstore.</span>
-                                    </div>
-                                </label>
                             </div>
                         </div>
                     </div>
@@ -503,9 +501,7 @@ function CheckoutPage({
                             <div className="checkout-items-list">
                                 {items.map((item) => {
                                     const id = item.bookId || item.id;
-                                    const itemPrice = item.discount > 0 
-                                        ? Math.round(item.price * (100 - item.discount) / 100) 
-                                        : item.price;
+                                    const itemPrice = calculateDiscountedUnitPrice(item.price, item.discount);
                                     const itemQty = Number(item.quantity) || 1;
                                     const itemTotal = itemPrice * itemQty;
 

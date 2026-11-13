@@ -159,8 +159,44 @@ async function countBooks(categoryId) {
     return result.recordset[0]?.total || 0;
 }
 
+const publicCategoryColumns = "c.id, c.name, c.description, c.image, ISNULL(bc_stats.bookCount, 0) AS bookCount";
+const activeBookCountJoin = `LEFT JOIN (
+    SELECT bc.category_id, COUNT(*) AS bookCount
+    FROM dbo.book_categories bc
+    INNER JOIN dbo.books b ON bc.book_id = b.id
+    WHERE b.isDelete = 0
+    GROUP BY bc.category_id
+) bc_stats ON bc_stats.category_id = c.id`;
+
+async function findPublicAll() {
+    const pool = await connectDB();
+    const result = await pool.request().query(
+        `SELECT ${publicCategoryColumns}
+         FROM dbo.categories c
+         ${activeBookCountJoin}
+         WHERE c.isDelete = 0
+         ORDER BY c.name ASC, c.id ASC`
+    );
+    return result.recordset;
+}
+
+async function findPublicById(id) {
+    const pool = await connectDB();
+    const result = await pool.request()
+        .input("id", sql.Int, id)
+        .query(
+            `SELECT TOP 1 ${publicCategoryColumns}
+             FROM dbo.categories c
+             ${activeBookCountJoin}
+             WHERE c.id = @id AND c.isDelete = 0`
+        );
+    return result.recordset[0] || null;
+}
+
 module.exports = {
     findAll,
+    findPublicAll,
+    findPublicById,
     findById,
     findByName,
     create,

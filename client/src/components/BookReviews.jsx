@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import reviewService from '../services/reviewService'
 import './BookReviews.css'
 
@@ -8,6 +8,105 @@ const STAR_LABELS = {
   3: 'Bình thường',
   4: 'Hài lòng',
   5: 'Tuyệt vời'
+}
+
+const DEFAULT_SUMMARY = {
+  averageRate: 0,
+  totalReviews: 0,
+  totalDiscussions: 0,
+  breakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+}
+
+const DEFAULT_PURCHASE_STATUS = {
+  canReview: false,
+  status: 'guest',
+  hasPurchased: false
+}
+
+function getAuthorDisplay(item, fallbackName = 'Khách hàng') {
+  const displayName = item?.user_full_name || item?.full_name || item?.user_username || item?.username || fallbackName
+  const avatarUrl = item?.user_avatar || item?.avatar || ''
+  const initialLetter = displayName.charAt(0).toUpperCase() || 'U'
+  return { displayName, avatarUrl, initialLetter }
+}
+
+function resolveReplyTargetAndContent(reply, rootAuthorName, candidateNames = []) {
+  const rawValue = String(reply?.value || '').trim()
+  const fallbackTarget =
+    reply?.parent_user_full_name ||
+    reply?.parent_user_username ||
+    rootAuthorName ||
+    ''
+
+  if (rawValue.startsWith('@')) {
+    const sorted = [...candidateNames]
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+
+    for (const name of sorted) {
+      const prefix = `@${name}`
+      if (rawValue.startsWith(prefix)) {
+        const rest = rawValue.slice(prefix.length)
+        if (rest.length === 0 || /^[:,\s]/.test(rest)) {
+          return {
+            targetName: name,
+            mentionPrefix: prefix,
+            cleanContent: rest.replace(/^[:,\s]+/, '')
+          }
+        }
+      }
+    }
+
+    const match = rawValue.match(/^@([^\s:,\n]+(?:\s+[^\s:,\n]+){0,4})(?:[:,\s]+(.*)|$)/s)
+    if (match && match[1]) {
+      const parsedName = match[1].trim()
+      return {
+        targetName: parsedName,
+        mentionPrefix: `@${parsedName}`,
+        cleanContent: (match[2] || '').trim()
+      }
+    }
+  }
+
+  return {
+    targetName: fallbackTarget,
+    mentionPrefix: null,
+    cleanContent: rawValue
+  }
+}
+
+function formatReviewDate(dateValue) {
+  if (!dateValue) return ''
+  return new Date(dateValue).toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
+function isAbortRequestError(error, signal) {
+  return Boolean(
+    signal?.aborted ||
+    error?.name === 'AbortError' ||
+    error?.name === 'CanceledError' ||
+    error?.code === 'ERR_CANCELED'
+  )
+}
+
+function getPaginationNumbers(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+  const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])
+  const sorted = [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b)
+  const items = []
+  sorted.forEach((num, idx) => {
+    if (idx > 0 && num - sorted[idx - 1] > 1) {
+      items.push(`ellipsis-${sorted[idx - 1]}`)
+    }
+    items.push(num)
+  })
+  return items
 }
 
 function StarRatingDisplay({ rate }) {
@@ -39,24 +138,54 @@ function BookReviews({
 
   const [reviews, setReviews] = useState([])
   const [discussions, setDiscussions] = useState([])
+  const [serverUserReview, setServerUserReview] = useState(null)
+  const [hasLoadedReviews, setHasLoadedReviews] = useState(false)
 
-  const [summary, setSummary] = useState({
-    averageRate: 0,
-    totalReviews: 0,
-    totalDiscussions: 0,
-    breakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-  })
-  const [purchaseStatus, setPurchaseStatus] = useState({
-    canReview: false,
-    status: 'guest',
-    hasPurchased: false
-  })
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY)
+  const [purchaseStatus, setPurchaseStatus] = useState(DEFAULT_PURCHASE_STATUS)
 
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [pageByTab, setPageByTab] = useState({ reviews: 1, discussions: 1 })
+  const [totalPagesByTab, setTotalPagesByTab] = useState({ reviews: 1, discussions: 1 })
+  const page = pageByTab[activeTab] || 1
+  const totalPages = totalPagesByTab[activeTab] || 1
   const [selectedStar, setSelectedStar] = useState(null)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  const loadedTabsRef = useRef({ bookId: null, userId: null, reviews: false, discussions: false })
+  const activeRequestRef = useRef({ controller: null, requestId: 0 })
+  const pageByTabRef = useRef(pageByTab)
+  const selectedStarRef = useRef(selectedStar)
+  const hasAutoScrolledRef = useRef(false)
+  const ownReviewCardRef = useRef(null)
+  const notificationTimerRef = useRef(null)
+  const highlightTimerRef = useRef(null)
+
+  useEffect(() => {
+    pageByTabRef.current = pageByTab
+  }, [pageByTab])
+
+  useEffect(() => {
+    selectedStarRef.current = selectedStar
+  }, [selectedStar])
+
+  useEffect(() => {
+    hasAutoScrolledRef.current = false
+  }, [bookId])
+
+  useEffect(() => {
+    return () => {
+      if (activeRequestRef.current.controller) {
+        activeRequestRef.current.controller.abort()
+      }
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current)
+      }
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current)
+      }
+    }
+  }, [])
 
   const [rate, setRate] = useState(5)
   const [hoverRate, setHoverRate] = useState(0)
@@ -64,122 +193,176 @@ function BookReviews({
   const [discussionValue, setDiscussionValue] = useState('')
 
   const [editingId, setEditingId] = useState(null)
+  const [editingIsReply, setEditingIsReply] = useState(false)
   const [editRate, setEditRate] = useState(null)
   const [editValue, setEditValue] = useState('')
+  const [replyingToId, setReplyingToId] = useState(null)
+  const [replyingTargetName, setReplyingTargetName] = useState('')
+  const [replyValue, setReplyValue] = useState('')
 
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
-  useEffect(() => {
-    if (!loading && (scrollToOwnReview || new URLSearchParams(window.location.search).get('focus') === 'review')) {
-      const ownCard = document.querySelector('.user-own-review-card')
-      if (ownCard) {
-        ownCard.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        ownCard.classList.add('review-highlight')
-        setTimeout(() => ownCard.classList.remove('review-highlight'), 3000)
-      }
-    }
-  }, [loading, scrollToOwnReview])
-
   const isAuthenticated = Boolean(localStorage.getItem('accessToken'))
   const currentUserId = currentUser?.id || null
+  const isAdminUser = Boolean(
+    isAuthenticated &&
+    currentUser &&
+    (currentUser.isAdmin || currentUser.role === 'Admin' || currentUser.role === 'admin')
+  )
 
-  const fetchReviewsData = useCallback(async (targetTab, targetPage = 1) => {
+  const applyReviewsResponse = useCallback((res, targetTab, fallbackPage, resetOtherTab = false) => {
+    if (targetTab === 'reviews') {
+      setReviews(res.comments || [])
+      setHasLoadedReviews(true)
+    } else {
+      setDiscussions(res.comments || [])
+    }
+
+    if (res && 'userReview' in res) {
+      setServerUserReview(res.userReview || null)
+    }
+
+    const rawSummary = res.summary || {}
+    const breakdown = rawSummary.breakdown || rawSummary.distribution || DEFAULT_SUMMARY.breakdown
+    const averageRate = rawSummary.averageRate ?? rawSummary.avgRating ?? 0
+    const totalReviews = rawSummary.totalReviews || 0
+    const totalDiscussions = rawSummary.totalDiscussions || 0
+
+    setSummary({
+      averageRate,
+      totalReviews,
+      totalDiscussions,
+      breakdown
+    })
+
+    if (res.purchaseStatus) {
+      setPurchaseStatus(res.purchaseStatus)
+    }
+
+    setTotalPagesByTab((prev) => ({
+      reviews: resetOtherTab ? 1 : prev.reviews,
+      discussions: resetOtherTab ? 1 : prev.discussions,
+      [targetTab]: res.totalPages || 1
+    }))
+    setPageByTab((prev) => ({
+      reviews: resetOtherTab ? 1 : prev.reviews,
+      discussions: resetOtherTab ? 1 : prev.discussions,
+      [targetTab]: res.page || fallbackPage
+    }))
+  }, [])
+
+  const fetchReviewsData = useCallback(async (targetTab, targetPage = 1, starOverride = undefined, { resetContext = false } = {}) => {
     if (!bookId) return
+
+    if (activeRequestRef.current.controller) {
+      activeRequestRef.current.controller.abort()
+    }
+    const controller = new AbortController()
+    const requestId = activeRequestRef.current.requestId + 1
+    activeRequestRef.current = { controller, requestId }
+
+    const effectiveStar = targetTab === 'reviews'
+      ? (starOverride !== undefined ? starOverride : selectedStarRef.current)
+      : null
+
+    const params = {
+      page: targetPage,
+      limit: 5,
+      type: targetTab
+    }
+    if (effectiveStar) {
+      params.rate = effectiveStar
+    }
+
     try {
       setLoading(true)
-      const res = await reviewService.getBookReviews(bookId, {
-        page: targetPage,
-        limit: 5,
-        type: targetTab
-      })
-
-      if (targetTab === 'reviews') {
-        setReviews(res.comments || [])
-      } else {
-        setDiscussions(res.comments || [])
+      const res = await reviewService.getBookReviews(bookId, params, { signal: controller.signal })
+      if (controller.signal.aborted || requestId !== activeRequestRef.current.requestId) {
+        return
       }
-
-      const rawSummary = res.summary || {}
-      const breakdown = rawSummary.breakdown || rawSummary.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-      const averageRate = rawSummary.averageRate ?? rawSummary.avgRating ?? 0
-      const totalReviews = rawSummary.totalReviews || 0
-      const totalDiscussions = rawSummary.totalDiscussions || 0
-
-      setSummary({
-        averageRate,
-        totalReviews,
-        totalDiscussions,
-        breakdown
-      })
-
-      if (res.purchaseStatus) {
-        setPurchaseStatus(res.purchaseStatus)
+      const shouldResetContext = resetContext || loadedTabsRef.current.bookId !== bookId || loadedTabsRef.current.userId !== currentUserId
+      if (shouldResetContext) {
+        loadedTabsRef.current = { bookId, userId: currentUserId, reviews: false, discussions: false }
+        setSelectedStar(null)
+        setEditingId(null)
+        setEditingIsReply(false)
+        setReplyingToId(null)
+        setReplyingTargetName('')
+        setReplyValue('')
       }
-
-      setTotalPages(res.totalPages || 1)
-      setPage(res.page || targetPage)
+      loadedTabsRef.current = { ...loadedTabsRef.current, bookId, userId: currentUserId, [targetTab]: true }
+      applyReviewsResponse(res, targetTab, targetPage, shouldResetContext)
     } catch (err) {
-      setErrorMsg(err.message || 'Không thể tải dữ liệu đánh giá.')
+      if (!isAbortRequestError(err, controller.signal) && requestId === activeRequestRef.current.requestId) {
+        setErrorMsg(err.message || 'Không thể tải dữ liệu đánh giá.')
+      }
     } finally {
-      setLoading(false)
+      if (requestId === activeRequestRef.current.requestId) {
+        setLoading(false)
+      }
     }
-  }, [bookId])
+  }, [bookId, currentUserId, applyReviewsResponse])
 
   useEffect(() => {
-    let ignore = false
     if (!bookId) return undefined
 
-    reviewService.getBookReviews(bookId, { page: 1, limit: 5, type: activeTab })
-      .then((res) => {
-        if (!ignore) {
-          if (activeTab === 'reviews') {
-            setReviews(res.comments || [])
-          } else {
-            setDiscussions(res.comments || [])
-          }
-          const rawSummary = res.summary || {}
-          const breakdown = rawSummary.breakdown || rawSummary.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-          const averageRate = rawSummary.averageRate ?? rawSummary.avgRating ?? 0
-          const totalReviews = rawSummary.totalReviews || 0
-          const totalDiscussions = rawSummary.totalDiscussions || 0
+    const isSameContext = loadedTabsRef.current.bookId === bookId && loadedTabsRef.current.userId === currentUserId
+    if (isSameContext && loadedTabsRef.current[activeTab]) {
+      return undefined
+    }
 
-          setSummary({
-            averageRate,
-            totalReviews,
-            totalDiscussions,
-            breakdown
-          })
-          if (res.purchaseStatus) {
-            setPurchaseStatus(res.purchaseStatus)
-          }
-          setTotalPages(res.totalPages || 1)
-          setPage(res.page || 1)
-        }
-      })
-      .catch((err) => {
-        if (!ignore) {
-          setErrorMsg(err.message || 'Không thể tải dữ liệu đánh giá.')
-        }
-      })
+    const targetPage = isSameContext ? (pageByTabRef.current[activeTab] || 1) : 1
+    const effectiveStar = isSameContext && activeTab === 'reviews' ? selectedStarRef.current : null
+    let disposed = false
+
+    Promise.resolve().then(() => {
+      if (!disposed) {
+        fetchReviewsData(activeTab, targetPage, effectiveStar, { resetContext: !isSameContext })
+      }
+    })
 
     return () => {
-      ignore = true
+      disposed = true
+      if (activeRequestRef.current.controller) {
+        activeRequestRef.current.controller.abort()
+      }
     }
-  }, [bookId, activeTab])
+  }, [bookId, activeTab, currentUserId, fetchReviewsData])
 
-  const userReview = useMemo(() => {
-    if (!currentUserId || !Array.isArray(reviews)) return null
-    return reviews.find((r) => r.user_id === currentUserId && r.rate !== null) || null
-  }, [reviews, currentUserId])
+  const userReview = isAuthenticated
+    ? (
+        serverUserReview ||
+        (currentUserId && Array.isArray(reviews)
+          ? reviews.find((r) => String(r.user_id).toLowerCase() === String(currentUserId).toLowerCase() && r.rate !== null)
+          : null) ||
+        null
+      )
+    : null
 
-  const filteredReviews = useMemo(() => {
-    if (!Array.isArray(reviews)) return []
-    if (!selectedStar) return reviews
-    return reviews.filter((r) => Number(r.rate) === selectedStar)
-  }, [reviews, selectedStar])
+  useEffect(() => {
+    const focusParam = new URLSearchParams(window.location.search).get('focus') === 'review'
+    if (hasAutoScrolledRef.current || loading || !hasLoadedReviews || !userReview || (!scrollToOwnReview && !focusParam)) {
+      return
+    }
+    const targetEl = ownReviewCardRef.current
+    if (!targetEl) return
+
+    hasAutoScrolledRef.current = true
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    targetEl.classList.add('review-highlight')
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current)
+    }
+    highlightTimerRef.current = setTimeout(() => {
+      targetEl.classList.remove('review-highlight')
+    }, 3000)
+  }, [loading, hasLoadedReviews, scrollToOwnReview, userReview])
 
   const showNotification = (success, message) => {
+    if (notificationTimerRef.current) {
+      clearTimeout(notificationTimerRef.current)
+    }
     if (success) {
       setSuccessMsg(message)
       setErrorMsg('')
@@ -187,10 +370,21 @@ function BookReviews({
       setErrorMsg(message)
       setSuccessMsg('')
     }
-    setTimeout(() => {
+    notificationTimerRef.current = setTimeout(() => {
       setSuccessMsg('')
       setErrorMsg('')
     }, 4000)
+  }
+
+  const handleSelectStarFilter = (starValue) => {
+    const nextStar = selectedStar === starValue ? null : starValue
+    setSelectedStar(nextStar)
+    setEditingId(null)
+    setEditingIsReply(false)
+    setReplyingToId(null)
+    setReplyingTargetName('')
+    setReplyValue('')
+    fetchReviewsData('reviews', 1, nextStar)
   }
 
   const handleCreateReviewSubmit = async (e) => {
@@ -213,7 +407,8 @@ function BookReviews({
       showNotification(true, 'Cảm ơn bạn đã gửi đánh giá chất lượng cho cuốn sách!')
       setReviewValue('')
       setRate(5)
-      await fetchReviewsData('reviews', 1)
+      setSelectedStar(null)
+      await fetchReviewsData('reviews', 1, null)
     } catch (err) {
       showNotification(false, err.message || 'Gửi đánh giá thất bại.')
     } finally {
@@ -240,7 +435,7 @@ function BookReviews({
       })
       showNotification(true, 'Câu hỏi/thảo luận của bạn đã được đăng thành công!')
       setDiscussionValue('')
-      await fetchReviewsData('discussions', 1)
+      await fetchReviewsData('discussions', 1, null)
     } catch (err) {
       showNotification(false, err.message || 'Gửi thảo luận thất bại.')
     } finally {
@@ -248,14 +443,19 @@ function BookReviews({
     }
   }
 
-  const handleStartEdit = (item) => {
+  const handleStartEdit = (item, isReplyItem = false) => {
+    setReplyingToId(null)
+    setReplyingTargetName('')
+    setReplyValue('')
     setEditingId(item.id)
+    setEditingIsReply(Boolean(isReplyItem || item?.parent_id))
     setEditRate(item.rate)
     setEditValue(item.value || '')
   }
 
   const handleCancelEdit = () => {
     setEditingId(null)
+    setEditingIsReply(false)
     setEditRate(null)
     setEditValue('')
   }
@@ -263,18 +463,84 @@ function BookReviews({
   const handleUpdateSubmit = async (e) => {
     e.preventDefault()
     if (!editingId) return
+    if ((editingIsReply || editRate === null) && !editValue.trim()) {
+      showNotification(
+        false,
+        editingIsReply
+          ? 'Nội dung trả lời bình luận không được để trống.'
+          : 'Nội dung thảo luận không được để trống.'
+      )
+      return
+    }
 
     try {
       setSubmitting(true)
-      await reviewService.updateReview(editingId, {
-        rate: editRate,
-        value: editValue.trim() || null
-      })
+      const payload = editingIsReply
+        ? { value: editValue.trim() }
+        : { rate: editRate, value: editValue.trim() || null }
+      await reviewService.updateReview(editingId, payload)
       showNotification(true, 'Cập nhật thành công!')
       setEditingId(null)
-      await fetchReviewsData(activeTab, page)
+      setEditingIsReply(false)
+      await fetchReviewsData(activeTab, page, activeTab === 'reviews' ? selectedStar : null)
     } catch (err) {
       showNotification(false, err.message || 'Cập nhật thất bại.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleOpenReply = (rootCommentId, targetDisplayName = '', mentionName = '') => {
+    if (!isAuthenticated) {
+      if (onRequireLogin) onRequireLogin()
+      return
+    }
+    setEditingId(null)
+    setEditingIsReply(false)
+    const effectiveMention = mentionName || targetDisplayName
+    if (replyingToId === rootCommentId && replyingTargetName === targetDisplayName) {
+      setReplyingToId(null)
+      setReplyingTargetName('')
+      setReplyValue('')
+      return
+    }
+    setReplyingToId(rootCommentId)
+    setReplyingTargetName(targetDisplayName)
+    setReplyValue(effectiveMention ? `@${effectiveMention} ` : '')
+  }
+
+  const handleCancelReply = () => {
+    setReplyingToId(null)
+    setReplyingTargetName('')
+    setReplyValue('')
+  }
+
+  const handleSubmitReply = async (e, rootCommentId) => {
+    e.preventDefault()
+    if (!isAuthenticated) {
+      if (onRequireLogin) onRequireLogin()
+      return
+    }
+    const trimmed = replyValue.trim()
+    if (!trimmed) {
+      showNotification(false, 'Vui lòng nhập nội dung trả lời bình luận.')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      await reviewService.createReview(bookId, {
+        parentId: rootCommentId,
+        rate: null,
+        value: trimmed
+      })
+      showNotification(true, 'Đã gửi phản hồi bình luận thành công!')
+      setReplyingToId(null)
+      setReplyingTargetName('')
+      setReplyValue('')
+      await fetchReviewsData(activeTab, page, activeTab === 'reviews' ? selectedStar : null)
+    } catch (err) {
+      showNotification(false, err.message || 'Gửi phản hồi thất bại.')
     } finally {
       setSubmitting(false)
     }
@@ -288,8 +554,14 @@ function BookReviews({
     try {
       setSubmitting(true)
       await reviewService.deleteReview(itemId)
+      if (editingId === itemId) {
+        handleCancelEdit()
+      }
+      if (replyingToId === itemId) {
+        handleCancelReply()
+      }
       showNotification(true, 'Đã xóa bài viết thành công.')
-      await fetchReviewsData(activeTab, 1)
+      await fetchReviewsData(activeTab, page, activeTab === 'reviews' ? selectedStar : null)
     } catch (err) {
       showNotification(false, err.message || 'Xóa bài viết thất bại.')
     } finally {
@@ -297,9 +569,350 @@ function BookReviews({
     }
   }
 
+  const renderCommentCard = (item, { isDiscussion = false, attachOwnRef = false, cardKeyPrefix = 'item' } = {}) => {
+    const isAuthor = Boolean(
+      isAuthenticated &&
+      currentUserId &&
+      item.user_id &&
+      String(item.user_id).toLowerCase() === String(currentUserId).toLowerCase()
+    )
+    const canReplyToItem = isDiscussion || isAdminUser
+    const isOwnReviewCard = !isDiscussion && isAuthor
+    const isEditing = editingId === item.id
+    const { displayName, avatarUrl, initialLetter } = getAuthorDisplay(
+      item,
+      isDiscussion ? 'Độc giả' : 'Khách hàng'
+    )
+    const formattedDate = formatReviewDate(item.createdAt)
+
+    if (isEditing) {
+      return (
+        <div
+          key={`${cardKeyPrefix}-edit-${item.id}`}
+          ref={attachOwnRef ? ownReviewCardRef : null}
+          className="review-item user-own-review-card"
+        >
+          <h4 style={{ margin: '0 0 12px 0', color: '#20201f' }}>
+            {isDiscussion ? 'Chỉnh sửa câu hỏi / thảo luận' : 'Chỉnh sửa bài đánh giá của bạn'}
+          </h4>
+          <form onSubmit={handleUpdateSubmit}>
+            {!isDiscussion ? (
+              <div className="star-picker">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    type="button"
+                    key={s}
+                    className={`star-btn ${editRate >= s ? 'active' : ''}`}
+                    onClick={() => setEditRate(s)}
+                  >
+                    ★
+                  </button>
+                ))}
+                <span className="star-hint">{STAR_LABELS[editRate]}</span>
+              </div>
+            ) : null}
+
+            <textarea
+              className="review-textarea"
+              value={editValue}
+              maxLength={1000}
+              onChange={(e) => setEditValue(e.target.value)}
+            />
+
+            <div className="form-footer">
+              <span className="char-counter">{editValue.length}/1000 ký tự</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="filter-btn"
+                  onClick={handleCancelEdit}
+                  disabled={submitting}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit-review"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )
+    }
+
+    return (
+      <article
+        key={`${cardKeyPrefix}-${item.id}`}
+        ref={attachOwnRef ? ownReviewCardRef : null}
+        className={`review-item ${isOwnReviewCard ? 'user-own-review-card' : ''}`}
+      >
+        {isOwnReviewCard ? (
+          <div className="own-review-badge">★ Đánh giá của bạn</div>
+        ) : null}
+
+        <div className="review-item-header">
+          <div className="review-author-info">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="author-avatar"
+              />
+            ) : (
+              <div className="author-avatar">{initialLetter}</div>
+            )}
+            <div className="author-details">
+              <div className="author-name-row">
+                <span className="author-name">{displayName}</span>
+                {isDiscussion ? (
+                  <span className="discussion-tag">Hỏi đáp / Thảo luận</span>
+                ) : null}
+                {item.isPurchased ? (
+                  <span
+                    className="purchased-badge"
+                    title={isDiscussion ? undefined : 'Đã mua và nhận sách thành công'}
+                  >
+                    ✓ Đã mua hàng
+                  </span>
+                ) : null}
+              </div>
+              <div className="review-date">{formattedDate}</div>
+            </div>
+          </div>
+
+          {!isDiscussion ? <StarRatingDisplay rate={item.rate} /> : null}
+        </div>
+
+        <p className="review-content">
+          {item.value || (!isDiscussion ? <em style={{ color: '#9ca3af' }}>(Người mua chỉ chấm điểm sao)</em> : null)}
+        </p>
+
+        {canReplyToItem || isAuthor ? (
+          <div className="review-actions">
+            {canReplyToItem ? (
+              <button
+                type="button"
+                className="btn-review-action btn-review-reply"
+                onClick={() => handleOpenReply(item.id, displayName, displayName)}
+                disabled={submitting}
+              >
+                {isDiscussion ? '↩️ Trả lời' : '↩️ Phản hồi đánh giá'}
+              </button>
+            ) : null}
+            {isAuthor ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-review-action btn-review-edit"
+                  onClick={() => handleStartEdit(item, false)}
+                  disabled={submitting}
+                >
+                  ✏️ Chỉnh sửa
+                </button>
+                <button
+                  type="button"
+                  className="btn-review-action btn-review-delete"
+                  onClick={() => handleDeleteItem(item.id)}
+                  disabled={submitting}
+                >
+                  {isDiscussion ? '🗑️ Xóa thảo luận' : '🗑️ Xóa đánh giá'}
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {Array.isArray(item.replies) && item.replies.length > 0 ? (
+          <div className="review-replies-list">
+            {item.replies.map((reply) => {
+              const isReplyAuthor = Boolean(
+                isAuthenticated &&
+                currentUserId &&
+                reply.user_id &&
+                String(reply.user_id).toLowerCase() === String(currentUserId).toLowerCase()
+              )
+              const replyAuthor = getAuthorDisplay(reply, 'Thành viên')
+              const isEditingThisReply = editingId === reply.id
+
+              if (isEditingThisReply) {
+                return (
+                  <div key={`${cardKeyPrefix}-reply-edit-${reply.id}`} className="review-reply-item">
+                    <h5 className="reply-edit-title">Chỉnh sửa phản hồi của bạn</h5>
+                    <form onSubmit={handleUpdateSubmit}>
+                      <textarea
+                        className="review-textarea review-reply-textarea"
+                        value={editValue}
+                        maxLength={1000}
+                        onChange={(e) => setEditValue(e.target.value)}
+                      />
+                      <div className="form-footer">
+                        <span className="char-counter">{editValue.length}/1000 ký tự</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="filter-btn"
+                            onClick={handleCancelEdit}
+                            disabled={submitting}
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="submit"
+                            className="btn-submit-review"
+                            disabled={submitting}
+                          >
+                            {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                )
+              }
+
+              const replyCandidateNames = [
+                displayName,
+                ...(Array.isArray(item.replies)
+                  ? item.replies.map((r) => getAuthorDisplay(r, 'Thành viên').displayName)
+                  : [])
+              ]
+              const targetInfo = resolveReplyTargetAndContent(
+                reply,
+                displayName,
+                replyCandidateNames
+              )
+
+              return (
+                <div key={`${cardKeyPrefix}-reply-${reply.id}`} className="review-reply-item">
+                  <div className="review-reply-header">
+                    {replyAuthor.avatarUrl ? (
+                      <img
+                        src={replyAuthor.avatarUrl}
+                        alt={replyAuthor.displayName}
+                        className="author-avatar reply-avatar"
+                      />
+                    ) : (
+                      <div className="author-avatar reply-avatar">{replyAuthor.initialLetter}</div>
+                    )}
+                    <div className="author-details">
+                      <div className="author-name-row">
+                        <span className="author-name">{replyAuthor.displayName}</span>
+                        {targetInfo.targetName ? (
+                          <span
+                            className="reply-target-tag"
+                            title={`Trả lời ${targetInfo.targetName}`}
+                          >
+                            <span className="reply-target-arrow">&gt;</span>
+                            <span className="reply-target-name">{targetInfo.targetName}</span>
+                          </span>
+                        ) : null}
+                        {reply.user_isAdmin ? (
+                          <span className="admin-reply-badge">Quản trị viên</span>
+                        ) : null}
+                        {reply.isPurchased ? (
+                          <span className="purchased-badge">✓ Đã mua hàng</span>
+                        ) : null}
+                      </div>
+                      <div className="review-date">{formatReviewDate(reply.createdAt)}</div>
+                    </div>
+                  </div>
+                  <p className="review-reply-content">
+                    {targetInfo.mentionPrefix ? (
+                      <span className="review-mention-highlight">{targetInfo.mentionPrefix}</span>
+                    ) : null}
+                    {targetInfo.mentionPrefix && targetInfo.cleanContent ? ' ' : ''}
+                    {targetInfo.cleanContent || (targetInfo.mentionPrefix ? '' : reply.value)}
+                  </p>
+                  {canReplyToItem || isReplyAuthor ? (
+                    <div className="review-reply-actions">
+                      {canReplyToItem ? (
+                        <button
+                          type="button"
+                          className="btn-review-action btn-review-reply"
+                          onClick={() => handleOpenReply(item.id, replyAuthor.displayName, replyAuthor.displayName)}
+                          disabled={submitting}
+                        >
+                          ↩️ Trả lời
+                        </button>
+                      ) : null}
+                      {isReplyAuthor ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-review-action btn-review-edit"
+                            onClick={() => handleStartEdit(reply, true)}
+                            disabled={submitting}
+                          >
+                            ✏️ Chỉnh sửa
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-review-action btn-review-delete"
+                            onClick={() => handleDeleteItem(reply.id)}
+                            disabled={submitting}
+                          >
+                            🗑️ Xóa
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {replyingToId === item.id ? (
+          <form className="review-reply-form-box" onSubmit={(e) => handleSubmitReply(e, item.id)}>
+            <div className="reply-form-target">
+              Đang trả lời <strong>{replyingTargetName || displayName}</strong>
+            </div>
+            <textarea
+              className="review-textarea review-reply-textarea"
+              placeholder={`Viết phản hồi cho ${replyingTargetName || displayName}...`}
+              value={replyValue}
+              maxLength={1000}
+              onChange={(e) => setReplyValue(e.target.value)}
+            />
+            <div className="form-footer">
+              <span className="char-counter">{replyValue.length}/1000 ký tự</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="filter-btn"
+                  onClick={handleCancelReply}
+                  disabled={submitting}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="btn-submit-review"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Đang gửi...' : 'Gửi phản hồi'}
+                </button>
+              </div>
+            </div>
+          </form>
+        ) : null}
+      </article>
+    )
+  }
+
   const avgScore = Number(summary.averageRate || 0).toFixed(1)
   const totalReviewCount = Number(summary.totalReviews || 0)
   const totalDiscussionCount = Number(summary.totalDiscussions || 0)
+  const shouldRenderPinnedOwnReview = Boolean(isAuthenticated && userReview)
+  const listReviews = shouldRenderPinnedOwnReview
+    ? reviews.filter((rev) => rev.id !== userReview.id)
+    : reviews
+  const paginationItems = getPaginationNumbers(page, totalPages)
 
   return (
     <section id="book-reviews-section" className="reviews-container" aria-label="Đánh giá và thảo luận từ độc giả">
@@ -309,7 +922,8 @@ function BookReviews({
           className={`reviews-tab-btn ${activeTab === 'reviews' ? 'active' : ''}`}
           onClick={() => {
             setActiveTab('reviews')
-            setEditingId(null)
+            handleCancelEdit()
+            handleCancelReply()
           }}
         >
           ⭐ Đánh giá từ người mua ({totalReviewCount})
@@ -319,7 +933,8 @@ function BookReviews({
           className={`reviews-tab-btn ${activeTab === 'discussions' ? 'active' : ''}`}
           onClick={() => {
             setActiveTab('discussions')
-            setEditingId(null)
+            handleCancelEdit()
+            handleCancelReply()
           }}
         >
           💬 Hỏi đáp & Thảo luận ({totalDiscussionCount})
@@ -373,6 +988,8 @@ function BookReviews({
                 Đăng nhập ngay
               </button>
             </div>
+          ) : shouldRenderPinnedOwnReview ? (
+            renderCommentCard(userReview, { isDiscussion: false, attachOwnRef: true, cardKeyPrefix: 'pinned-own' })
           ) : purchaseStatus.status === 'pending' ? (
             <div className="order-pending-banner">
               <span className="banner-icon">⏳</span>
@@ -440,7 +1057,7 @@ function BookReviews({
             <button
               type="button"
               className={`filter-btn ${selectedStar === null ? 'active' : ''}`}
-              onClick={() => setSelectedStar(null)}
+              onClick={() => handleSelectStarFilter(null)}
             >
               Tất cả ({totalReviewCount})
             </button>
@@ -451,7 +1068,7 @@ function BookReviews({
                   type="button"
                   key={s}
                   className={`filter-btn ${selectedStar === s ? 'active' : ''}`}
-                  onClick={() => setSelectedStar(selectedStar === s ? null : s)}
+                  onClick={() => handleSelectStarFilter(s)}
                 >
                   {s} sao ({count})
                 </button>
@@ -459,164 +1076,43 @@ function BookReviews({
             })}
           </div>
 
-          {loading && filteredReviews.length === 0 ? (
-            <div className="reviews-empty-box">Đang tải danh sách đánh giá...</div>
-          ) : filteredReviews.length === 0 ? (
-            <div className="reviews-empty-box">
-              <div className="reviews-empty-icon">💬</div>
-              <p>
-                {selectedStar
-                  ? `Chưa có bài đánh giá nào ${selectedStar} sao.`
-                  : 'Chưa có bài đánh giá nào từ người mua. Hãy là người đầu tiên đánh giá sau khi nhận sách!'}
-              </p>
-            </div>
-          ) : (
-            <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
-              {filteredReviews.map((rev) => {
-                const isAuthor = currentUserId && rev.user_id === currentUserId
-                const isEditing = editingId === rev.id
-                const initialLetter = (rev.full_name || rev.username || 'U').charAt(0).toUpperCase()
-                const formattedDate = rev.createdAt
-                  ? new Date(rev.createdAt).toLocaleDateString('vi-VN', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    })
-                  : ''
-
-                if (isEditing) {
-                  return (
-                    <div key={rev.id} className="review-item user-own-review-card">
-                      <h4 style={{ margin: '0 0 12px 0', color: '#20201f' }}>Chỉnh sửa bài đánh giá của bạn</h4>
-                      <form onSubmit={handleUpdateSubmit}>
-                        <div className="star-picker">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <button
-                              type="button"
-                              key={s}
-                              className={`star-btn ${editRate >= s ? 'active' : ''}`}
-                              onClick={() => setEditRate(s)}
-                            >
-                              ★
-                            </button>
-                          ))}
-                          <span className="star-hint">{STAR_LABELS[editRate]}</span>
-                        </div>
-
-                        <textarea
-                          className="review-textarea"
-                          value={editValue}
-                          maxLength={1000}
-                          onChange={(e) => setEditValue(e.target.value)}
-                        />
-
-                        <div className="form-footer">
-                          <span className="char-counter">{editValue.length}/1000 ký tự</span>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              type="button"
-                              className="filter-btn"
-                              onClick={handleCancelEdit}
-                              disabled={submitting}
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="submit"
-                              className="btn-submit-review"
-                              disabled={submitting}
-                            >
-                              {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    </div>
-                  )
-                }
-
-                return (
-                  <article
-                    key={rev.id}
-                    className={`review-item ${isAuthor ? 'user-own-review-card' : ''}`}
-                  >
-                    {isAuthor ? (
-                      <div className="own-review-badge">★ Đánh giá của bạn</div>
-                    ) : null}
-
-                    <div className="review-item-header">
-                      <div className="review-author-info">
-                        {rev.avatar ? (
-                          <img
-                            src={rev.avatar}
-                            alt={rev.full_name || rev.username}
-                            className="author-avatar"
-                          />
-                        ) : (
-                          <div className="author-avatar">{initialLetter}</div>
-                        )}
-                        <div className="author-details">
-                          <div className="author-name-row">
-                            <span className="author-name">
-                              {rev.full_name || rev.username || 'Khách hàng'}
-                            </span>
-                            {rev.isPurchased ? (
-                              <span className="purchased-badge" title="Đã mua và nhận sách thành công">
-                                ✓ Đã mua hàng
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="review-date">{formattedDate}</div>
-                        </div>
-                      </div>
-
-                      <StarRatingDisplay rate={rev.rate} />
-                    </div>
-
-                    {rev.value ? (
-                      <p className="review-content">{rev.value}</p>
-                    ) : (
-                      <p className="review-content" style={{ fontStyle: 'italic', color: '#8c8273' }}>
-                        Người mua không để lại bình luận văn bản.
-                      </p>
-                    )}
-
-                    {isAuthor ? (
-                      <div className="review-actions">
-                        <button
-                          type="button"
-                          className="btn-review-action btn-review-edit"
-                          onClick={() => handleStartEdit(rev)}
-                          disabled={submitting}
-                        >
-                          ✏️ Chỉnh sửa
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-review-action btn-review-delete"
-                          onClick={() => handleDeleteItem(rev.id)}
-                          disabled={submitting}
-                        >
-                          🗑️ Xóa đánh giá
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                )
-              })}
-            </div>
-          )}
+          <div className="reviews-list-stage">
+            {loading && reviews.length === 0 ? (
+              <div className="reviews-empty-box">Đang tải danh sách đánh giá...</div>
+            ) : listReviews.length === 0 ? (
+              <div className="reviews-empty-box">
+                <div className="reviews-empty-icon">💬</div>
+                <p>
+                  {reviews.length > 0 && shouldRenderPinnedOwnReview
+                    ? totalPages > 1
+                      ? 'Không còn đánh giá nào khác ở trang này ngoài bài của bạn đã ghim ở trên.'
+                      : selectedStar
+                        ? `Chưa có đánh giá ${selectedStar} sao nào khác ngoài bài của bạn đã ghim ở trên.`
+                        : 'Hiện chưa có đánh giá nào khác ngoài bài của bạn đã ghim ở trên.'
+                    : selectedStar
+                      ? `Chưa có bài đánh giá nào ${selectedStar} sao.`
+                      : 'Chưa có bài đánh giá nào từ người mua. Hãy là người đầu tiên đánh giá sau khi nhận sách!'}
+                </p>
+              </div>
+            ) : (
+              <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
+                {listReviews.map((rev) =>
+                  renderCommentCard(rev, {
+                    isDiscussion: false,
+                    attachOwnRef: false,
+                    cardKeyPrefix: 'rev'
+                  })
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div>
-          <div className="discussion-info-banner">
-            💬 <strong>Mục Hỏi đáp & Thảo luận cộng đồng</strong>: Mọi độc giả đều có thể đặt câu hỏi hoặc trao đổi tự do về cuốn sách mà không cần mua trước (không tính điểm sao).
-          </div>
-
           {!isAuthenticated ? (
             <div className="login-prompt-banner">
               <p className="login-prompt-text">
-                Vui lòng đăng nhập để đặt câu hỏi hoặc tham gia thảo luận về cuốn sách này.
+                Đăng nhập để tham gia đặt câu hỏi và trao đổi cùng cộng đồng độc giả BookWeb.
               </p>
               <button
                 type="button"
@@ -652,119 +1148,22 @@ function BookReviews({
             </div>
           )}
 
-          {loading && discussions.length === 0 ? (
-            <div className="reviews-empty-box">Đang tải danh sách thảo luận...</div>
-          ) : discussions.length === 0 ? (
-            <div className="reviews-empty-box">
-              <div className="reviews-empty-icon">💭</div>
-              <p>Chưa có câu hỏi hay thảo luận nào. Hãy là người đầu tiên đặt câu hỏi về cuốn sách này!</p>
-            </div>
-          ) : (
-            <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
-              {discussions.map((disc) => {
-                const isAuthor = currentUserId && disc.user_id === currentUserId
-                const isEditing = editingId === disc.id
-                const initialLetter = (disc.full_name || disc.username || 'U').charAt(0).toUpperCase()
-                const formattedDate = disc.createdAt
-                  ? new Date(disc.createdAt).toLocaleDateString('vi-VN', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    })
-                  : ''
-
-                if (isEditing) {
-                  return (
-                    <div key={disc.id} className="review-item user-own-review-card">
-                      <h4 style={{ margin: '0 0 12px 0', color: '#20201f' }}>Chỉnh sửa câu hỏi / thảo luận</h4>
-                      <form onSubmit={handleUpdateSubmit}>
-                        <textarea
-                          className="review-textarea"
-                          value={editValue}
-                          maxLength={1000}
-                          onChange={(e) => setEditValue(e.target.value)}
-                        />
-
-                        <div className="form-footer">
-                          <span className="char-counter">{editValue.length}/1000 ký tự</span>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              type="button"
-                              className="filter-btn"
-                              onClick={handleCancelEdit}
-                              disabled={submitting}
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="submit"
-                              className="btn-submit-review"
-                              disabled={submitting}
-                            >
-                              {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    </div>
-                  )
-                }
-
-                return (
-                  <article key={disc.id} className="review-item">
-                    <div className="review-item-header">
-                      <div className="review-author-info">
-                        {disc.avatar ? (
-                          <img
-                            src={disc.avatar}
-                            alt={disc.full_name || disc.username}
-                            className="author-avatar"
-                          />
-                        ) : (
-                          <div className="author-avatar">{initialLetter}</div>
-                        )}
-                        <div className="author-details">
-                          <div className="author-name-row">
-                            <span className="author-name">
-                              {disc.full_name || disc.username || 'Độc giả'}
-                            </span>
-                            <span className="discussion-tag">Hỏi đáp / Thảo luận</span>
-                            {disc.isPurchased ? (
-                              <span className="purchased-badge">✓ Đã mua hàng</span>
-                            ) : null}
-                          </div>
-                          <div className="review-date">{formattedDate}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="review-content">{disc.value}</p>
-
-                    {isAuthor ? (
-                      <div className="review-actions">
-                        <button
-                          type="button"
-                          className="btn-review-action btn-review-edit"
-                          onClick={() => handleStartEdit(disc)}
-                          disabled={submitting}
-                        >
-                          ✏️ Chỉnh sửa
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-review-action btn-review-delete"
-                          onClick={() => handleDeleteItem(disc.id)}
-                          disabled={submitting}
-                        >
-                          🗑️ Xóa thảo luận
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                )
-              })}
-            </div>
-          )}
+          <div className="reviews-list-stage">
+            {loading && discussions.length === 0 ? (
+              <div className="reviews-empty-box">Đang tải danh sách thảo luận...</div>
+            ) : discussions.length === 0 ? (
+              <div className="reviews-empty-box">
+                <div className="reviews-empty-icon">💭</div>
+                <p>Chưa có câu hỏi hay thảo luận nào. Hãy là người đầu tiên đặt câu hỏi về cuốn sách này!</p>
+              </div>
+            ) : (
+              <div className="reviews-list" style={{ opacity: loading ? 0.65 : 1, transition: 'opacity 0.15s ease' }}>
+                {discussions.map((disc) =>
+                  renderCommentCard(disc, { isDiscussion: true, cardKeyPrefix: 'disc' })
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -774,26 +1173,42 @@ function BookReviews({
             type="button"
             className="btn-page"
             disabled={page <= 1 || loading}
-            onClick={() => fetchReviewsData(activeTab, page - 1)}
+            onClick={() => {
+              handleCancelEdit()
+              handleCancelReply()
+              fetchReviewsData(activeTab, page - 1)
+            }}
           >
             ←
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              type="button"
-              key={p}
-              className={`btn-page ${page === p ? 'active' : ''}`}
-              disabled={loading}
-              onClick={() => fetchReviewsData(activeTab, p)}
-            >
-              {p}
-            </button>
-          ))}
+          {paginationItems.map((item) =>
+            typeof item === 'string' ? (
+              <span key={item} style={{ padding: '0 4px', color: '#8c8273' }}>...</span>
+            ) : (
+              <button
+                type="button"
+                key={item}
+                className={`btn-page ${page === item ? 'active' : ''}`}
+                disabled={loading}
+                onClick={() => {
+                  handleCancelEdit()
+                  handleCancelReply()
+                  fetchReviewsData(activeTab, item)
+                }}
+              >
+                {item}
+              </button>
+            )
+          )}
           <button
             type="button"
             className="btn-page"
             disabled={page >= totalPages || loading}
-            onClick={() => fetchReviewsData(activeTab, page + 1)}
+            onClick={() => {
+              handleCancelEdit()
+              handleCancelReply()
+              fetchReviewsData(activeTab, page + 1)
+            }}
           >
             →
           </button>

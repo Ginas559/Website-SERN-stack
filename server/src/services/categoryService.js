@@ -3,6 +3,15 @@ const categoryModel = require("../models/categoryModel");
 const AppError = require("../utils/AppError");
 
 const CATEGORY_NAME_INDEX = "UX_categories_active_name";
+const MAX_INT32 = 2147483647;
+
+function validateCategoryId(id) {
+    const categoryId = Number(id);
+    if (!Number.isInteger(categoryId) || categoryId <= 0 || categoryId > MAX_INT32) {
+        throw new AppError("ID thể loại không hợp lệ.", 400);
+    }
+    return categoryId;
+}
 
 function isCategoryDuplicateError(error) {
     return (error?.number === 2601 || error?.number === 2627)
@@ -134,6 +143,19 @@ async function getAdminCategories() {
     );
 }
 
+async function getPublicCategories() {
+    return await categoryModel.findPublicAll();
+}
+
+async function getPublicCategoryById(id) {
+    const categoryId = validateCategoryId(id);
+    const category = await categoryModel.findPublicById(categoryId);
+    if (!category) {
+        throw new AppError("Không tìm thấy thể loại.", 404);
+    }
+    return category;
+}
+
 async function getCategoryById(id) {
     const category = await categoryModel.findById(id);
     if (!category) {
@@ -151,6 +173,8 @@ module.exports = {
     updateCategory,
     softDeleteCategory,
     restoreCategory,
+    getPublicCategories,
+    getPublicCategoryById,
     getAdminCategories,
     getCategoryById,
 };

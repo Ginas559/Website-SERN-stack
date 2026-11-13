@@ -28,10 +28,22 @@ async function getById(req, res) {
     res.json(category);
 }
 
+async function getPublicAll(req, res) {
+    const categories = await categoryService.getPublicCategories();
+    res.json(categories);
+}
+
+async function getPublicById(req, res) {
+    const category = await categoryService.getPublicCategoryById(req.params.id);
+    res.json(category);
+}
+
 module.exports = {
     create,
     update,
     changeStatus,
     getAll,
     getById,
+    getPublicAll,
+    getPublicById,
 };

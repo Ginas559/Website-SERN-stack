@@ -392,6 +392,24 @@
     padding: 18px 22px;
     margin-bottom: 28px;
     box-shadow: 0 4px 14px rgba(56, 161, 105, 0.08);
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.user-own-review-card.review-highlight {
+    border-color: #c77736;
+    animation: reviewHighlightPulse 1.5s ease-in-out 2;
+}
+
+@keyframes reviewHighlightPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(199, 119, 54, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(199, 119, 54, 0.12);
+    }
+    100% {
+        box-shadow: 0 4px 14px rgba(56, 161, 105, 0.08);
+    }
 }
 
 .own-review-badge {
@@ -418,6 +436,10 @@
     border: 1px solid #bae6fd;
     padding: 1px 7px;
     border-radius: 12px;
+}
+
+.reviews-list-stage {
+    min-height: 220px;
 }
 
 .reviews-list {
@@ -631,4 +653,130 @@
     font-weight: 600;
     margin-bottom: 16px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.btn-review-reply {
+    color: #c77736;
+}
+
+.btn-review-reply:hover {
+    background: #fff7ed;
+}
+
+.review-replies-list {
+    margin-top: 12px;
+    margin-left: 18px;
+    padding-left: 16px;
+    border-left: 2px solid #e6dccb;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.review-reply-item {
+    background: #faf6ef;
+    border: 1px solid #ebe1d0;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.review-reply-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.reply-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 0.82rem;
+}
+
+.admin-reply-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #9a3412;
+    background: #ffedd5;
+    border: 1px solid #fdba74;
+    padding: 1px 7px;
+    border-radius: 12px;
+}
+
+.reply-target-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.84rem;
+    color: #8c8273;
+    font-weight: 500;
+}
+
+.reply-target-arrow {
+    font-size: 0.78rem;
+    color: #d97706;
+    font-weight: 800;
+}
+
+.reply-target-name {
+    color: #92400e;
+    font-weight: 600;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    letter-spacing: 0.01em;
+}
+
+.review-mention-highlight {
+    color: #b45309;
+    font-weight: 700;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    padding: 1px 6px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-right: 4px;
+}
+
+.review-reply-content {
+    font-size: 0.9rem;
+    color: #38342f;
+    line-height: 1.5;
+    margin: 4px 0 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.review-reply-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.review-reply-form-box {
+    margin-top: 12px;
+    margin-left: 18px;
+    padding: 12px 14px;
+    background: #faf6ef;
+    border: 1px solid #e5d8c3;
+    border-radius: 10px;
+}
+
+.reply-form-target {
+    font-size: 0.82rem;
+    color: #6b6358;
+    margin-bottom: 8px;
+}
+
+.reply-edit-title {
+    margin: 0 0 8px 0;
+    font-size: 0.88rem;
+    color: #20201f;
+}
+
+.review-reply-textarea {
+    min-height: 74px;
 }

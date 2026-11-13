@@ -2,23 +2,25 @@ const reviewService = require("../services/reviewService");
 
 async function createReview(req, res) {
     const { bookId } = req.params;
-    const { rate, value } = req.body;
+    const { rate, value, parentId } = req.body;
     const review = await reviewService.createReview({
         bookId,
         userId: req.user.id,
         rate,
-        value
+        value,
+        parentId
     });
     res.status(201).json(review);
 }
 
 async function getBookReviews(req, res) {
     const { bookId } = req.params;
-    const { page, limit, type } = req.query;
+    const { page, limit, type, rate } = req.query;
     const result = await reviewService.getBookReviews(bookId, {
         page,
         limit,
         type,
+        rate,
         userId: req.user?.id || null
     });
     res.json(result);
