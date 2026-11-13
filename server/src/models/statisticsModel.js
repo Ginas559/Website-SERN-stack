@@ -45,14 +45,14 @@ async function getOverviewMetrics() {
 
     const reviewsQuery = `
         SELECT 
-            COUNT(CASE WHEN rate IS NOT NULL THEN 1 END) AS totalReviews,
-            COUNT(CASE WHEN rate IS NULL THEN 1 END) AS totalDiscussions,
-            CAST(ROUND(COALESCE(AVG(CAST(rate AS FLOAT)), 0), 1) AS FLOAT) AS avgRating,
-            COUNT(CASE WHEN rate = 5 THEN 1 END) AS count5Star,
-            COUNT(CASE WHEN rate = 4 THEN 1 END) AS count4Star,
-            COUNT(CASE WHEN rate = 3 THEN 1 END) AS count3Star,
-            COUNT(CASE WHEN rate = 2 THEN 1 END) AS count2Star,
-            COUNT(CASE WHEN rate = 1 THEN 1 END) AS count1Star
+            COUNT(CASE WHEN parent_id IS NULL AND rate IS NOT NULL THEN 1 END) AS totalReviews,
+            COUNT(CASE WHEN parent_id IS NULL AND rate IS NULL THEN 1 END) AS totalDiscussions,
+            CAST(ROUND(COALESCE(AVG(CAST(CASE WHEN parent_id IS NULL THEN rate END AS FLOAT)), 0), 1) AS FLOAT) AS avgRating,
+            COUNT(CASE WHEN parent_id IS NULL AND rate = 5 THEN 1 END) AS count5Star,
+            COUNT(CASE WHEN parent_id IS NULL AND rate = 4 THEN 1 END) AS count4Star,
+            COUNT(CASE WHEN parent_id IS NULL AND rate = 3 THEN 1 END) AS count3Star,
+            COUNT(CASE WHEN parent_id IS NULL AND rate = 2 THEN 1 END) AS count2Star,
+            COUNT(CASE WHEN parent_id IS NULL AND rate = 1 THEN 1 END) AS count1Star
         FROM dbo.comments
         WHERE isDelete = 0
     `;

@@ -10,6 +10,7 @@ import {
 import CartTable from './CartTable';
 import CartSummary from './CartSummary';
 import EmptyCart from './EmptyCart';
+import { useShippingRule, calculateSelectedItemsTotals, calculateShippingFee } from '../utils/pricing';
 import './Cart.css';
 
 function cleanCartData(rawList) {
@@ -78,10 +79,10 @@ function CartPage({
     }, [isAuthenticated, reduxCart.items, localGuestItems]);
 
     useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && reduxCart.fetchStatus === 'idle') {
             dispatch(fetchCart());
         }
-    }, [isAuthenticated, dispatch]);
+    }, [isAuthenticated, reduxCart.fetchStatus, dispatch]);
 
     const [selectedItemIds, setSelectedItemIds] = useState(() => {
         return items
@@ -266,21 +267,14 @@ function CartPage({
         });
     }, [items, selectedItemIds]);
 
-    const { selectedCount, subtotal } = useMemo(() => {
-        let count = 0;
-        let sum = 0;
-        selectedItems.forEach((item) => {
-            const finalPrice = item.discount > 0 
-                ? Math.round(item.price * (100 - item.discount) / 100) 
-                : item.price;
-            const qty = Math.max(1, Number(item.quantity) || 1);
-            count += qty;
-            sum += finalPrice * qty;
-        });
-        return { selectedCount: count, subtotal: sum };
-    }, [selectedItems]);
+    const shippingRule = useShippingRule();
 
-    const shippingFee = subtotal >= 250000 || subtotal === 0 ? 0 : 25000;
+    const { selectedCount, subtotal } = useMemo(
+        () => calculateSelectedItemsTotals(selectedItems),
+        [selectedItems]
+    );
+
+    const shippingFee = calculateShippingFee(subtotal, shippingRule);
     const total = subtotal + shippingFee;
 
     const handleCheckoutAction = () => {
@@ -298,6 +292,7 @@ function CartPage({
             .unwrap()
             .then((res) => {
                 if (res && res.summary && res.summary.hasErrors) {
+                    dispatch(fetchCart());
                     triggerToast('Một số sản phẩm trong giỏ có thay đổi tồn kho, vui lòng kiểm tra lại.', 'warning');
                     return;
                 }

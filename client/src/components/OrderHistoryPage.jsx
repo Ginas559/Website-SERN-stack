@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useDispatch } from 'react-redux'
 import orderService from '../services/orderService'
 import reviewService, { getMyReviewedBookIds } from '../services/reviewService'
+import { fetchCart } from '../store/slices/cartSlice'
+import { invalidateBooks } from '../store/slices/bookSlice'
+import { getPaymentMethodLabel } from '../utils/pricing'
 import './OrderHistory.css'
 
 function formatCurrency(amount) {
@@ -37,6 +41,7 @@ function OrderHistoryPage({
   onGoToCart,
   onSelectBook
 }) {
+  const dispatch = useDispatch()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
@@ -207,6 +212,7 @@ function OrderHistoryPage({
     setIsCancelling(true)
     try {
       await orderService.cancelOrder(cancelModalOrder.id, cancelReason)
+      dispatch(invalidateBooks())
       showToast('Hủy đơn hàng thành công.', 'success')
       handleCloseCancelModal()
       setLoading(true)
@@ -221,6 +227,7 @@ function OrderHistoryPage({
     try {
       showToast('Đang thêm các sản phẩm vào giỏ hàng...', 'info')
       const res = await orderService.reorder(order.id)
+      dispatch(fetchCart())
       const data = res.data || res
       if (data.warnings && data.warnings.length > 0) {
         showToast(data.warnings.join(' | '), 'warning')
@@ -432,7 +439,7 @@ function OrderHistoryPage({
                       <br />
                       <strong>Địa chỉ:</strong> {order.shippingAddress || order.shipping_address || order.address || ghnInfo.address || ghnInfo.shippingAddress || '---'}
                       <br />
-                      <strong>Phương thức:</strong> {order.payment_method === 'VNPAY' ? 'VNPAY Sandbox' : order.payment_method === 'BANK' ? 'Chuyển khoản' : 'Thanh toán khi nhận hàng (COD)'}
+                      <strong>Phương thức:</strong> {getPaymentMethodLabel(order.payment_method, 'full')}
                     </div>
 
                     <div className="order-summary-and-actions">

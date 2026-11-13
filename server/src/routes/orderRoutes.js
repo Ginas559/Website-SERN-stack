@@ -3,9 +3,11 @@ const { body, param, query } = require("express-validator");
 const controller = require("../controllers/orderController");
 const validate = require("../middleware/validateMiddleware");
 const { protect, restrictTo } = require("../middleware/authMiddleware");
+const { SUPPORTED_PAYMENT_METHODS } = require("../utils/pricing");
 
 const router = express.Router();
 
+router.get("/shipping-rule", controller.getShippingRule);
 router.get("/vnpay/return", controller.handleVNPayReturn);
 router.get("/vnpay/ipn", controller.handleVNPayIPN);
 
@@ -71,7 +73,7 @@ router.post(
             .bail(),
         body("paymentMethod")
             .optional()
-            .isIn(["COD", "VNPAY", "BANK"])
+            .isIn(SUPPORTED_PAYMENT_METHODS)
             .withMessage("Phương thức thanh toán không hợp lệ.")
             .bail(),
         body("selectedBookIds")
@@ -98,6 +100,12 @@ router.post(
             .isBoolean()
             .withMessage("saveAsDefaultAddress phải là kiểu boolean.")
             .bail(),
+        body("expectedShippingFee")
+            .optional({ nullable: true })
+            .isInt({ min: 0 })
+            .withMessage("Phí vận chuyển dự kiến phải là số nguyên không âm.")
+            .bail()
+            .toInt(),
     ],
     validate,
     controller.createOrder
@@ -130,7 +138,7 @@ router.get(
             .bail(),
         query("paymentMethod")
             .optional()
-            .isIn(["COD", "VNPAY", "BANK"])
+            .isIn(SUPPORTED_PAYMENT_METHODS)
             .withMessage("Phương thức thanh toán không hợp lệ.")
             .bail(),
         query("sortBy")

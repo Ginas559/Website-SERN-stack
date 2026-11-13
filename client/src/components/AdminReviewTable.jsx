@@ -281,8 +281,24 @@ function AdminReviewTable({
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontWeight: '600', color: '#e2dacd' }}>
-                        {rev.user_name || 'Khách hàng'}
+                      <div style={{ fontWeight: '600', color: '#e2dacd', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span>{rev.user_name || rev.user_full_name || rev.user_username || 'Khách hàng'}</span>
+                        {rev.parent_id && (rev.parent_user_full_name || rev.parent_user_username) ? (
+                          <span
+                            style={{
+                              fontSize: '0.76rem',
+                              color: '#fbbf24',
+                              background: '#372a15',
+                              border: '1px solid #78350f',
+                              borderRadius: '4px',
+                              padding: '1px 5px',
+                              fontWeight: '500'
+                            }}
+                            title={`Trả lời ${rev.parent_user_full_name || rev.parent_user_username}`}
+                          >
+                            &gt; {rev.parent_user_full_name || rev.parent_user_username}
+                          </span>
+                        ) : null}
                       </div>
                       {rev.user_username ? (
                         <div style={{ fontSize: '0.78rem', color: '#8c857b' }}>
@@ -297,6 +313,18 @@ function AdminReviewTable({
                           <span style={{ fontSize: '0.8rem', marginLeft: '4px', color: '#b9b0a7' }}>
                             ({rev.rate})
                           </span>
+                        </span>
+                      ) : rev.parent_id ? (
+                        <span
+                          style={{
+                            background: '#2e1f47',
+                            color: '#d8b4fe',
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            fontSize: '0.78rem'
+                          }}
+                        >
+                          ↩️ Phản hồi {rev.parent_user_full_name || rev.parent_user_username ? `@${rev.parent_user_full_name || rev.parent_user_username}` : `#${rev.parent_id}`}
                         </span>
                       ) : (
                         <span
@@ -440,6 +468,10 @@ function AdminReviewTable({
                   {selectedReview.rate !== null && selectedReview.rate !== undefined ? (
                     <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: '1rem' }}>
                       {selectedReview.rate} ★ (Đánh giá chất lượng)
+                    </span>
+                  ) : selectedReview.parent_id ? (
+                    <span style={{ color: '#d8b4fe', fontWeight: 600 }}>
+                      ↩️ Trả lời {selectedReview.parent_user_full_name || selectedReview.parent_user_username ? `@${selectedReview.parent_user_full_name || selectedReview.parent_user_username}` : `bình luận #${selectedReview.parent_id}`}
                     </span>
                   ) : (
                     <span style={{ color: '#60a5fa', fontWeight: 600 }}>

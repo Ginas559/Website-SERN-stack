@@ -1,37 +1,71 @@
 const { sql, connectDB } = require("../config/connectDB");
 const AppError = require("../utils/AppError");
 
-const commentColumns = "c.id, c.user_id, c.book_id, c.rate, c.value, c.isDelete, c.createdAt, c.updatedAt";
-const insertedCommentColumns = "INSERTED.id, INSERTED.user_id, INSERTED.book_id, INSERTED.rate, INSERTED.value, INSERTED.isDelete, INSERTED.createdAt, INSERTED.updatedAt";
+const commentColumns = "c.id, c.user_id, c.book_id, c.parent_id, c.rate, c.value, c.isDelete, c.createdAt, c.updatedAt";
+const insertedCommentColumns = "INSERTED.id, INSERTED.user_id, INSERTED.book_id, INSERTED.parent_id, INSERTED.rate, INSERTED.value, INSERTED.isDelete, INSERTED.createdAt, INSERTED.updatedAt";
 
-function handleCommentWriteError(error) {
+function handleCommentWriteError(
+    error,
+    conflictMessage = "Bạn đã có bài đánh giá cho cuốn sách này rồi."
+) {
     if (error && (error.number === 2601 || error.number === 2627)) {
-        throw new AppError("Bạn đã có bài đánh giá cho cuốn sách này rồi.", 409, error);
+        throw new AppError(conflictMessage, 409, error);
+    }
+    if (error && error.number === 547) {
+        throw new AppError("Dữ liệu phản hồi không hợp lệ hoặc bình luận gốc không tồn tại.", 400, error);
     }
     throw error;
 }
 
-async function create({ userId, bookId, rate = null, value = null }, transaction = null) {
+async function create({ userId, bookId, parentId = null, rate = null, value = null }, transaction = null) {
     const pool = await connectDB();
     const executor = transaction || pool;
 
-    const parsedRate = rate !== null && rate !== undefined ? Number(rate) : null;
+    const parsedParentId = parentId !== null && parentId !== undefined ? Number(parentId) : null;
+    const parsedRate = parsedParentId !== null
+        ? null
+        : (rate !== null && rate !== undefined ? Number(rate) : null);
 
     const req = new sql.Request(executor)
         .input("user_id", sql.Char(36), userId)
         .input("book_id", sql.Int, Number(bookId))
+        .input("parent_id", sql.Int, parsedParentId)
         .input("rate", sql.Int, parsedRate)
         .input("value", sql.NVarChar(1000), value);
 
     const query = `
-        INSERT INTO dbo.comments (user_id, book_id, rate, value, isDelete, createdAt, updatedAt)
+        INSERT INTO dbo.comments (user_id, book_id, parent_id, rate, value, isDelete, createdAt, updatedAt)
         OUTPUT ${insertedCommentColumns}
-        VALUES (@user_id, @book_id, @rate, @value, 0, SYSUTCDATETIME(), SYSUTCDATETIME())
+        SELECT @user_id, @book_id, @parent_id, @rate, @value, 0, SYSUTCDATETIME(), SYSUTCDATETIME()
+        FROM dbo.books b
+        WHERE b.id = @book_id
+          AND b.isDelete = 0
+          AND (
+              @parent_id IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM dbo.comments p
+                  WHERE p.id = @parent_id
+                    AND p.book_id = @book_id
+                    AND p.isDelete = 0
+                    AND p.parent_id IS NULL
+                    AND (
+                        p.rate IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM dbo.Users au
+                            WHERE au.id = @user_id
+                              AND au.isAdmin = 1
+                              AND au.isDelete = 0
+                        )
+                    )
+              )
+          )
     `;
 
     try {
         const result = await req.query(query);
-        return result.recordset[0];
+        return result.recordset[0] || null;
     } catch (error) {
         handleCommentWriteError(error);
     }
@@ -44,10 +78,15 @@ async function findById(id, { includeDeleted = false } = {}) {
                u.full_name AS user_full_name, 
                u.username AS user_username, 
                u.avatar AS user_avatar,
-               b.title AS book_title
+               COALESCE(u.isAdmin, 0) AS user_isAdmin,
+               b.title AS book_title,
+               parent_u.full_name AS parent_user_full_name,
+               parent_u.username AS parent_user_username
         FROM dbo.comments c
         LEFT JOIN dbo.Users u ON c.user_id = u.id
         LEFT JOIN dbo.books b ON c.book_id = b.id
+        LEFT JOIN dbo.comments parent_c ON c.parent_id = parent_c.id
+        LEFT JOIN dbo.Users parent_u ON parent_c.user_id = parent_u.id
         WHERE c.id = @id
     `;
     if (!includeDeleted) {
@@ -66,17 +105,97 @@ async function findUserReview(userId, bookId) {
     const result = await pool.request()
         .input("user_id", sql.Char(36), userId)
         .input("book_id", sql.Int, Number(bookId))
-        .query(`SELECT TOP 1 ${commentColumns} FROM dbo.comments c WHERE c.user_id = @user_id AND c.book_id = @book_id AND c.isDelete = 0 AND c.rate IS NOT NULL`);
+        .query(`
+            SELECT TOP 1 ${commentColumns},
+                   u.full_name AS user_full_name,
+                   u.username AS user_username,
+                   u.avatar AS user_avatar,
+                   COALESCE(u.isAdmin, 0) AS user_isAdmin
+            FROM dbo.comments c
+            LEFT JOIN dbo.Users u ON c.user_id = u.id
+            WHERE c.user_id = @user_id
+              AND c.book_id = @book_id
+              AND c.isDelete = 0
+              AND c.parent_id IS NULL
+              AND c.rate IS NOT NULL
+            ORDER BY c.createdAt DESC, c.id DESC
+        `);
     return result.recordset[0] || null;
 }
 
-async function findByBookId(bookId, { page = 1, limit = 10, includeDeleted = false, type = "all" } = {}) {
-    const pool = await connectDB();
-    const safePage = Math.max(1, Number(page) || 1);
-    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
-    const offset = (safePage - 1) * safeLimit;
+async function findRepliesByParentIds(parentIds = []) {
+    const uniqueIds = [...new Set(
+        (Array.isArray(parentIds) ? parentIds : [])
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0)
+    )];
+    if (uniqueIds.length === 0) {
+        return [];
+    }
 
-    let whereClause = "WHERE c.book_id = @book_id";
+    const pool = await connectDB();
+    const req = new sql.Request(pool);
+    const placeholders = uniqueIds.map((parentId, index) => {
+        req.input(`p${index}`, sql.Int, parentId);
+        return `@p${index}`;
+    });
+
+    const query = `
+        SELECT ${commentColumns},
+               u.full_name AS user_full_name,
+               u.username AS user_username,
+               u.avatar AS user_avatar,
+               COALESCE(u.isAdmin, 0) AS user_isAdmin,
+               parent_u.full_name AS parent_user_full_name,
+               parent_u.username AS parent_user_username
+        FROM dbo.comments c
+        LEFT JOIN dbo.Users u ON c.user_id = u.id
+        LEFT JOIN dbo.comments parent_c ON c.parent_id = parent_c.id
+        LEFT JOIN dbo.Users parent_u ON parent_c.user_id = parent_u.id
+        WHERE c.isDelete = 0
+          AND c.parent_id IN (${placeholders.join(", ")})
+        ORDER BY c.createdAt ASC, c.id ASC
+    `;
+
+    const result = await req.query(query);
+    return result.recordset;
+}
+
+async function executeBookReviewsList(pool, whereClause, { bookId, hasRateFilter, rate, offset, safeLimit }) {
+    const listReq = new sql.Request(pool)
+        .input("book_id", sql.Int, Number(bookId))
+        .input("offset", sql.Int, offset)
+        .input("limit", sql.Int, safeLimit);
+
+    if (hasRateFilter) {
+        listReq.input("rate", sql.Int, Number(rate));
+    }
+
+    const listQuery = `
+        SELECT ${commentColumns}, 
+               u.full_name AS user_full_name, 
+               u.username AS user_username, 
+               u.avatar AS user_avatar,
+               COALESCE(u.isAdmin, 0) AS user_isAdmin
+        FROM dbo.comments c
+        LEFT JOIN dbo.Users u ON c.user_id = u.id
+        ${whereClause}
+        ORDER BY c.createdAt DESC, c.id DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `;
+
+    const listRes = await listReq.query(listQuery);
+    return listRes.recordset;
+}
+
+async function findByBookId(bookId, { page = 1, limit = 10, includeDeleted = false, type = "all", rate = null } = {}) {
+    const pool = await connectDB();
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
+    const maxSafePage = Math.floor(2147483647 / safeLimit);
+    const safePage = Math.max(1, Math.min(maxSafePage, Number(page) || 1));
+    const hasRateFilter = rate !== null && rate !== undefined && rate !== "";
+
+    let whereClause = "WHERE c.book_id = @book_id AND c.parent_id IS NULL";
     if (!includeDeleted) {
         whereClause += " AND c.isDelete = 0";
     }
@@ -85,38 +204,41 @@ async function findByBookId(bookId, { page = 1, limit = 10, includeDeleted = fal
     } else if (type === "discussions") {
         whereClause += " AND c.rate IS NULL";
     }
+    if (hasRateFilter) {
+        whereClause += " AND c.rate = @rate";
+    }
 
     const countReq = new sql.Request(pool).input("book_id", sql.Int, Number(bookId));
-    const listReq = new sql.Request(pool)
-        .input("book_id", sql.Int, Number(bookId))
-        .input("offset", sql.Int, offset)
-        .input("limit", sql.Int, safeLimit);
+    if (hasRateFilter) {
+        countReq.input("rate", sql.Int, Number(rate));
+    }
 
     const countQuery = `SELECT COUNT(1) AS total FROM dbo.comments c ${whereClause}`;
-    const listQuery = `
-        SELECT ${commentColumns}, 
-               u.full_name AS user_full_name, 
-               u.username AS user_username, 
-               u.avatar AS user_avatar
-        FROM dbo.comments c
-        LEFT JOIN dbo.Users u ON c.user_id = u.id
-        ${whereClause}
-        ORDER BY c.createdAt DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-    `;
+    const offset = (safePage - 1) * safeLimit;
 
-    const [countRes, listRes] = await Promise.all([
+    const [countRes, initialComments] = await Promise.all([
         countReq.query(countQuery),
-        listReq.query(listQuery)
+        executeBookReviewsList(pool, whereClause, { bookId, hasRateFilter, rate, offset, safeLimit })
     ]);
 
     const total = countRes.recordset[0]?.total || 0;
     const totalPages = Math.ceil(total / safeLimit) || 1;
+    const clampedPage = Math.min(safePage, totalPages);
+
+    const comments = total > 0 && clampedPage !== safePage
+        ? await executeBookReviewsList(pool, whereClause, {
+            bookId,
+            hasRateFilter,
+            rate,
+            offset: (clampedPage - 1) * safeLimit,
+            safeLimit
+        })
+        : initialComments;
 
     return {
-        comments: listRes.recordset,
+        comments,
         total,
-        page: safePage,
+        page: clampedPage,
         limit: safeLimit,
         totalPages
     };
@@ -126,14 +248,15 @@ async function getBookRatingSummary(bookId) {
     const pool = await connectDB();
     const query = `
         SELECT 
-            COUNT(rate) AS totalReviews,
-            COUNT(CASE WHEN rate IS NULL THEN 1 END) AS totalDiscussions,
-            CAST(ROUND(COALESCE(AVG(CAST(rate AS FLOAT)), 0), 1) AS FLOAT) AS avgRating,
-            SUM(CASE WHEN rate = 5 THEN 1 ELSE 0 END) AS count5Star,
-            SUM(CASE WHEN rate = 4 THEN 1 ELSE 0 END) AS count4Star,
-            SUM(CASE WHEN rate = 3 THEN 1 ELSE 0 END) AS count3Star,
-            SUM(CASE WHEN rate = 2 THEN 1 ELSE 0 END) AS count2Star,
-            SUM(CASE WHEN rate = 1 THEN 1 ELSE 0 END) AS count1Star
+            COUNT(CASE WHEN parent_id IS NULL AND rate IS NOT NULL THEN 1 END) AS totalReviews,
+            COUNT(CASE WHEN parent_id IS NULL AND rate IS NULL THEN 1 END) AS totalDiscussions,
+            COUNT(CASE WHEN parent_id IS NOT NULL THEN 1 END) AS totalReplies,
+            CAST(ROUND(COALESCE(AVG(CAST(CASE WHEN parent_id IS NULL THEN rate END AS FLOAT)), 0), 1) AS FLOAT) AS avgRating,
+            SUM(CASE WHEN parent_id IS NULL AND rate = 5 THEN 1 ELSE 0 END) AS count5Star,
+            SUM(CASE WHEN parent_id IS NULL AND rate = 4 THEN 1 ELSE 0 END) AS count4Star,
+            SUM(CASE WHEN parent_id IS NULL AND rate = 3 THEN 1 ELSE 0 END) AS count3Star,
+            SUM(CASE WHEN parent_id IS NULL AND rate = 2 THEN 1 ELSE 0 END) AS count2Star,
+            SUM(CASE WHEN parent_id IS NULL AND rate = 1 THEN 1 ELSE 0 END) AS count1Star
         FROM dbo.comments
         WHERE book_id = @book_id AND isDelete = 0
     `;
@@ -153,6 +276,7 @@ async function getBookRatingSummary(bookId) {
     return {
         totalReviews: row.totalReviews || 0,
         totalDiscussions: row.totalDiscussions || 0,
+        totalReplies: row.totalReplies || 0,
         avgRating: row.avgRating || 0,
         averageRate: row.avgRating || 0,
         distribution,
@@ -183,7 +307,22 @@ async function update(id, userId, { rate = undefined, value = undefined }, trans
         UPDATE dbo.comments
         SET ${sets.join(", ")}
         OUTPUT ${insertedCommentColumns}
-        WHERE id = @id AND user_id = @user_id AND isDelete = 0
+        WHERE id = @id
+          AND user_id = @user_id
+          AND isDelete = 0
+          AND EXISTS (
+              SELECT 1
+              FROM dbo.books b
+              WHERE b.id = dbo.comments.book_id AND b.isDelete = 0
+          )
+          AND (
+              dbo.comments.parent_id IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM dbo.comments p
+                  WHERE p.id = dbo.comments.parent_id AND p.isDelete = 0
+              )
+          )
     `;
 
     try {
@@ -204,16 +343,35 @@ async function changeStatus(id, isDelete, transaction = null) {
         UPDATE dbo.comments
         SET isDelete = @targetFlag, updatedAt = SYSUTCDATETIME()
         OUTPUT ${insertedCommentColumns}
-        WHERE id = @id AND isDelete = @currentStatus
+        WHERE id = @id
+          AND isDelete = @currentStatus
+          AND (
+              @targetFlag = 1
+              OR dbo.comments.parent_id IS NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM dbo.comments p
+                  WHERE p.id = dbo.comments.parent_id AND p.isDelete = 0
+              )
+          )
     `;
 
-    const result = await new sql.Request(executor)
-        .input("id", sql.Int, Number(id))
-        .input("targetFlag", sql.TinyInt, targetFlag)
-        .input("currentStatus", sql.TinyInt, currentStatus)
-        .query(query);
+    try {
+        const result = await new sql.Request(executor)
+            .input("id", sql.Int, Number(id))
+            .input("targetFlag", sql.TinyInt, targetFlag)
+            .input("currentStatus", sql.TinyInt, currentStatus)
+            .query(query);
 
-    return result.recordset[0] || null;
+        return result.recordset[0] || null;
+    } catch (error) {
+        handleCommentWriteError(
+            error,
+            targetFlag === 0
+                ? "Người dùng đã có bài đánh giá đang hoạt động cho cuốn sách này, không thể khôi phục bài đánh giá trùng lặp."
+                : undefined
+        );
+    }
 }
 
 async function findAllAdmin({ page = 1, limit = 10, bookId = null, rate = null, isDelete = null, search = null, type = null } = {}) {
@@ -277,10 +435,14 @@ async function findAllAdmin({ page = 1, limit = 10, bookId = null, rate = null, 
                u.full_name AS user_full_name, 
                u.username AS user_username, 
                u.avatar AS user_avatar,
-               b.title AS book_title
+               b.title AS book_title,
+               parent_u.full_name AS parent_user_full_name,
+               parent_u.username AS parent_user_username
         FROM dbo.comments c
         LEFT JOIN dbo.Users u ON c.user_id = u.id
         LEFT JOIN dbo.books b ON c.book_id = b.id
+        LEFT JOIN dbo.comments parent_c ON c.parent_id = parent_c.id
+        LEFT JOIN dbo.Users parent_u ON parent_c.user_id = parent_u.id
         ${whereSql}
         ORDER BY c.createdAt DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -307,6 +469,7 @@ module.exports = {
     create,
     findById,
     findUserReview,
+    findRepliesByParentIds,
     findByBookId,
     getBookRatingSummary,
     update,

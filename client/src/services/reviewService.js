@@ -7,7 +7,7 @@ export const getMyReviewedBookIds = async () => {
 
 const reviewService = {
   getMyReviewedBookIds,
-  getBookReviews: (bookId, params) => axiosClient.get(`/books/${bookId}/reviews`, { params }),
+  getBookReviews: (bookId, params, config = {}) => axiosClient.get(`/books/${bookId}/reviews`, { ...config, params }),
   createReview: (bookId, data) => axiosClient.post(`/books/${bookId}/reviews`, data),
   updateReview: (id, data) => axiosClient.put(`/reviews/${id}`, data),
   deleteReview: (id) => axiosClient.delete(`/reviews/${id}`),

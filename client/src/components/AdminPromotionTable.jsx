@@ -181,20 +181,11 @@ function AdminPromotionTable({
 
       <div className="admin-table-wrapper">
         {loading && sortedPromotions.length > 0 && <div className="admin-table-loading-bar" />}
-        <table className="admin-table">
+        <table className="admin-table admin-table-promo">
           <thead>
             <tr>
               <th
-                className={`admin-th-sortable ${sortBy === 'id' ? 'sorted' : ''}`}
-                style={{ width: '75px' }}
-                onClick={() => handleSort('id')}
-                title="Nhấn để sắp xếp theo ID"
-              >
-                ID {renderSortIndicator('id')}
-              </th>
-              <th
                 className={`admin-th-sortable ${sortBy === 'code' ? 'sorted' : ''}`}
-                style={{ minWidth: '190px' }}
                 onClick={() => handleSort('code')}
                 title="Nhấn để sắp xếp theo Mã Voucher"
               >
@@ -202,23 +193,21 @@ function AdminPromotionTable({
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'value' ? 'sorted' : ''}`}
-                style={{ width: '155px' }}
                 onClick={() => handleSort('value')}
                 title="Nhấn để sắp xếp theo Mức giảm"
               >
-                Loại & Mức giảm {renderSortIndicator('value')}
+                Mức giảm {renderSortIndicator('value')}
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'minimumOrderValue' ? 'sorted' : ''}`}
-                style={{ width: '190px' }}
                 onClick={() => handleSort('minimumOrderValue')}
                 title="Nhấn để sắp xếp theo Điều kiện đơn hàng"
               >
-                Điều kiện áp dụng {renderSortIndicator('minimumOrderValue')}
+                Điều kiện {renderSortIndicator('minimumOrderValue')}
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'usedCount' ? 'sorted' : ''}`}
-                style={{ width: '130px', textAlign: 'center' }}
+                style={{ textAlign: 'center' }}
                 onClick={() => handleSort('usedCount')}
                 title="Nhấn để sắp xếp theo Lượt dùng"
               >
@@ -226,7 +215,6 @@ function AdminPromotionTable({
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'expiredAt' ? 'sorted' : ''}`}
-                style={{ width: '165px' }}
                 onClick={() => handleSort('expiredAt')}
                 title="Nhấn để sắp xếp theo Thời hạn"
               >
@@ -234,25 +222,25 @@ function AdminPromotionTable({
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'isDelete' ? 'sorted' : ''}`}
-                style={{ width: '135px', textAlign: 'center' }}
+                style={{ textAlign: 'center' }}
                 onClick={() => handleSort('isDelete')}
                 title="Nhấn để sắp xếp theo Trạng thái"
               >
                 Trạng thái {renderSortIndicator('isDelete')}
               </th>
-              <th style={{ width: '140px', textAlign: 'center' }}>Thao tác</th>
+              <th className="admin-col-sticky-actions" style={{ textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody className={loading && sortedPromotions.length > 0 ? 'admin-tbody-loading' : ''}>
             {loading && sortedPromotions.length === 0 ? (
               <tr>
-                <td colSpan="8" className="admin-table-empty">
+                <td colSpan="7" className="admin-table-empty">
                   Đang tải danh sách khuyến mãi...
                 </td>
               </tr>
             ) : sortedPromotions.length === 0 ? (
               <tr>
-                <td colSpan="8" className="admin-table-empty">
+                <td colSpan="7" className="admin-table-empty">
                   Không tìm thấy mã khuyến mãi nào phù hợp.
                 </td>
               </tr>
@@ -265,21 +253,25 @@ function AdminPromotionTable({
 
                 return (
                   <tr key={promo.id} className={isHidden ? 'admin-row-muted' : ''}>
-                    <td className="admin-col-id">#{promo.id}</td>
                     <td>
                       <div className="admin-promo-code-badge">
                         🎟️ <strong>{promo.code}</strong>
                       </div>
-                      {promo.description && (
-                        <div className="admin-promo-desc">{promo.description}</div>
-                      )}
+                      <div className="admin-promo-meta">
+                        <span className="admin-col-id">#{promo.id}</span>
+                        {promo.description && (
+                          <span className="admin-promo-desc-inline" title={promo.description}>
+                            • {promo.description}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <span className="admin-promo-value-tag">
                         {discountDisplay}
                       </span>
                       <div className="admin-text-sub">
-                        {isPercent ? 'Giảm theo %' : 'Giảm tiền cố định'}
+                        {isPercent ? 'Giảm theo %' : 'Giảm cố định'}
                       </div>
                     </td>
                     <td>
@@ -321,7 +313,7 @@ function AdminPromotionTable({
                         {status.label}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="admin-col-sticky-actions" style={{ textAlign: 'center' }}>
                       <div className="admin-table-actions">
                         <button
                           type="button"

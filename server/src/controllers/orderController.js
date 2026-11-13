@@ -145,6 +145,18 @@ async function handleVNPayIPN(req, res, next) {
     }
 }
 
+async function getShippingRule(req, res, next) {
+    try {
+        const rule = await orderService.getShippingRule();
+        return res.status(200).json({
+            status: "success",
+            data: rule
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     createOrder,
     cancelOrder,
@@ -155,6 +167,7 @@ module.exports = {
     reorder,
     createPaymentUrl,
     handleVNPayReturn,
-    handleVNPayIPN
+    handleVNPayIPN,
+    getShippingRule
 };
 

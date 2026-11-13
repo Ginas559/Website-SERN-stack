@@ -6,16 +6,16 @@ const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
 const paymentService = require("./paymentService");
 const discountService = require("./discountService");
+const storePolicyService = require("./storePolicyService");
 const discountModel = require("../models/discountModel");
 const userModel = require("../models/userModel");
 const AppError = require("../utils/AppError");
-
-function calculateItemPrice(price, discount = 0) {
-    const rawPrice = Math.max(0, Number(price) || 0);
-    const rate = Math.max(0, Math.min(100, Number(discount) || 0));
-    if (rate <= 0) return rawPrice;
-    return Math.round(rawPrice * (1 - rate / 100));
-}
+const {
+    SUPPORTED_PAYMENT_METHODS,
+    calculateDiscountedUnitPrice,
+    calculateShippingFee,
+    calculateSelectedItemsTotals
+} = require("../utils/pricing");
 
 function validatePhoneNumber(phone) {
     const trimmed = typeof phone === "string" ? phone.trim() : "";
@@ -48,12 +48,6 @@ function validateAddress(address) {
     return trimmed;
 }
 
-function calculateShippingFee(subtotal) {
-    if (subtotal >= 250000 || subtotal === 0) return 0;
-    return 25000;
-}
-
-
 
 async function createOrderFromCart(userId, orderPayload = {}) {
     if (!userId) {
@@ -64,7 +58,13 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     const phone = validatePhoneNumber(orderPayload.phone || orderPayload.phoneNumber || orderPayload.recipientPhone || orderPayload.recipient_phone);
     const address = validateAddress(orderPayload.address || orderPayload.shippingAddress || orderPayload.shipping_address);
     const note = orderPayload.note && typeof orderPayload.note === "string" ? orderPayload.note.trim().slice(0, 500) : null;
-    const paymentMethod = orderPayload.paymentMethod === "VNPAY" ? "VNPAY" : orderPayload.paymentMethod === "BANK" ? "BANK" : "COD";
+    const rawPaymentMethod = orderPayload.paymentMethod === undefined || orderPayload.paymentMethod === null || orderPayload.paymentMethod === ""
+        ? "COD"
+        : String(orderPayload.paymentMethod).trim().toUpperCase();
+    if (!SUPPORTED_PAYMENT_METHODS.includes(rawPaymentMethod)) {
+        throw new AppError("Phương thức thanh toán không hợp lệ (hiện chỉ hỗ trợ COD hoặc VNPAY).", 400);
+    }
+    const paymentMethod = rawPaymentMethod;
 
     const cart = await cartModel.findByUserId(userId);
     if (!cart) {
@@ -103,25 +103,23 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         }
     }
 
-    let subtotal = 0;
-    let totalQuantity = 0;
-    const orderItems = [];
+    const { subtotal, totalQuantity, lineItems } = calculateSelectedItemsTotals(targetItems);
+    const orderItems = lineItems.map(({ bookId, quantity, total }) => ({ bookId, quantity, total }));
 
-    for (const item of targetItems) {
-        const qty = Math.max(1, Number(item.quantity) || 1);
-        const unitPrice = calculateItemPrice(item.price, item.discount);
-        const lineTotal = unitPrice * qty;
-
-        subtotal += lineTotal;
-        totalQuantity += qty;
-        orderItems.push({
-            bookId: item.book_id,
-            quantity: qty,
-            total: lineTotal
-        });
+    const shippingRule = await storePolicyService.getShippingPolicy();
+    const shippingFee = calculateShippingFee(subtotal, shippingRule);
+    if (
+        orderPayload.expectedShippingFee !== undefined &&
+        orderPayload.expectedShippingFee !== null &&
+        orderPayload.expectedShippingFee !== "" &&
+        Number(orderPayload.expectedShippingFee) !== shippingFee
+    ) {
+        const formattedFee = Number(shippingFee).toLocaleString("vi-VN");
+        throw new AppError(
+            `Phí vận chuyển vừa được cửa hàng cập nhật thành ${formattedFee}đ, vui lòng kiểm tra lại tổng thanh toán trước khi xác nhận đặt hàng.`,
+            409
+        );
     }
-
-    const shippingFee = calculateShippingFee(subtotal);
     let discountValue = 0;
     let appliedDiscountId = null;
     let appliedCouponCode = null;
@@ -134,7 +132,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         const promoResult = await discountService.validateAndCalculatePromotion({
             code: cleanCoupon,
             subtotal,
-            shippingFee
+            shippingRule
         });
         discountValue = promoResult.discountAmount;
         appliedDiscountId = promoResult.discount.id;
@@ -535,7 +533,7 @@ async function getAllOrdersForAdmin(filters = {}) {
     let parsedPaymentMethod = null;
     if (filters.paymentMethod && typeof filters.paymentMethod === "string") {
         const cleanPm = filters.paymentMethod.trim().toUpperCase();
-        if (!["COD", "VNPAY", "BANK"].includes(cleanPm)) {
+        if (!SUPPORTED_PAYMENT_METHODS.includes(cleanPm)) {
             throw new AppError("Phương thức thanh toán không hợp lệ.", 400);
         }
         parsedPaymentMethod = cleanPm;
@@ -647,7 +645,7 @@ async function reorder(orderId, userId) {
             continue;
         }
 
-        const unitPrice = calculateItemPrice(book.price, book.discount);
+        const unitPrice = calculateDiscountedUnitPrice(book.price, book.discount);
         const lineTotal = unitPrice * finalQty;
 
         itemsToAdd.push({
@@ -719,6 +717,10 @@ async function reorder(orderId, userId) {
     }
 }
 
+async function getShippingRule() {
+    return await storePolicyService.getShippingPolicy();
+}
+
 module.exports = {
     createOrderFromCart,
     cancelOrder,
@@ -732,7 +734,8 @@ module.exports = {
     processPaymentIPN: paymentService.processPaymentIPN,
     generatePaymentUrl: paymentService.generatePaymentUrl,
     verifyPaymentSignature: paymentService.verifyPaymentSignature,
-    calculateItemPrice,
+    getShippingRule,
+    calculateItemPrice: calculateDiscountedUnitPrice,
     calculateShippingFee,
     calculateDiscountValue: discountService.calculateDiscountValue,
     validatePhoneNumber,

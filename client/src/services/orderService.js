@@ -1,6 +1,7 @@
 import axiosClient from './axiosClient'
 
 const orderService = {
+  getShippingRule: () => axiosClient.get('/orders/shipping-rule'),
   createOrder: (data) => axiosClient.post('/orders', data),
   getPaymentUrl: (orderId, returnUrl) => axiosClient.post(`/orders/${orderId}/payment-url`, { returnUrl }),
   verifyPaymentReturn: (searchString) => {

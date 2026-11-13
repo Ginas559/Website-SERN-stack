@@ -1,5 +1,12 @@
-import { memo, useState, useEffect, useMemo } from 'react'
+import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import debounce from 'lodash.debounce'
+
+function formatShortUserId(id) {
+  const raw = String(id || '').trim()
+  if (!raw) return '—'
+  if (raw.length <= 14) return raw
+  return `${raw.slice(0, 6)}…${raw.slice(-4)}`
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -42,6 +49,8 @@ function AdminUserTable({
   const [prevSearch, setPrevSearch] = useState(search)
   const [sortBy, setSortBy] = useState('createdAt')
   const [sortOrder, setSortOrder] = useState('desc')
+  const [copiedUserId, setCopiedUserId] = useState(null)
+  const copyTimerRef = useRef(null)
 
   if (search !== prevSearch) {
     setPrevSearch(search)
@@ -59,8 +68,40 @@ function AdminUserTable({
   useEffect(() => {
     return () => {
       debouncedSearch.cancel()
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current)
+      }
     }
   }, [debouncedSearch])
+
+  const handleCopyUserId = async (userId) => {
+    const rawId = String(userId || '').trim()
+    if (!rawId) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(rawId)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = rawId
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      setCopiedUserId(rawId)
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current)
+      }
+      copyTimerRef.current = setTimeout(() => {
+        setCopiedUserId(null)
+      }, 1800)
+    } catch {
+      return
+    }
+  }
 
   const handleInputChange = (e) => {
     const val = e.target.value
@@ -253,17 +294,31 @@ function AdminUserTable({
               sortedUsers.map((user) => {
                 const isBlocked = Boolean(user.isDelete)
                 const isAdmin = Boolean(user.isAdmin)
+                const rawUserId = String(user.id || '').trim()
+                const isCopied = copiedUserId === rawUserId
 
                 return (
                   <tr key={user.id} className={isBlocked ? 'admin-row-muted' : ''}>
                     <td>
                       <div className="admin-user-cell">
-                        <div className="admin-user-avatar">
+                        <div className="admin-user-avatar-small">
                           {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
                         </div>
                         <div>
                           <div className="admin-user-name">{user.full_name || 'Chưa đặt tên'}</div>
-                          <div className="admin-user-id">#{user.id}</div>
+                          <div className="admin-user-id-row">
+                            <span className="admin-user-id-code" title={`#${rawUserId}`}>
+                              #{formatShortUserId(rawUserId)}
+                            </span>
+                            <button
+                              type="button"
+                              className={`admin-copy-id-btn ${isCopied ? 'copied' : ''}`}
+                              onClick={() => handleCopyUserId(rawUserId)}
+                              title={isCopied ? 'Đã sao chép ID đầy đủ' : `Sao chép ID đầy đủ: ${rawUserId}`}
+                            >
+                              {isCopied ? '✓ Đã chép' : '📋 Chép'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </td>

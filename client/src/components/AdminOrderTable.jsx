@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { getPaymentMethodLabel } from '../utils/pricing'
 
 const orderStatusLabels = {
   0: { label: 'Chờ xác nhận', color: '#f59e0b', bg: '#451a03' },
@@ -138,7 +139,6 @@ function AdminOrderTable({
             <option value="all">Tất cả phương thức</option>
             <option value="COD">COD (Tiền mặt)</option>
             <option value="VNPAY">VNPAY Sandbox</option>
-            <option value="BANK">Chuyển khoản</option>
           </select>
           <button
             type="button"
@@ -263,7 +263,7 @@ function AdminOrderTable({
                     </td>
                     <td>
                       <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>
-                        {order.payment_method === 'VNPAY' ? 'VNPAY' : order.payment_method === 'BANK' ? 'BANK' : 'COD'}
+                        {getPaymentMethodLabel(order.payment_method, 'compact')}
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -392,7 +392,7 @@ function AdminOrderTable({
                   <div className="admin-user-detail-field">
                     <span className="label">Phương thức thanh toán:</span>
                     <span className="value">
-                      {detailModalOrder.payment_method === 'VNPAY' ? 'VNPAY Sandbox' : detailModalOrder.payment_method === 'BANK' ? 'Chuyển khoản' : 'Thanh toán khi nhận hàng (COD)'}
+                      {getPaymentMethodLabel(detailModalOrder.payment_method, 'full')}
                     </span>
                   </div>
                   <div className="admin-user-detail-field">

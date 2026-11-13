@@ -17,8 +17,8 @@ async function getByCode(req, res) {
 }
 
 async function validateAndCalculate(req, res) {
-    const { code, subtotal, shippingFee } = req.body;
-    const result = await discountService.validateAndCalculatePromotion({ code, subtotal, shippingFee });
+    const { code, subtotal } = req.body;
+    const result = await discountService.validateAndCalculatePromotion({ code, subtotal });
     res.json(result);
 }
 

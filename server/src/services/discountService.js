@@ -1,5 +1,10 @@
 const discountModel = require("../models/discountModel");
+const storePolicyService = require("./storePolicyService");
 const AppError = require("../utils/AppError");
+const {
+    calculateShippingFee,
+    isShippingPromotion
+} = require("../utils/pricing");
 
 function formatDiscountResponse(discount) {
     if (!discount) return null;
@@ -255,7 +260,7 @@ function calculateDiscountValue(discount, subtotal) {
     return Math.max(0, Math.min(discountAmount, subtotal));
 }
 
-async function validateAndCalculatePromotion({ code, subtotal = 0, shippingFee = 0 }) {
+async function validateAndCalculatePromotion({ code, subtotal = 0, shippingRule = null }) {
     if (!code || typeof code !== "string" || !code.trim()) {
         throw new AppError("Vui lòng nhập mã khuyến mãi.", 400);
     }
@@ -265,7 +270,8 @@ async function validateAndCalculatePromotion({ code, subtotal = 0, shippingFee =
         throw new AppError("Tổng giá trị đơn hàng phải lớn hơn 0 để áp dụng mã khuyến mãi.", 400);
     }
 
-    const numShippingFee = Math.max(0, Number(shippingFee) || 0);
+    const activeShippingRule = shippingRule || await storePolicyService.getShippingPolicy();
+    const numShippingFee = calculateShippingFee(numSubtotal, activeShippingRule);
     const cleanCode = code.trim().toUpperCase();
 
     const discount = await discountModel.findByCode(cleanCode, { includeDeleted: false });
@@ -291,7 +297,18 @@ async function validateAndCalculatePromotion({ code, subtotal = 0, shippingFee =
         throw new AppError(`Đơn hàng phải từ ${formattedMin} đ để áp dụng mã khuyến mãi này.`, 400);
     }
 
-    const discountAmount = calculateDiscountValue(discount, numSubtotal);
+    let discountAmount = calculateDiscountValue(discount, numSubtotal);
+    if (isShippingPromotion(discount)) {
+        if (numShippingFee <= 0) {
+            if (activeShippingRule.standardFee === 0 || activeShippingRule.freeThreshold === 0) {
+                throw new AppError("Cửa hàng hiện đang miễn phí vận chuyển cho toàn bộ đơn hàng, không cần áp dụng mã hỗ trợ phí ship này.", 400);
+            }
+            const formattedThreshold = Number(activeShippingRule.freeThreshold).toLocaleString("vi-VN");
+            throw new AppError(`Đơn hàng đã đạt mức miễn phí vận chuyển (từ ${formattedThreshold}đ), không cần áp dụng mã hỗ trợ phí ship này.`, 400);
+        }
+        discountAmount = Math.min(discountAmount, numShippingFee);
+    }
+
     const finalTotal = Math.max(0, numSubtotal + numShippingFee - discountAmount);
 
     return {
@@ -299,6 +316,7 @@ async function validateAndCalculatePromotion({ code, subtotal = 0, shippingFee =
         discount: formatDiscountResponse(discount),
         subtotal: numSubtotal,
         shippingFee: numShippingFee,
+        shippingRule: activeShippingRule,
         discountAmount,
         finalTotal,
         message: "Áp dụng mã khuyến mãi thành công."

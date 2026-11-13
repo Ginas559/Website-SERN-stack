@@ -97,6 +97,8 @@ const initialState = {
   total: 0,
   totalQuantity: 0,
   loading: false,
+  hasLoaded: false,
+  fetchStatus: 'idle',
   error: null,
   validationResult: null,
 }
@@ -109,27 +111,38 @@ const cartSlice = createSlice({
       state.items = []
       state.total = 0
       state.totalQuantity = 0
+      state.loading = false
+      state.hasLoaded = false
+      state.fetchStatus = 'idle'
       state.error = null
       state.validationResult = null
     },
     setCartItems: (state, action) => {
       state.items = action.payload || []
     },
+    invalidateCart: (state) => {
+      state.hasLoaded = false
+      state.fetchStatus = 'idle'
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchCart.pending, (state) => {
         state.loading = true
+        state.fetchStatus = 'loading'
         state.error = null
       })
       .addCase(fetchCart.fulfilled, (state, action) => {
         state.loading = false
+        state.hasLoaded = true
+        state.fetchStatus = 'succeeded'
         state.items = action.payload?.items || []
         state.total = action.payload?.total || 0
         state.totalQuantity = action.payload?.totalQuantity || 0
       })
       .addCase(fetchCart.rejected, (state, action) => {
         state.loading = false
+        state.fetchStatus = 'failed'
         state.error = action.payload
       })
       .addCase(addToCart.pending, (state) => {
@@ -193,21 +206,25 @@ const cartSlice = createSlice({
       })
       .addCase(syncGuestCart.pending, (state) => {
         state.loading = true
+        state.fetchStatus = 'loading'
         state.error = null
       })
       .addCase(syncGuestCart.fulfilled, (state, action) => {
         state.loading = false
+        state.hasLoaded = true
+        state.fetchStatus = 'succeeded'
         state.items = action.payload?.items || []
         state.total = action.payload?.total || 0
         state.totalQuantity = action.payload?.totalQuantity || 0
       })
       .addCase(syncGuestCart.rejected, (state, action) => {
         state.loading = false
+        state.fetchStatus = 'failed'
         state.error = action.payload
       })
   },
 })
 
-export const { clearCartState, setCartItems } = cartSlice.actions
+export const { clearCartState, setCartItems, invalidateCart } = cartSlice.actions
 export default cartSlice.reducer
 

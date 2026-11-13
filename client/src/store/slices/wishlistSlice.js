@@ -79,6 +79,8 @@ const initialState = {
   items: [],
   totalItems: 0,
   loading: false,
+  hasLoaded: false,
+  fetchStatus: 'idle',
   error: null,
 }
 
@@ -90,6 +92,8 @@ const wishlistSlice = createSlice({
       state.items = []
       state.totalItems = 0
       state.loading = false
+      state.hasLoaded = false
+      state.fetchStatus = 'idle'
       state.error = null
     },
     setWishlistItems: (state, action) => {
@@ -101,15 +105,19 @@ const wishlistSlice = createSlice({
     builder
       .addCase(fetchWishlist.pending, (state) => {
         state.loading = true
+        state.fetchStatus = 'loading'
         state.error = null
       })
       .addCase(fetchWishlist.fulfilled, (state, action) => {
         state.loading = false
+        state.hasLoaded = true
+        state.fetchStatus = 'succeeded'
         state.items = action.payload?.items || []
         state.totalItems = action.payload?.totalItems || 0
       })
       .addCase(fetchWishlist.rejected, (state, action) => {
         state.loading = false
+        state.fetchStatus = 'failed'
         state.error = action.payload
       })
       .addCase(addToWishlist.pending, (state, action) => {
@@ -164,15 +172,19 @@ const wishlistSlice = createSlice({
       })
       .addCase(syncGuestWishlist.pending, (state) => {
         state.loading = true
+        state.fetchStatus = 'loading'
         state.error = null
       })
       .addCase(syncGuestWishlist.fulfilled, (state, action) => {
         state.loading = false
+        state.hasLoaded = true
+        state.fetchStatus = 'succeeded'
         state.items = action.payload?.items || []
         state.totalItems = action.payload?.totalItems || 0
       })
       .addCase(syncGuestWishlist.rejected, (state, action) => {
         state.loading = false
+        state.fetchStatus = 'failed'
         state.error = action.payload
       })
   },
