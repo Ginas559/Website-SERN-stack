@@ -54,7 +54,13 @@ function PaymentResult({
         }
       } catch (err) {
         if (isMounted) {
-          setErrorMessage(err.message || 'Xác thực thanh toán thất bại.')
+          const fallbackData = err?.response?.data?.data || err?.response?.data
+          if (fallbackData && (fallbackData.order || fallbackData.isSuccess !== undefined)) {
+            setPaymentData(fallbackData)
+            setErrorMessage(err.message || fallbackData.message || 'Xác thực thanh toán thất bại.')
+          } else {
+            setErrorMessage(err.message || 'Xác thực thanh toán thất bại.')
+          }
           setLoading(false)
         }
       }

@@ -220,7 +220,7 @@ function CheckoutPage({
             setAsDefaultAddress: saveAsDefaultAddress,
             saveAsDefaultAddress: saveAsDefaultAddress,
             expectedShippingFee: shippingFee,
-            selectedBookIds: items.map((it) => Number(it.book_id || it.id))
+            selectedBookIds: items.map((it) => Number(it.book_id || it.bookId || it.id))
         };
 
         orderService.createOrder(orderPayload)
@@ -239,8 +239,9 @@ function CheckoutPage({
                     }
                 }
 
-                if (paymentMethod === 'VNPAY' && createdOrder.pay_url) {
-                    window.location.href = createdOrder.pay_url;
+                const redirectPayUrl = createdOrder.pay_url || createdOrder.payUrl || createdOrder.paymentUrl;
+                if (paymentMethod === 'VNPAY' && redirectPayUrl) {
+                    window.location.href = redirectPayUrl;
                     return;
                 }
 

@@ -291,9 +291,9 @@ function CartPage({
         dispatch(validateCart())
             .unwrap()
             .then((res) => {
-                if (res && res.summary && res.summary.hasErrors) {
+                if (res && (res.isValid === false || (res.summary && res.summary.hasErrors))) {
                     dispatch(fetchCart());
-                    triggerToast('Một số sản phẩm trong giỏ có thay đổi tồn kho, vui lòng kiểm tra lại.', 'warning');
+                    triggerToast(res.message || 'Một số sản phẩm trong giỏ có thay đổi tồn kho, vui lòng kiểm tra lại.', 'warning');
                     return;
                 }
                 if (onCheckout) {
