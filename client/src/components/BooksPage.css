@@ -136,14 +136,22 @@
     width: 100%;
     height: 100%;
     margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    outline: none;
     background: transparent;
     pointer-events: none;
     -webkit-appearance: none;
     appearance: none;
 }
 
-.price-range-input:focus {
+.price-range-input:focus,
+.price-range-input:focus-visible {
     outline: none;
+    border: none;
+    box-shadow: none;
 }
 
 .price-range-input::-webkit-slider-runnable-track {

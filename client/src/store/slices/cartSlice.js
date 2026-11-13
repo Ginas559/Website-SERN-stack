@@ -79,7 +79,11 @@ export const syncGuestCart = createAsyncThunk(
             const bId = item.bookId || item.id
             const qty = Math.max(1, Number(item.quantity) || 1)
             if (bId) {
-              await cartService.addItem(bId, qty)
+              try {
+                await cartService.addItem(bId, qty)
+              } catch {
+                continue
+              }
             }
           }
         }

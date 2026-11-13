@@ -93,7 +93,10 @@ axiosClient.interceptors.response.use(
     if (status === 403 && typeof baseMessage === 'string' && (baseMessage.includes('bị khóa') || baseMessage.includes('khóa'))) {
       clearStoredAuth()
       dispatchAuthEvent('sern:account-blocked', { message: baseMessage })
-      return Promise.reject(new Error(formattedMessage))
+      const rejectionError = new Error(formattedMessage)
+      rejectionError.status = status
+      rejectionError.response = error.response
+      return Promise.reject(rejectionError)
     }
 
     if (status === 401 && isProtectedTokenFailure(error, baseMessage)) {
@@ -118,14 +121,20 @@ axiosClient.interceptors.response.use(
           } else {
             dispatchAuthEvent('sern:session-expired', { message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.' })
           }
-          return Promise.reject(new Error(refreshMsg))
+          const refreshErrObj = new Error(refreshMsg)
+          refreshErrObj.status = refreshStatus
+          refreshErrObj.response = refreshError.response
+          return Promise.reject(refreshErrObj)
         }
       }
       clearStoredAuth()
       dispatchAuthEvent('sern:session-expired', { message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.' })
     }
 
-    return Promise.reject(new Error(formattedMessage))
+    const rejectionError = new Error(formattedMessage)
+    rejectionError.status = status
+    rejectionError.response = error.response
+    return Promise.reject(rejectionError)
   }
 )
 

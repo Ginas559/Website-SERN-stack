@@ -50,24 +50,35 @@ export const clearWishlist = createAsyncThunk(
 
 export const syncGuestWishlist = createAsyncThunk(
   'wishlist/syncGuestWishlist',
-  async (guestItems, { rejectWithValue }) => {
+  async (itemsArg, { rejectWithValue }) => {
     try {
-      if (!Array.isArray(guestItems) || guestItems.length === 0) {
-        return await wishlistService.getWishlist()
-      }
-
-      for (const item of guestItems) {
-        const bookId = item.bookId || item.id
-        if (bookId) {
+      let itemsToSync = Array.isArray(itemsArg) ? itemsArg : null
+      if (!itemsToSync) {
+        const raw = localStorage.getItem('guestWishlist')
+        if (raw) {
           try {
-            await wishlistService.addItem(bookId)
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed)) itemsToSync = parsed
           } catch {
-            return
+            itemsToSync = []
           }
         }
       }
 
-      localStorage.removeItem('guestWishlist')
+      if (Array.isArray(itemsToSync) && itemsToSync.length > 0) {
+        for (const item of itemsToSync) {
+          const bookId = typeof item === 'number' ? item : (item.bookId || item.id)
+          if (bookId) {
+            try {
+              await wishlistService.addItem(bookId)
+            } catch {
+              continue
+            }
+          }
+        }
+        localStorage.removeItem('guestWishlist')
+      }
+
       return await wishlistService.getWishlist()
     } catch (error) {
       return rejectWithValue(error.message)
