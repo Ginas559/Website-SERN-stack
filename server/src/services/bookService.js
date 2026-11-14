@@ -20,6 +20,20 @@ function validateNumber(value, field, { min, max } = {}) {
     return number;
 }
 
+function normalizePagination(options = {}) {
+    const page = options.page === undefined ? 1 : Number(options.page);
+    const limit = options.limit === undefined ? 10 : Number(options.limit);
+
+    if (!Number.isFinite(page) || !Number.isInteger(page) || page <= 0) {
+        throw new AppError("Số trang không hợp lệ.", 400);
+    }
+    if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0 || limit > 100) {
+        throw new AppError("Số lượng mỗi trang phải là số nguyên từ 1 đến 100.", 400);
+    }
+
+    return { page, limit };
+}
+
 function validatePublicationDate(value) {
     if (value === null || value === undefined) return null;
     const isoDatePattern = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,7})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
@@ -188,19 +202,7 @@ async function getBookById(id) {
 }
 
 async function getClientBooks(options = {}) {
-    const page = options.page === undefined
-        ? 1
-        : Number(options.page);
-    const limit = options.limit === undefined
-        ? 10
-        : Number(options.limit);
-
-    if (!Number.isFinite(page) || !Number.isInteger(page) || page <= 0) {
-        throw new AppError("Số trang không hợp lệ.", 400);
-    }
-    if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0 || limit > 100) {
-        throw new AppError("Số lượng mỗi trang phải là số nguyên từ 1 đến 100.", 400);
-    }
+    const { page, limit } = normalizePagination(options);
 
     let minPrice = null;
     let maxPrice = null;
@@ -271,6 +273,66 @@ async function getClientBookDetail(id, relatedLimit = 4) {
     };
 }
 
+async function getAdminBooks(options = {}) {
+    const { page, limit } = normalizePagination(options);
+
+    let isDelete = null;
+    if (options.isDelete !== undefined && options.isDelete !== null && options.isDelete !== "") {
+        const parsedIsDelete = Number(options.isDelete);
+        if (parsedIsDelete === 0 || parsedIsDelete === 1) {
+            isDelete = parsedIsDelete;
+        } else {
+            throw new AppError("Trạng thái isDelete không hợp lệ.", 400);
+        }
+    }
+
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (options.minPrice !== undefined && options.minPrice !== null && options.minPrice !== "") {
+        minPrice = Number(options.minPrice);
+        if (Number.isNaN(minPrice) || minPrice < 0) {
+            throw new AppError("Giá tối thiểu không hợp lệ.", 400);
+        }
+    }
+
+    if (options.maxPrice !== undefined && options.maxPrice !== null && options.maxPrice !== "") {
+        maxPrice = Number(options.maxPrice);
+        if (Number.isNaN(maxPrice) || maxPrice < 0) {
+            throw new AppError("Giá tối đa không hợp lệ.", 400);
+        }
+    }
+
+    if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+        throw new AppError("Giá tối thiểu không được lớn hơn giá tối đa.", 400);
+    }
+
+    let categoryId = null;
+    if (options.categoryId !== undefined && options.categoryId !== null && options.categoryId !== "") {
+        categoryId = Number(options.categoryId);
+        if (Number.isNaN(categoryId) || !Number.isInteger(categoryId) || categoryId <= 0) {
+            throw new AppError("ID thể loại không hợp lệ.", 400);
+        }
+    }
+
+    const allowedSorts = ["newest", "oldest", "price_asc", "price_desc", "discount"];
+    const sort = allowedSorts.includes(options.sort) ? options.sort : "newest";
+
+    const search = typeof options.search === "string" ? options.search.trim() : "";
+
+    return await bookModel.findAll({
+        page,
+        limit,
+        search,
+        categoryId,
+        minPrice,
+        maxPrice,
+        sort,
+        includeDeleted: true,
+        isDelete,
+    });
+}
+
 module.exports = {
     createBook,
     updateBook,
@@ -278,4 +340,5 @@ module.exports = {
     getBookById,
     getClientBooks,
     getClientBookDetail,
+    getAdminBooks,
 };

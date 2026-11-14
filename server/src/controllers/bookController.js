@@ -30,6 +30,11 @@ async function getDetailClient(req, res) {
     res.json(book);
 }
 
+async function getAllAdmin(req, res) {
+    const result = await bookService.getAdminBooks(req.query);
+    res.json(result);
+}
+
 module.exports = {
     create,
     update,
@@ -37,4 +42,5 @@ module.exports = {
     getById,
     getAllClient,
     getDetailClient,
+    getAllAdmin,
 };
