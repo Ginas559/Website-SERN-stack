@@ -1,9 +1,10 @@
 import { useState, memo } from 'react'
 import { buildCircularSegments } from '../utils/chartGeometry'
+import { TagIcon, BookIcon, TicketIcon } from './common/Icons'
 import './AdminCatalogAnalyticsCharts.css'
 
 const CATEGORY_COLORS = [
-  '#e7b26a',
+  '#0088a9',
   '#3b82f6',
   '#10b981',
   '#a855f7',
@@ -210,7 +211,10 @@ function AdminCatalogAnalyticsCharts({
       <div className={`catalog-chart-card ${loading && safeCategories.length > 0 ? 'loading' : ''}`}>
         <div className="catalog-chart-header">
           <div className="catalog-chart-title-wrap">
-            <h3 className="catalog-chart-title">🏷️ Cơ Cấu Thể Loại Sách</h3>
+            <h3 className="catalog-chart-title">
+            <TagIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Cơ Cấu Thể Loại Sách</span>
+          </h3>
             <p className="catalog-chart-sub">
               Phân bổ thực tế theo {catMetric === 'revenue' ? 'doanh thu đã chốt' : 'số lượng đầu sách'}
             </p>
@@ -257,7 +261,7 @@ function AdminCatalogAnalyticsCharts({
                   cy="100"
                   r={donutRadius}
                   fill="none"
-                  stroke="#33302b"
+                  stroke="#e2e8f0"
                   strokeWidth="30"
                 />
                 {totalCatValue > 0 ? donutSegments.map((seg, idx) => (
@@ -331,7 +335,10 @@ function AdminCatalogAnalyticsCharts({
       <div className={`catalog-chart-card ${loading && safeTopBooks.length > 0 ? 'loading' : ''}`}>
         <div className="catalog-chart-header">
           <div className="catalog-chart-title-wrap">
-            <h3 className="catalog-chart-title">📚 Top Sách Bán Chạy & Kho Hàng</h3>
+            <h3 className="catalog-chart-title">
+            <BookIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Top Sách Bán Chạy &amp; Kho Hàng</span>
+          </h3>
             <p className="catalog-chart-sub">
               Biểu đồ cột ngang xếp hạng bán chạy & đồng hồ sức khỏe tồn kho
             </p>
@@ -450,7 +457,7 @@ function AdminCatalogAnalyticsCharts({
                       width={bookPlotW}
                       height={16}
                       rx={4}
-                      fill="#1a1917"
+                      fill="#f1f5f9"
                     />
                     <rect
                       x={bookPad.left}
@@ -483,7 +490,7 @@ function AdminCatalogAnalyticsCharts({
                 cy="104"
                 r={gaugeRadius}
                 fill="none"
-                stroke="#2e2b26"
+                stroke="#e2e8f0"
                 strokeWidth="18"
                 strokeDasharray={`${gaugeSemiCircumference} ${gaugeFullCircumference}`}
                 transform="rotate(180 110 104)"
@@ -556,7 +563,7 @@ function AdminCatalogAnalyticsCharts({
         <div className="review-visual-hero">
           <div className="review-ring-box">
             <svg viewBox="0 0 98 98" className="review-ring-svg">
-              <circle cx="49" cy="49" r={scoreRingRadius} fill="none" stroke="#33302b" strokeWidth="8" />
+              <circle cx="49" cy="49" r={scoreRingRadius} fill="none" stroke="#e2e8f0" strokeWidth="8" />
               <circle
                 cx="49"
                 cy="49"
@@ -576,7 +583,7 @@ function AdminCatalogAnalyticsCharts({
 
           <div className="review-split-donut-box">
             <svg viewBox="0 0 84 84" className="review-split-svg" onMouseLeave={() => setHoverReviewSlice(null)}>
-              <circle cx="42" cy="42" r={miniSplitRadius} fill="none" stroke="#33302b" strokeWidth="16" />
+              <circle cx="42" cy="42" r={miniSplitRadius} fill="none" stroke="#e2e8f0" strokeWidth="16" />
               {resolvedTotalPosts > 0 ? reviewSplitSlices.map((sl) => (
                 sl.segLen > 0 ? (
                   <circle
@@ -650,7 +657,7 @@ function AdminCatalogAnalyticsCharts({
                   width={starPlotW}
                   height={14}
                   rx={4}
-                  fill="#1a1917"
+                  fill="#f1f5f9"
                 />
                 {fillW > 0 ? (
                   <rect
@@ -685,7 +692,10 @@ function AdminCatalogAnalyticsCharts({
       <div className={`catalog-chart-card ${loading && topPromotions.length > 0 ? 'loading' : ''}`}>
         <div className="catalog-chart-header">
           <div className="catalog-chart-title-wrap">
-            <h3 className="catalog-chart-title">🎟️ Hiệu Quả Khuyến Mãi & Voucher</h3>
+            <h3 className="catalog-chart-title">
+            <TicketIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Hiệu Quả Khuyến Mãi &amp; Voucher</span>
+          </h3>
             <p className="catalog-chart-sub">
               Đang chạy {promotionsOverview.active || 0}/{promotionsOverview.total || 0} mã · Tổng {promotionsOverview.totalUsed || 0} lượt áp dụng
             </p>
@@ -704,7 +714,7 @@ function AdminCatalogAnalyticsCharts({
         <div className="promo-radial-hero">
           <div className="promo-ring-box">
             <svg viewBox="0 0 92 92" className="promo-ring-svg">
-              <circle cx="46" cy="46" r={promoRingRadius} fill="none" stroke="#33302b" strokeWidth="9" />
+              <circle cx="46" cy="46" r={promoRingRadius} fill="none" stroke="#e2e8f0" strokeWidth="9" />
               <circle
                 cx="46"
                 cy="46"
@@ -718,13 +728,13 @@ function AdminCatalogAnalyticsCharts({
               />
             </svg>
             <div className="promo-ring-center">
-              <strong style={{ color: '#e7b26a', fontSize: '1.02rem' }}>{promoAdoption.promoRate || 0}%</strong>
+              <strong style={{ color: '#0088a9', fontSize: '1.02rem' }}>{promoAdoption.promoRate || 0}%</strong>
             </div>
           </div>
 
           <div className="promo-hero-details">
             <div className="promo-adoption-top">
-              <span style={{ color: '#d6cfc5' }}>
+              <span style={{ color: '#64748b' }}>
                 Đơn áp mã kỳ lọc: <strong style={{ color: '#10b981' }}>{promoAdoption.ordersWithPromo || 0}</strong> / {promoAdoption.totalOrders || 0} đơn
               </span>
             </div>
@@ -740,7 +750,10 @@ function AdminCatalogAnalyticsCharts({
         ) : topPromotions.length === 0 ? (
           <div className="catalog-empty-placeholder">Chưa có chương trình khuyến mãi nào</div>
         ) : (
-          <div className="promo-chart-area">
+          <div
+            className="promo-chart-area"
+            onMouseLeave={() => setHoverPromoIdx(null)}
+          >
             <div className={`catalog-detail-strip ${hoveredPromo ? 'active' : ''}`}>
               {hoveredPromo ? (
                 <>
@@ -757,7 +770,6 @@ function AdminCatalogAnalyticsCharts({
             <svg
               viewBox={`0 0 ${promoSvgW} ${promoSvgH}`}
               className="promo-cols-svg"
-              onMouseLeave={() => setHoverPromoIdx(null)}
             >
               {[0, 0.5, 1].map((ratio) => {
                 const y = promoPad.top + promoPlotH * (1 - ratio)
@@ -787,18 +799,7 @@ function AdminCatalogAnalyticsCharts({
                 const baseBottom = promoPad.top + promoPlotH
                 const yFill = baseBottom - fillH
                 return (
-                  <g
-                    key={promo.id}
-                    className="promo-svg-col-group"
-                    onMouseEnter={() => setHoverPromoIdx(idx)}
-                  >
-                    <rect
-                      x={promoPad.left + promoColSlot * idx}
-                      y={promoPad.top}
-                      width={promoColSlot}
-                      height={promoPlotH}
-                      fill={hoverPromoIdx === idx ? 'rgba(231, 178, 106, 0.06)' : 'transparent'}
-                    />
+                  <g key={promo.id} className="promo-svg-col-group">
                     {fillH > 0 ? (
                       <rect
                         x={colX}
@@ -808,6 +809,7 @@ function AdminCatalogAnalyticsCharts({
                         rx={6}
                         fill={statusMeta.color}
                         style={{ opacity: hoverPromoIdx !== null && hoverPromoIdx !== idx ? 0.55 : 0.94 }}
+                        className="promo-col-bar"
                       />
                     ) : null}
                     <text
@@ -818,6 +820,15 @@ function AdminCatalogAnalyticsCharts({
                     >
                       {promo.usedCount}/{promo.quantity}
                     </text>
+                    <rect
+                      x={promoPad.left + promoColSlot * idx}
+                      y={0}
+                      width={promoColSlot}
+                      height={promoSvgH}
+                      fill={hoverPromoIdx === idx ? 'rgba(0, 136, 169, 0.08)' : 'transparent'}
+                      className="promo-col-hover-hitbox"
+                      onMouseEnter={() => setHoverPromoIdx(idx)}
+                    />
                   </g>
                 )
               })}
@@ -841,7 +852,6 @@ function AdminCatalogAnalyticsCharts({
                     key={promo.id}
                     className={`promo-aligned-col-label ${hoverPromoIdx === idx ? 'active' : ''}`}
                     onMouseEnter={() => setHoverPromoIdx(idx)}
-                    onMouseLeave={() => setHoverPromoIdx(null)}
                   >
                     <span className="promo-code-tag">{promo.code}</span>
                     <div className="promo-sub-meta">

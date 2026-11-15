@@ -5,8 +5,8 @@
 }
 
 .catalog-chart-card {
-  background: #23211d;
-  border: 1px solid #383530;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 20px 22px;
   display: flex;
@@ -39,7 +39,7 @@
   margin: 0;
   font-size: 1.02rem;
   font-weight: 700;
-  color: #fffaf1;
+  color: #0f172a;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -48,7 +48,7 @@
 .catalog-chart-sub {
   margin: 0;
   font-size: 0.78rem;
-  color: #8c857b;
+  color: #64748b;
 }
 
 .catalog-chart-actions {
@@ -102,7 +102,7 @@
 
 .catalog-donut-center-label {
   font-size: 0.72rem;
-  color: #a8a29e;
+  color: #64748b;
   max-width: 110px;
   white-space: nowrap;
   overflow: hidden;
@@ -112,14 +112,14 @@
 .catalog-donut-center-val {
   font-size: 1rem;
   font-weight: 800;
-  color: #fffaf1;
+  color: #0f172a;
   margin-top: 2px;
 }
 
 .catalog-donut-center-pct {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #e7b26a;
+  color: #0088a9;
   margin-top: 1px;
 }
 
@@ -137,15 +137,15 @@
   gap: 10px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: #1a1917;
+  background: #ffffff;
   border: 1px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .catalog-legend-row.active {
-  border-color: #e7b26a;
-  background: #2b2720;
+  border-color: #0088a9;
+  background: #f8fafc;
 }
 
 .catalog-legend-left {
@@ -165,7 +165,7 @@
 .catalog-legend-name {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #f3eadb;
+  color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -180,12 +180,12 @@
 }
 
 .catalog-legend-metric {
-  color: #a8a29e;
+  color: #64748b;
 }
 
 .catalog-legend-pct {
   font-weight: 700;
-  color: #e7b26a;
+  color: #0088a9;
   min-width: 40px;
   text-align: right;
 }
@@ -209,28 +209,30 @@
 
 .catalog-detail-strip {
   height: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   padding: 0 12px;
   border-radius: 8px;
-  background: #1a1917;
-  border: 1px solid #2e2b26;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   font-size: 0.76rem;
-  color: #8c857b;
+  color: #64748b;
   overflow: hidden;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .catalog-detail-strip.active {
-  background: rgba(231, 178, 106, 0.1);
-  border-color: rgba(231, 178, 106, 0.35);
-  color: #f3eadb;
+  background: #f0fdfa;
+  border-color: #0088a9;
+  color: #0f172a;
 }
 
 .catalog-detail-title {
-  color: #e7b26a;
+  color: #0088a9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -239,7 +241,7 @@
 .catalog-detail-meta {
   white-space: nowrap;
   flex-shrink: 0;
-  color: #d6cfc5;
+  color: #64748b;
 }
 
 .catalog-detail-hint {
@@ -258,13 +260,13 @@
 }
 
 .catalog-svg-label {
-  fill: #f3eadb;
+  fill: #0f172a;
   font-size: 11.5px;
   font-weight: 600;
 }
 
 .catalog-svg-val {
-  fill: #e7b26a;
+  fill: #0088a9;
   font-size: 11px;
   font-weight: 700;
 }
@@ -276,8 +278,8 @@
   gap: 16px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: #1a1917;
-  border: 1px solid #33302b;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   margin-top: auto;
 }
 
@@ -298,13 +300,13 @@
 }
 
 .stock-gauge-main {
-  fill: #fffaf1;
+  fill: #0f172a;
   font-size: 15px;
   font-weight: 800;
 }
 
 .stock-gauge-sub {
-  fill: #a8a29e;
+  fill: #64748b;
   font-size: 10.5px;
 }
 
@@ -318,7 +320,7 @@
 .stock-gauge-title {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #d6cfc5;
+  color: #64748b;
 }
 
 .inventory-health-legend {
@@ -326,7 +328,7 @@
   flex-wrap: wrap;
   gap: 14px;
   font-size: 0.75rem;
-  color: #c2b9ac;
+  color: #64748b;
 }
 
 .inventory-health-legend.vertical {
@@ -345,8 +347,8 @@
   gap: 16px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: #1a1917;
-  border: 1px solid #33302b;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
 }
 
 .review-ring-box {
@@ -396,7 +398,7 @@
   flex-direction: column;
   gap: 6px;
   font-size: 0.76rem;
-  color: #c2b9ac;
+  color: #64748b;
 }
 
 .review-split-legend span {
@@ -407,7 +409,7 @@
 
 .review-split-legend span.highlighted {
   background: rgba(231, 178, 106, 0.14);
-  color: #fffaf1;
+  color: #0f172a;
 }
 
 .rating-svg-star {
@@ -416,7 +418,7 @@
 }
 
 .rating-svg-count {
-  fill: #c2b9ac;
+  fill: #64748b;
   font-size: 11px;
   font-weight: 600;
 }
@@ -434,10 +436,10 @@
   gap: 6px;
   padding: 5px 10px;
   border-radius: 999px;
-  background: #1a1917;
-  border: 1px solid #383530;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   font-size: 0.75rem;
-  color: #f3eadb;
+  color: #0f172a;
   max-width: 100%;
 }
 
@@ -454,8 +456,8 @@
   gap: 14px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: #1a1917;
-  border: 1px solid #33302b;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
 }
 
 .promo-ring-box {
@@ -495,7 +497,7 @@
   flex-wrap: wrap;
   gap: 12px;
   font-size: 0.75rem;
-  color: #c2b9ac;
+  color: #64748b;
 }
 
 .promo-chart-area {
@@ -509,9 +511,19 @@
 }
 
 .promo-col-ratio {
-  fill: #d6cfc5;
+  fill: #64748b;
   font-size: 10.5px;
   font-weight: 700;
+  pointer-events: none;
+}
+
+.promo-col-bar {
+  pointer-events: none;
+}
+
+.promo-col-hover-hitbox {
+  pointer-events: all;
+  cursor: pointer;
 }
 
 .promo-cols-aligned-tags {
@@ -526,15 +538,21 @@
   gap: 4px;
   padding: 5px 4px;
   border-radius: 8px;
-  background: #1a1917;
-  border: 1px solid #2e2b26;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   cursor: pointer;
   min-width: 0;
-  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .promo-aligned-col-label.active {
-  border-color: #e7b26a;
+  border-color: #0088a9;
+  background-color: #f0fdfa;
+}
+
+.promo-aligned-col-label * {
+  pointer-events: none;
 }
 
 .promo-sub-meta {
@@ -549,8 +567,8 @@
   font-family: monospace;
   font-weight: 800;
   font-size: 0.82rem;
-  color: #e7b26a;
-  background: rgba(231, 178, 106, 0.12);
+  color: #0088a9;
+  background: #e6f4f8;
   padding: 2px 7px;
   border-radius: 6px;
 }
@@ -569,23 +587,27 @@
 }
 
 .promo-status-chip.active {
-  background: #064e3b;
-  color: #34d399;
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
 }
 
 .promo-status-chip.scheduled {
-  background: #1e3a8a;
-  color: #93c5fd;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
 .promo-status-chip.exhausted {
-  background: #431407;
-  color: #fb923c;
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
 }
 
 .promo-status-chip.expired {
-  background: #374151;
-  color: #9ca3af;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
 }
 
 .catalog-empty-placeholder {
@@ -593,7 +615,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8c857b;
+  color: #64748b;
   font-size: 0.86rem;
 }
 

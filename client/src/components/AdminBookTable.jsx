@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { RefreshIcon } from './common/Icons'
 
 function AdminBookTable({
   books = [],
@@ -103,7 +104,8 @@ function AdminBookTable({
             onClick={handleResetFilters}
             title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
         <button type="button" className="admin-btn-primary" onClick={onOpenCreate}>
