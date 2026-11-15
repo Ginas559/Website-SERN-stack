@@ -18,6 +18,7 @@ const adminStorePolicyRoutes = require("./routes/adminStorePolicyRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const statisticsRoutes = require("./routes/statisticsRoutes");
+const shippingRoutes = require("./routes/shippingRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/api/payment", orderRoutes);
 app.use("/api/books", clientBookRoutes);
 app.use("/api/categories", clientCategoryRoutes);
 app.use("/api/discounts", discountRoutes);
+app.use("/api/shipping", shippingRoutes);
 app.use("/api", reviewRoutes);
 app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
 app.use(errorHandler);

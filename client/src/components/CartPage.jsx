@@ -24,8 +24,16 @@ function cleanCartData(rawList) {
         if (!id || seen.has(id)) continue;
         seen.add(id);
 
-        const stock = Math.max(0, Number(it.stock ?? it.quantityInStock ?? 999));
-        const safeQuantity = stock > 0 
+        const rawStock = Number(
+            it.stockQuantity ?? 
+            it.stock ?? 
+            it.quantityInStock ?? 
+            it.quantity ?? 
+            0
+        );
+        const stock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(it.isDeleted || it.book_is_deleted || it.isDelete);
+        const safeQuantity = stock > 0 && !isDeleted 
             ? Math.max(1, Math.min(stock, Number(it.quantity) || 1)) 
             : 0;
 
@@ -38,7 +46,9 @@ function cleanCartData(rawList) {
             price: Math.max(0, Number(it.price) || 0),
             discount: Math.max(0, Math.min(100, Number(it.discount) || 0)),
             quantity: safeQuantity,
-            stock
+            stock,
+            stockQuantity: stock,
+            isDeleted
         });
     }
 
@@ -127,8 +137,8 @@ function CartPage({
 
     const handleToggleSelect = (itemId) => {
         const item = items.find((it) => (it.bookId || it.id) === itemId);
-        if (item && item.stock <= 0) {
-            triggerToast('Sản phẩm này tạm thời hết hàng, không thể chọn mua.', 'warning');
+        if (item && (item.stock <= 0 || item.isDeleted)) {
+            triggerToast(item.isDeleted ? 'Sản phẩm này đã ngừng kinh doanh, không thể chọn mua.' : 'Sản phẩm này tạm thời hết hàng, không thể chọn mua.', 'warning');
             return;
         }
 

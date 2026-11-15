@@ -22,9 +22,10 @@ export default function Header({
     }
   }
 
-  const accountDisplayLabel = user?.fullName
-    ? (user.fullName.length > 12 ? 'Tài khoản' : user.fullName)
-    : (user?.username || 'Tài khoản')
+  const rawName = user?.fullName || user?.full_name || user?.username || ''
+  const accountDisplayLabel = rawName
+    ? (rawName.length > 12 ? (user?.username || 'Tài khoản') : rawName)
+    : 'Tài khoản'
 
   return (
     <header className="lumina-header-root">

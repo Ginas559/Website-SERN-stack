@@ -250,8 +250,14 @@ function AdminPromotionTable({
               sortedPromotions.map((promo) => {
                 const status = getPromotionStatus(promo)
                 const isHidden = Boolean(promo.isDelete)
-                const isPercent = promo.discount_type === 'PERCENT'
+                const isPercent = (promo.discount_type || promo.discountType) === 'PERCENT'
                 const discountDisplay = isPercent ? `${promo.value}%` : formatCurrency(promo.value)
+                const minOrder = promo.minimumOrderValue ?? promo.minimum_order_value ?? 0
+                const maxDiscount = promo.maxDiscountValue ?? promo.max_discount_value ?? null
+                const usedCount = Number(promo.usedCount ?? promo.used_count ?? 0)
+                const totalQty = Math.max(1, Number(promo.quantity ?? 1))
+                const startDate = promo.startDate ?? promo.start_date
+                const expiredAt = promo.expiredAt ?? promo.expired_at
 
                 return (
                   <tr key={promo.id} className={isHidden ? 'admin-row-muted' : ''}>
@@ -279,33 +285,33 @@ function AdminPromotionTable({
                     </td>
                     <td>
                       <div className="admin-promo-condition">
-                        Đơn từ: <strong>{formatCurrency(promo.minimumOrderValue)}</strong>
+                        Đơn từ: <strong>{formatCurrency(minOrder)}</strong>
                       </div>
-                      {isPercent && promo.maxDiscountValue && (
+                      {isPercent && maxDiscount && (
                         <div className="admin-promo-condition">
-                          Tối đa: <strong>{formatCurrency(promo.maxDiscountValue)}</strong>
+                          Tối đa: <strong>{formatCurrency(maxDiscount)}</strong>
                         </div>
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div className="admin-promo-usage">
-                        <span className="admin-promo-used-count">{promo.usedCount}</span> / {promo.quantity}
+                        <span className="admin-promo-used-count">{usedCount}</span> / {totalQty}
                       </div>
                       <div className="admin-progress-bar-bg">
                         <div
                           className="admin-progress-bar-fill"
                           style={{
-                            width: `${Math.min(100, Math.round((promo.usedCount / promo.quantity) * 100))}%`,
+                            width: `${Math.min(100, Math.round((usedCount / totalQty) * 100))}%`,
                           }}
                         />
                       </div>
                     </td>
                     <td>
                       <div className="admin-promo-date">
-                        Từ: {formatDate(promo.startDate)}
+                        Từ: {formatDate(startDate)}
                       </div>
                       <div className="admin-promo-date">
-                        Đến: {formatDate(promo.expiredAt)}
+                        Đến: {formatDate(expiredAt)}
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>

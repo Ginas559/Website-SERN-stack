@@ -10,8 +10,14 @@ function CartTable({
     onClearCart 
 }) {
     const availableItems = items.filter((it) => {
-        const stock = Number(it.stock ?? it.quantityInStock ?? 999);
-        return stock > 0;
+        const rawStock = Number(
+            it.stockQuantity ?? 
+            it.stock ?? 
+            it.quantityInStock ?? 
+            it.quantity ?? 
+            0
+        );
+        return rawStock > 0 && !it.isDeleted;
     });
 
     const isAllSelected = availableItems.length > 0 && availableItems.every((it) => 

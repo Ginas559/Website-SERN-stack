@@ -4,6 +4,7 @@ import orderService from '../services/orderService'
 import reviewService, { getMyReviewedBookIds } from '../services/reviewService'
 import { fetchCart } from '../store/slices/cartSlice'
 import { invalidateBooks } from '../store/slices/bookSlice'
+import shippingService from '../services/shippingService'
 import { getPaymentMethodLabel } from '../utils/pricing'
 import './OrderHistory.css'
 
@@ -28,12 +29,77 @@ function formatDate(dateStr) {
   }
 }
 
+function parseOrderTime(dateStr) {
+  if (!dateStr) return 0
+  const raw = String(dateStr).trim()
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/)
+  if (match) {
+    const [, year, month, day, hours, minutes, seconds] = match
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds)).getTime()
+  }
+  return new Date(raw).getTime()
+}
+
 const statusConfig = {
   0: { label: 'Chờ xác nhận', class: 'status-0' },
   1: { label: 'Đã thanh toán', class: 'status-1' },
   2: { label: 'Đang giao hàng', class: 'status-2' },
   3: { label: 'Hoàn thành', class: 'status-3' },
   4: { label: 'Đã hủy', class: 'status-4' },
+}
+
+function VnpayCountdown({ createdAt, onExpire }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (!createdAt) return 0
+    const createdTime = parseOrderTime(createdAt)
+    if (!createdTime || Number.isNaN(createdTime)) return 0
+    return Math.max(0, Math.floor((createdTime + 15 * 60 * 1000 - Date.now()) / 1000))
+  })
+
+  useEffect(() => {
+    if (!createdAt) return undefined
+    const createdTime = parseOrderTime(createdAt)
+    if (!createdTime || Number.isNaN(createdTime)) return undefined
+    const expiryTime = createdTime + 15 * 60 * 1000
+
+    if (expiryTime <= Date.now()) {
+      if (onExpire) {
+        onExpire()
+      }
+      return undefined
+    }
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.floor((expiryTime - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+      if (remaining <= 0) {
+        clearInterval(interval)
+        if (onExpire) {
+          onExpire()
+        }
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [createdAt, onExpire])
+
+  if (secondsLeft <= 0) {
+    return (
+      <span className="vnpay-countdown-badge expired" title="Thời hạn 15 phút thanh toán đã hết. Đơn hàng đang được tự động hủy và hoàn trả kho.">
+        ⏱️ Hết hạn thanh toán
+      </span>
+    )
+  }
+
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = secondsLeft % 60
+  const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+
+  return (
+    <span className="vnpay-countdown-badge active" title="Đơn hàng sẽ tự động hủy nếu không thanh toán trong vòng 15 phút kể từ lúc đặt">
+      <span className="countdown-pulse-dot" />
+      ⏱️ Hạn thanh toán: <strong>{formatted}</strong>
+    </span>
+  )
 }
 
 function OrderHistoryPage({
@@ -50,6 +116,12 @@ function OrderHistoryPage({
   const [statusFilter, setStatusFilter] = useState('all')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [reviewedBookIds, setReviewedBookIds] = useState(new Set())
+  const [expiredOrderIds, setExpiredOrderIds] = useState(new Set())
+
+  const handleOrderExpired = useCallback((orderId) => {
+    setExpiredOrderIds((prev) => new Set([...prev, orderId]))
+    setRefreshTrigger((prev) => prev + 1)
+  }, [])
 
   const navigate = (url) => {
     try {
@@ -118,6 +190,45 @@ function OrderHistoryPage({
   const [cancelModalOrder, setCancelModalOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
+
+  const [expandedTrackerIds, setExpandedTrackerIds] = useState(new Set())
+  const [copiedGhnCode, setCopiedGhnCode] = useState(null)
+
+  const toggleTracker = useCallback((order) => {
+    const orderId = typeof order === 'object' && order ? order.id : order
+    setExpandedTrackerIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(orderId)) {
+        next.delete(orderId)
+      } else {
+        next.add(orderId)
+        if (typeof order === 'object' && Number(order?.status) === 2 && order.ghn_code && !order.ghn_code.startsWith('GHN_')) {
+          shippingService.trackOrder(order.ghn_code)
+            .then((res) => {
+              const trackingData = res?.data || res
+              if (trackingData?.status === 'delivered') {
+                setRefreshTrigger((p) => p + 1)
+              }
+            })
+            .catch(() => {})
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const handleCopyGhnCode = useCallback((code) => {
+    if (!code) return
+    const markDone = () => {
+      setCopiedGhnCode(code)
+      setTimeout(() => setCopiedGhnCode(null), 2000)
+    }
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(code).then(markDone).catch(markDone)
+    } else {
+      markDone()
+    }
+  }, [])
 
   const [toast, setToast] = useState(null)
   const [copiedOrderId, setCopiedOrderId] = useState(null)
@@ -211,7 +322,7 @@ function OrderHistoryPage({
     if (!cancelModalOrder) return
     setIsCancelling(true)
     try {
-      await orderService.cancelOrder(cancelModalOrder.id, cancelReason)
+      await orderService.cancelOrder(cancelModalOrder.id, cancelReason, cancelModalOrder.status)
       dispatch(invalidateBooks())
       showToast('Hủy đơn hàng thành công.', 'success')
       handleCloseCancelModal()
@@ -340,6 +451,82 @@ function OrderHistoryPage({
                 ? (() => { try { return JSON.parse(order.ghn_info) } catch { return {} } })()
                 : (order.ghn_info || {})
               const items = Array.isArray(order.items) ? order.items : []
+              const rawAddress = String(order.shippingAddress || order.shipping_address || order.address || ghnInfo.address || ghnInfo.shippingAddress || '')
+              const addressLower = rawAddress.toLowerCase()
+              const isHcmAddress = addressLower.includes('hồ chí minh') || addressLower.includes('tp.hcm') || addressLower.includes('tphcm') || addressLower.includes('hcm') || addressLower.includes('thủ đức') || addressLower.includes('sài gòn')
+              const isGhn = Boolean(order.ghn_code || ghnInfo.ghnCode || ghnInfo.deliveryType === 'GHN' || (!isHcmAddress && rawAddress.trim().length > 5))
+              const ghnCode = order.ghn_code || ghnInfo.ghnCode || null
+              const statusNum = Number(order.status)
+              const isExpanded = expandedTrackerIds.has(order.id)
+
+              const isOrderExpired = expiredOrderIds.has(order.id)
+
+              const outOfStockItems = items.filter((it) => {
+                const stock = Number(it.stock_quantity ?? it.stock)
+                const isDeleted = Boolean(it.book_is_deleted || it.isDelete)
+                return isDeleted || (Number.isFinite(stock) && stock <= 0)
+              })
+              const isAllOutOfStock = items.length > 0 && outOfStockItems.length === items.length
+              const hasPartialOutOfStock = outOfStockItems.length > 0 && !isAllOutOfStock
+
+              const cancelReasonText = ghnInfo.cancelReason
+                ? `Lý do: ${ghnInfo.cancelReason.charAt(0).toUpperCase() + ghnInfo.cancelReason.slice(1)}`
+                : 'Đơn hàng đã hủy'
+
+              const trackerSteps = statusNum === 4
+                ? [
+                    { key: 'created', label: 'Đặt hàng', sub: formatDate(order.createdAt), done: true },
+                    { key: 'packed', label: 'Đóng gói', sub: 'Đã dừng xử lý', cancelled: true },
+                    { key: 'shipping', label: 'Vận chuyển', sub: 'Đã hủy đơn', cancelled: true },
+                    { key: 'delivered', label: 'Đã hủy', sub: cancelReasonText, cancelled: true }
+                  ]
+                : isGhn
+                  ? [
+                      { key: 'created', label: 'Đặt hàng', sub: formatDate(order.createdAt), done: true },
+                      {
+                        key: 'packed',
+                        label: 'Đóng gói',
+                        sub: statusNum >= 2 ? 'Đã giao cho GHN' : statusNum === 1 ? 'Kho đang chuẩn bị sách' : order.payment_method === 'VNPAY' ? 'Chờ thanh toán VNPAY' : 'Chờ shop xác nhận',
+                        done: statusNum >= 2,
+                        active: statusNum === 1 || statusNum === 0
+                      },
+                      {
+                        key: 'shipping',
+                        label: 'Vận chuyển',
+                        sub: statusNum === 3 ? 'Giao thành công' : statusNum === 2 ? 'GHN đang vận chuyển' : 'GHN Express',
+                        done: statusNum === 3,
+                        active: statusNum === 2
+                      },
+                      {
+                        key: 'delivered',
+                        label: 'Đã nhận',
+                        sub: statusNum === 3 ? 'Giao thành công' : (ghnInfo.estimatedDelivery || '2 - 4 ngày làm việc'),
+                        done: statusNum === 3
+                      }
+                    ]
+                  : [
+                      { key: 'created', label: 'Đặt hàng', sub: formatDate(order.createdAt), done: true },
+                      {
+                        key: 'packed',
+                        label: 'Đóng gói',
+                        sub: statusNum >= 2 ? 'Đã xuất kho Thủ Đức' : statusNum === 1 ? 'Shop đang soạn sách' : order.payment_method === 'VNPAY' ? 'Chờ thanh toán VNPAY' : 'Chờ shop xác nhận',
+                        done: statusNum >= 2,
+                        active: statusNum === 1 || statusNum === 0
+                      },
+                      {
+                        key: 'shipping',
+                        label: 'Đang giao',
+                        sub: statusNum === 3 ? 'Đã giao tận tay' : statusNum === 2 ? 'Shipper đang giao xe máy' : 'Shop Shipper 24h',
+                        done: statusNum === 3,
+                        active: statusNum === 2
+                      },
+                      {
+                        key: 'delivered',
+                        label: 'Đã nhận',
+                        sub: statusNum === 3 ? 'Giao thành công' : 'Trong vòng 24 giờ',
+                        done: statusNum === 3
+                      }
+                    ]
 
               return (
                 <div key={order.id} className="order-card-item">
@@ -357,8 +544,14 @@ function OrderHistoryPage({
                       <span className="order-date-text">{formatDate(order.createdAt)}</span>
                     </div>
                     <div className="order-status-wrap">
+                      {statusNum === 0 && order.payment_method === 'VNPAY' && (
+                        <VnpayCountdown
+                          createdAt={order.createdAt}
+                          onExpire={() => handleOrderExpired(order.id)}
+                        />
+                      )}
                       <span className={`order-status-tag ${statusInfo.class}`}>
-                        {statusInfo.label}
+                        {isOrderExpired ? 'Đang hủy (Hết hạn)' : statusInfo.label}
                       </span>
                     </div>
                   </div>
@@ -388,6 +581,20 @@ function OrderHistoryPage({
                               <span className="order-item-qty">Số lượng: <strong>x{it.quantity}</strong></span>
                               <span className="order-item-dot">•</span>
                               <span className="order-item-unit-price">Đơn giá: {formatCurrency(unitPrice)}</span>
+                              {(() => {
+                                const stock = Number(it.stock_quantity ?? it.stock)
+                                const isDeleted = Boolean(it.book_is_deleted || it.isDelete)
+                                if (isDeleted) {
+                                  return <span className="order-stock-badge deleted">Ngừng kinh doanh</span>
+                                }
+                                if (Number.isFinite(stock) && stock <= 0) {
+                                  return <span className="order-stock-badge out">Hết hàng</span>
+                                }
+                                if (Number.isFinite(stock) && stock <= 5) {
+                                  return <span className="order-stock-badge low">Chỉ còn {stock} cuốn</span>
+                                }
+                                return null
+                              })()}
                             </div>
                             {order.status === 3 && (() => {
                               const hasReviewed = reviewedBookIds.has(Number(bookId)) || Boolean(it.isReviewed)
@@ -433,6 +640,117 @@ function OrderHistoryPage({
                     })}
                   </div>
 
+                  <div className="order-inline-tracker">
+                    <div className="tracker-header">
+                      <div className="tracker-channel-badge">
+                        {isGhn ? (
+                          <span className="channel-tag ghn">
+                            📦 <strong>GHN Express (Liên tỉnh)</strong>
+                            {ghnCode && (
+                              <span className="tracking-code-chip">
+                                Mã: <strong>{ghnCode}</strong>
+                                <button
+                                  type="button"
+                                  className="btn-copy-chip"
+                                  onClick={() => handleCopyGhnCode(ghnCode)}
+                                  title="Sao chép mã vận đơn"
+                                >
+                                  {copiedGhnCode === ghnCode ? '✓' : '📋'}
+                                </button>
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="channel-tag internal">
+                            🛵 <strong>Shop Shipper (Nội thành TP.HCM)</strong> — Giao nhanh trong 24 giờ
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-toggle-tracker-details"
+                        onClick={() => toggleTracker(order)}
+                      >
+                        {isExpanded ? 'Thu gọn lộ trình ▲' : 'Chi tiết lộ trình ▼'}
+                      </button>
+                    </div>
+
+                    <div className={`tracker-steps-bar ${statusNum === 4 ? 'has-cancelled' : ''}`}>
+                      {trackerSteps.map((st, idx) => {
+                        const stateClass = st.done ? 'step-done' : st.active ? 'step-active' : st.cancelled ? 'step-cancelled' : 'step-pending'
+                        return (
+                          <div key={st.key} className={`tracker-step ${stateClass}`}>
+                            <div className="tracker-dot-wrap">
+                              <div className={`tracker-line before ${idx === 0 ? 'line-hidden' : ''}`} />
+                              <span className="tracker-dot">
+                                {st.done ? '✓' : st.cancelled ? '✕' : idx + 1}
+                              </span>
+                              <div className={`tracker-line after ${idx === trackerSteps.length - 1 ? 'line-hidden' : ''}`} />
+                            </div>
+                            <div className="tracker-step-label">{st.label}</div>
+                            <div className="tracker-step-sub">{st.sub}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {isExpanded && (
+                      <div className="tracker-expanded-details">
+                        <div className="tracker-detail-row">
+                          <span className="detail-label">🏬 Kho xuất phát:</span>
+                          <span className="detail-value">BookStore HCMUTE — Số 1 Võ Văn Ngân, Phường Linh Chiểu, TP. Thủ Đức, TP.HCM</span>
+                        </div>
+                        <div className="tracker-detail-row">
+                          <span className="detail-label">📍 Địa chỉ nhận hàng:</span>
+                          <span className="detail-value">{order.shippingAddress || order.address || ghnInfo.address || '---'}</span>
+                        </div>
+                        <div className="tracker-detail-row">
+                          <span className="detail-label">⏳ Dự kiến giao hàng:</span>
+                          <span className="detail-value">{isGhn ? (ghnInfo.estimatedDelivery && !ghnInfo.estimatedDelivery.includes('24 giờ') ? ghnInfo.estimatedDelivery : '2 - 4 ngày làm việc') : (ghnInfo.estimatedDelivery || 'Trong vòng 24 giờ kể từ khi xác nhận')}</span>
+                        </div>
+                        {isGhn ? (
+                          <>
+                            <div className="tracker-detail-row">
+                              <span className="detail-label">🚚 Đơn vị vận chuyển:</span>
+                              <span className="detail-value">Giao Hàng Nhanh (GHN Express)</span>
+                            </div>
+                            <div className="tracker-detail-row">
+                              <span className="detail-label">📦 Ghi chú bưu tá:</span>
+                              <span className="detail-value">Cho xem hàng, không cho thử (CHOXEMHANGKHONGTHU)</span>
+                            </div>
+                            {ghnCode && !ghnCode.startsWith('GHN_') && (
+                              <div className="tracker-detail-row link-row">
+                                <a
+                                  href={`https://donhang.ghn.vn/?order_code=${ghnCode}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="tracker-external-link"
+                                >
+                                  ↗ Tra cứu bưu tá trên cổng GHN Quốc Gia
+                                </a>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div className="tracker-detail-row">
+                              <span className="detail-label">🚚 Đơn vị vận chuyển:</span>
+                              <span className="detail-value">Đội ngũ giao hàng trực tiếp BookStore HCMUTE (Giao xe máy)</span>
+                            </div>
+                            <div className="tracker-detail-row">
+                              <span className="detail-label">📞 Hỗ trợ giao nhận:</span>
+                              <span className="detail-value">Hotline cửa hàng: 0795 865 240 (Hỗ trợ 8h00 - 21h00)</span>
+                            </div>
+                            <div className="tracker-detail-row">
+                              <span className="detail-label">🛡️ Chính sách:</span>
+                              <span className="detail-value">Đồng kiểm khi nhận hàng, kiểm tra sách trước khi thanh toán</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="order-card-footer">
                     <div className="order-shipping-info">
                       <strong>Người nhận:</strong> {order.recipientName || order.recipient_name || order.receiverName || order.fullName || order.customerName || ghnInfo.receiverName || ghnInfo.recipientName || ghnInfo.fullName || '---'} ({order.recipientPhone || order.recipient_phone || order.phoneNumber || order.phone || ghnInfo.phone || ghnInfo.phoneNumber || ghnInfo.recipientPhone || '---'})
@@ -469,16 +787,27 @@ function OrderHistoryPage({
                       </div>
 
                       <div className="order-action-buttons">
-                        {order.status === 0 && order.payment_method === 'VNPAY' && (
-                          <button 
-                            type="button" 
-                            className="btn-pay-now"
-                            onClick={() => handlePayNow(order)}
-                          >
-                            Thanh toán ngay
-                          </button>
+                        {statusNum === 0 && order.payment_method === 'VNPAY' && (
+                          !isOrderExpired ? (
+                            <button 
+                              type="button" 
+                              className="btn-pay-now"
+                              onClick={() => handlePayNow(order)}
+                            >
+                              Thanh toán ngay
+                            </button>
+                          ) : (
+                            <button 
+                              type="button" 
+                              className="btn-pay-now expired"
+                              disabled
+                              title="Thời gian thanh toán 15 phút đã kết thúc. Đơn hàng đang được tự động hủy và hoàn trả kho."
+                            >
+                              Đã hết hạn thanh toán
+                            </button>
+                          )
                         )}
-                        {order.status === 0 && (
+                        {statusNum === 0 && !isOrderExpired && (
                           <button 
                             type="button" 
                             className="btn-cancel-order"
@@ -487,14 +816,52 @@ function OrderHistoryPage({
                             Hủy đơn
                           </button>
                         )}
-                        {(order.status === 3 || order.status === 4) && (
+                        {statusNum === 1 && order.payment_method === 'COD' && (
                           <button 
                             type="button" 
-                            className="btn-reorder"
-                            onClick={() => handleReorder(order)}
+                            className="btn-cancel-order"
+                            onClick={() => handleOpenCancelModal(order)}
                           >
-                            Mua lại
+                            Hủy đơn
                           </button>
+                        )}
+                        {statusNum === 1 && order.payment_method === 'VNPAY' && (
+                          <span 
+                            className="order-vnpay-paid-badge" 
+                            title="Đơn hàng đã thanh toán qua VNPAY. Vui lòng liên hệ bộ phận Chăm sóc khách hàng nếu cần hủy đơn và đối soát hoàn tiền."
+                          >
+                            Đã thanh toán (Liên hệ CSKH)
+                          </span>
+                        )}
+                        {(statusNum === 3 || statusNum === 4) && (
+                          isAllOutOfStock ? (
+                            <button 
+                              type="button" 
+                              className="btn-reorder disabled"
+                              disabled
+                              title={`Tất cả sản phẩm trong đơn hàng hiện đã hết hàng (${outOfStockItems.map((i) => i.title || `Mã #${i.book_id || i.id}`).join(', ')}).`}
+                            >
+                              🚫 Tạm hết hàng
+                            </button>
+                          ) : hasPartialOutOfStock ? (
+                            <button 
+                              type="button" 
+                              className="btn-reorder partial"
+                              onClick={() => handleReorder(order)}
+                              title={`Một số cuốn sách đã hết hàng (${outOfStockItems.map((i) => i.title || `Mã #${i.book_id || i.id}`).join(', ')}). Bấm để thêm các cuốn còn hàng vào giỏ.`}
+                            >
+                              Mua lại ({items.length - outOfStockItems.length}/{items.length} cuốn)
+                            </button>
+                          ) : (
+                            <button 
+                              type="button" 
+                              className="btn-reorder"
+                              onClick={() => handleReorder(order)}
+                              title="Thêm lại toàn bộ sách trong đơn này vào giỏ hàng"
+                            >
+                              Mua lại
+                            </button>
+                          )
                         )}
                       </div>
                     </div>

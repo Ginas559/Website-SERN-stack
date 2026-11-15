@@ -9,9 +9,16 @@ function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
         ? Math.round(price * (100 - discount) / 100) 
         : price;
 
-    const rawStock = Number(item.stock ?? item.quantityInStock ?? 999);
-    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 999);
-    const inStock = maxStock > 0;
+    const rawStock = Number(
+        item.stockQuantity ?? 
+        item.quantityInStock ?? 
+        item.stock ?? 
+        item.quantity ?? 
+        0
+    );
+    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+    const isDeleted = Boolean(item.isDeleted || item.book_is_deleted || item.isDelete);
+    const inStock = !isDeleted && maxStock > 0;
 
     const formatPrice = (val) => Number(val).toLocaleString('vi-VN') + ' đ';
 
@@ -54,7 +61,9 @@ function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
 
             <div className="wishlist-info-block">
                 <div className="wishlist-stock-status">
-                    {inStock ? (
+                    {isDeleted ? (
+                        <span className="wishlist-stock-badge-out">Ngừng kinh doanh</span>
+                    ) : inStock ? (
                         <span className="wishlist-stock-badge-in">Còn {maxStock} cuốn</span>
                     ) : (
                         <span className="wishlist-stock-badge-out">Tạm hết hàng</span>
@@ -84,7 +93,7 @@ function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
                         disabled={!inStock}
                         onClick={() => onAddToCart && onAddToCart(item)}
                     >
-                        {inStock ? '🛒 Thêm vào giỏ' : 'Hết hàng'}
+                        {isDeleted ? 'Ngừng kinh doanh' : inStock ? '🛒 Thêm vào giỏ' : 'Hết hàng'}
                     </button>
                 </div>
             </div>

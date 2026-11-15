@@ -21,7 +21,15 @@ function cleanWishlistData(rawList) {
         if (!id || seen.has(id)) continue;
         seen.add(id);
 
-        const stock = Math.max(0, Number(it.stock ?? it.quantityInStock ?? 999));
+        const rawStock = Number(
+            it.stockQuantity ?? 
+            it.quantityInStock ?? 
+            it.stock ?? 
+            it.quantity ?? 
+            0
+        );
+        const stock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(it.isDeleted || it.book_is_deleted || it.isDelete);
 
         result.push({
             ...it,
@@ -32,6 +40,8 @@ function cleanWishlistData(rawList) {
             price: Math.max(0, Number(it.price) || 0),
             discount: Math.max(0, Math.min(100, Number(it.discount) || 0)),
             stock,
+            stockQuantity: stock,
+            isDeleted,
             image: it.image || null
         });
     }
@@ -119,8 +129,21 @@ function WishlistPage({
             return;
         }
 
-        const rawStock = Number(book.stock ?? book.quantityInStock ?? 999);
-        const stockCount = Math.max(0, Number.isFinite(rawStock) ? rawStock : 999);
+        const rawStock = Number(
+            book.stockQuantity ?? 
+            book.quantityInStock ?? 
+            book.stock ?? 
+            book.quantity ?? 
+            0
+        );
+        const stockCount = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(book.isDeleted || book.book_is_deleted || book.isDelete);
+
+        if (isDeleted) {
+            triggerToast('Sản phẩm này đã ngừng kinh doanh.', 'warning');
+            return;
+        }
+
         if (stockCount <= 0) {
             triggerToast('Sản phẩm này tạm thời hết hàng trong kho.', 'warning');
             return;
@@ -172,7 +195,10 @@ function WishlistPage({
     };
 
     const handleAddAllToCart = () => {
-        const availableItems = items.filter((it) => it.stock > 0);
+        const availableItems = items.filter((it) => {
+            const rawStock = Number(it.stockQuantity ?? it.stock ?? it.quantity ?? 0);
+            return rawStock > 0 && !it.isDeleted;
+        });
         if (availableItems.length === 0) {
             triggerToast('Không có sách nào còn hàng để thêm vào giỏ.', 'warning');
             return;
@@ -196,7 +222,7 @@ function WishlistPage({
             availableItems.forEach((book) => {
                 const bookId = book.bookId || book.id;
                 const existingIndex = currentCart.findIndex((item) => (item.bookId || item.id) === bookId);
-                const stockCount = book.stock;
+                const stockCount = Math.max(0, Number(book.stock ?? book.stockQuantity ?? book.quantity ?? 0));
 
                 if (existingIndex >= 0) {
                     const currentQty = Number(currentCart[existingIndex].quantity) || 1;

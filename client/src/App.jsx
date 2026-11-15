@@ -491,6 +491,10 @@ function App() {
             dispatch(invalidateBooks())
             navigateTo({ tab: 'books', bookId: null }, { replace: true })
           }}
+          onGoToCart={() => {
+            dispatch(fetchCart())
+            navigateTo({ tab: 'cart' }, { replace: true })
+          }}
         />
       ) : activeTab === 'admin' && isAdmin ? (
         <AdminDashboard

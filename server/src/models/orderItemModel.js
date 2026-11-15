@@ -76,7 +76,9 @@ async function findByOrderId(orderId) {
                     b.author,
                     b.price,
                     b.image,
-                    b.discount AS book_discount
+                    b.discount AS book_discount,
+                    b.quantity AS stock_quantity,
+                    b.isDelete AS book_is_deleted
                 FROM dbo.order_details od
                 LEFT JOIN dbo.books b ON od.book_id = b.id
                 WHERE od.order_id = @order_id
@@ -125,7 +127,9 @@ async function findByOrderIds(orderIds = []) {
                                         b.author,
                                         b.price,
                                         b.image,
-                                        b.discount AS book_discount
+                                        b.discount AS book_discount,
+                    b.quantity AS stock_quantity,
+                    b.isDelete AS book_is_deleted
                                     FROM dbo.order_details od
                                     LEFT JOIN dbo.books b ON od.book_id = b.id
                                     WHERE od.order_id IN (${paramNames.join(",")})

@@ -9,6 +9,7 @@ const discountService = require("./discountService");
 const storePolicyService = require("./storePolicyService");
 const discountModel = require("../models/discountModel");
 const userModel = require("../models/userModel");
+const ghnService = require("./ghnService");
 const AppError = require("../utils/AppError");
 const {
     SUPPORTED_PAYMENT_METHODS,
@@ -18,10 +19,13 @@ const {
 } = require("../utils/pricing");
 
 function validatePhoneNumber(phone) {
-    const trimmed = typeof phone === "string" ? phone.trim() : "";
-    const phoneRegex = /(84|0[3|5|7|8|9])+([0-9]{8})\b/;
+    let trimmed = typeof phone === "string" ? phone.trim().replace(/\D/g, "") : "";
+    if (trimmed.startsWith("84") && trimmed.length === 11) {
+        trimmed = "0" + trimmed.slice(2);
+    }
+    const phoneRegex = /^0[3|5|7|8|9]\d{8}$/;
     if (!trimmed || !phoneRegex.test(trimmed)) {
-        throw new AppError("Số điện thoại nhận hàng không hợp lệ.", 400);
+        throw new AppError("Số điện thoại nhận hàng không hợp lệ (yêu cầu 10 chữ số).", 400);
     }
     return trimmed;
 }
@@ -105,9 +109,33 @@ async function createOrderFromCart(userId, orderPayload = {}) {
 
     const { subtotal, totalQuantity, lineItems } = calculateSelectedItemsTotals(targetItems);
     const orderItems = lineItems.map(({ bookId, quantity, total }) => ({ bookId, quantity, total }));
+    const estimatedWeightGrams = Math.min(20000, Math.max(300, totalQuantity * 350));
 
-    const shippingRule = await storePolicyService.getShippingPolicy();
-    const shippingFee = calculateShippingFee(subtotal, shippingRule);
+    let shippingCalculation;
+    if (orderPayload.toDistrictId || orderPayload.provinceId || orderPayload.toWardCode) {
+        shippingCalculation = await ghnService.calculateShippingFee({
+            toDistrictId: orderPayload.toDistrictId,
+            toWardCode: orderPayload.toWardCode,
+            provinceId: orderPayload.provinceId,
+            provinceName: orderPayload.provinceName,
+            weightInGrams: estimatedWeightGrams,
+            orderTotal: subtotal
+        });
+    } else {
+        const isHcm = ghnService.isInnerCityHcm(address, null);
+        if (!isHcm) {
+            throw new AppError("Địa chỉ nhận hàng liên tỉnh cần chọn Quận/Huyện và Phường/Xã để tính phí vận chuyển GHN chính xác.", 400);
+        }
+        const shippingRule = await storePolicyService.getShippingPolicy();
+        const fee = calculateShippingFee(subtotal, shippingRule);
+        shippingCalculation = {
+            shippingFee: fee,
+            deliveryType: "INTERNAL",
+            deliveryProvider: "Shop Shipper (Nội thành TP.HCM)",
+            estimatedDelivery: "Giao nhanh trong 24 giờ"
+        };
+    }
+    const shippingFee = shippingCalculation.shippingFee;
     if (
         orderPayload.expectedShippingFee !== undefined &&
         orderPayload.expectedShippingFee !== null &&
@@ -116,7 +144,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     ) {
         const formattedFee = Number(shippingFee).toLocaleString("vi-VN");
         throw new AppError(
-            `Phí vận chuyển vừa được cửa hàng cập nhật thành ${formattedFee}đ, vui lòng kiểm tra lại tổng thanh toán trước khi xác nhận đặt hàng.`,
+            `Phí vận chuyển vừa được hệ thống cập nhật thành ${formattedFee}đ, vui lòng kiểm tra lại tổng thanh toán trước khi xác nhận đặt hàng.`,
             409
         );
     }
@@ -129,6 +157,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         if (cleanCoupon.length > 50) {
             throw new AppError("Mã khuyến mãi không được vượt quá 50 ký tự.", 400);
         }
+        const shippingRule = await storePolicyService.getShippingPolicy();
         const promoResult = await discountService.validateAndCalculatePromotion({
             code: cleanCoupon,
             subtotal,
@@ -140,6 +169,34 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     }
 
     const finalTotal = Math.max(0, subtotal + shippingFee - discountValue);
+    const orderId = uuidv4();
+
+    let ghnCode = null;
+    let ghnResponse = null;
+    if (paymentMethod === "COD" && shippingCalculation.deliveryType === "GHN" && orderPayload.toDistrictId && orderPayload.toWardCode) {
+        try {
+            const ghnOrderRes = await ghnService.createShippingOrder({
+                toName: receiverName,
+                toPhone: phone,
+                toAddress: address,
+                toWardCode: orderPayload.toWardCode,
+                toDistrictId: orderPayload.toDistrictId,
+                weightInGrams: estimatedWeightGrams,
+                items: targetItems.map((it) => ({
+                    title: it.title,
+                    quantity: it.quantity,
+                    price: it.price
+                })),
+                codAmount: finalTotal,
+                insuranceValue: finalTotal,
+                clientOrderCode: orderId
+            });
+            ghnCode = ghnOrderRes?.order_code || null;
+            ghnResponse = ghnOrderRes;
+        } catch {
+            ghnCode = `GHN_${orderId.slice(0, 8).toUpperCase()}`;
+        }
+    }
 
     const ghnInfo = {
         receiverName,
@@ -154,10 +211,16 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         subtotal,
         shippingFee,
         discountValue,
-        couponCode: appliedCouponCode
+        couponCode: appliedCouponCode,
+        deliveryType: shippingCalculation.deliveryType,
+        deliveryProvider: shippingCalculation.deliveryProvider,
+        estimatedDelivery: shippingCalculation.estimatedDelivery,
+        provinceId: orderPayload.provinceId || null,
+        districtId: orderPayload.toDistrictId || null,
+        wardCode: orderPayload.toWardCode || null,
+        ghnCode
     };
 
-    const orderId = uuidv4();
     let payUrl = null;
     if (paymentMethod === "VNPAY") {
         payUrl = paymentService.generatePaymentUrl({ id: orderId, total: finalTotal }, {
@@ -180,6 +243,8 @@ async function createOrderFromCart(userId, orderPayload = {}) {
             paymentMethod,
             payUrl,
             ghnFee: shippingFee,
+            ghnCode,
+            ghnResponse,
             discount: appliedDiscountId || null,
             ghnInfo
         }, transaction);
@@ -252,6 +317,10 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
         throw new AppError("Bạn không có quyền hủy đơn hàng này.", 403);
     }
 
+    if (!isAdmin && order.payment_method === "VNPAY" && Number(order.status) >= 1) {
+        throw new AppError("Đơn hàng đã được thanh toán qua VNPAY. Quý khách vui lòng liên hệ bộ phận Chăm sóc khách hàng để được hỗ trợ đối soát và hoàn tiền.", 400);
+    }
+
     if (currentStatus !== null && currentStatus !== undefined && order.status !== Number(currentStatus)) {
         throw new AppError("Trạng thái đơn hàng đã thay đổi trước đó, vui lòng tải lại danh sách.", 409);
     }
@@ -307,6 +376,14 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
 
         await transaction.commit();
 
+        if (order.ghn_code && !order.ghn_code.startsWith("GHN_")) {
+            try {
+                await ghnService.cancelShippingOrder(order.ghn_code);
+            } catch {
+                ghnInfoObj.ghnCancelWarning = "Không thể gửi yêu cầu hủy sang GHN, bưu tá cần kiểm tra thủ công.";
+            }
+        }
+
         return {
             ...updatedOrder,
             status: 4,
@@ -356,6 +433,14 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
 
     if (order.status === 3) {
         throw new AppError("Đơn hàng đã hoàn thành, không thể thay đổi trạng thái.", 400);
+    }
+
+    if (safeNext < Number(order.status)) {
+        throw new AppError(`Không thể chuyển ngược trạng thái đơn hàng từ [${order.status}] về [${safeNext}].`, 400);
+    }
+
+    if (order.payment_method === "VNPAY" && Number(order.status) === 0) {
+        throw new AppError("Đơn hàng VNPAY chưa hoàn tất thanh toán, trạng thái sẽ tự động cập nhật khi khách hàng thanh toán qua cổng VNPAY.", 400);
     }
 
     const pool = await connectDB();
@@ -447,6 +532,12 @@ async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {
         throw new AppError("Người dùng không hợp lệ.", 401);
     }
 
+    try {
+        await releaseExpiredVnpayOrders();
+    } catch (err) {
+        void err;
+    }
+
     const safePage = Math.max(1, Number(page) || 1);
     const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
 
@@ -519,6 +610,12 @@ async function getOrderDetails(orderId, userId, { isAdmin = false } = {}) {
 }
 
 async function getAllOrdersForAdmin(filters = {}) {
+    try {
+        await releaseExpiredVnpayOrders();
+    } catch (err) {
+        void err;
+    }
+
     const safePage = Math.max(1, Number(filters.page) || 1);
     const safeLimit = Math.max(1, Math.min(100, Number(filters.limit) || 10));
 
@@ -634,35 +731,39 @@ async function reorder(orderId, userId) {
         const existingQty = existingItem ? Number(existingItem.quantity) || 0 : 0;
         const requestedQty = Number(item.quantity) || 1;
 
-        let finalQty = existingQty + requestedQty;
-        if (finalQty > currentStock) {
-            finalQty = currentStock;
+        if (existingQty >= requestedQty) {
+            warnings.push(`Ấn phẩm "${book.title}" đã có sẵn trong giỏ hàng (${existingQty} cuốn).`);
+            continue;
+        }
+
+        let targetQty = Math.max(existingQty, requestedQty);
+        if (targetQty > currentStock) {
+            targetQty = currentStock;
             warnings.push(`Ấn phẩm "${book.title}" chỉ còn ${currentStock} cuốn trong kho, đã tự động điều chỉnh số lượng.`);
         }
 
-        if (finalQty <= existingQty) {
+        if (targetQty <= existingQty) {
             warnings.push(`Số lượng ấn phẩm "${book.title}" trong giỏ đã đạt mức tối đa hiện có (${currentStock} cuốn).`);
             continue;
         }
 
         const unitPrice = calculateDiscountedUnitPrice(book.price, book.discount);
-        const lineTotal = unitPrice * finalQty;
+        const lineTotal = unitPrice * targetQty;
 
         itemsToAdd.push({
             bookId,
-            quantity: finalQty,
+            quantity: targetQty,
             total: lineTotal,
             isExisting: Boolean(existingItem)
         });
     }
 
     if (itemsToAdd.length === 0) {
-        throw new AppError(
-            warnings.length > 0
-                ? warnings.join(" ")
-                : "Không thể thêm sản phẩm nào từ đơn hàng này vào giỏ hàng.",
-            400
-        );
+        return {
+            success: true,
+            message: "Tất cả sản phẩm từ đơn hàng này đã có sẵn trong giỏ hàng của bạn.",
+            warnings: warnings.length > 0 ? warnings : ["Sản phẩm đã có sẵn trong giỏ hàng."]
+        };
     }
 
     const transaction = new sql.Transaction(pool);
@@ -717,6 +818,132 @@ async function reorder(orderId, userId) {
     }
 }
 
+async function dispatchGhnForPaidOrder(orderId) {
+    if (!orderId) return null;
+    const order = await orderModel.findById(orderId, { includeItems: true });
+    if (!order) return null;
+    if (order.ghn_code && !order.ghn_code.startsWith("GHN_")) {
+        return parseOrderJsonFields(order);
+    }
+
+    let ghnInfoObj;
+    try {
+        ghnInfoObj = typeof order.ghn_info === "string" ? JSON.parse(order.ghn_info) : (order.ghn_info || {});
+    } catch {
+        ghnInfoObj = {};
+    }
+
+    if (ghnInfoObj.deliveryType !== "GHN" || !ghnInfoObj.districtId || !ghnInfoObj.wardCode) {
+        return parseOrderJsonFields(order);
+    }
+
+    const orderItems = order.items && order.items.length > 0
+        ? order.items
+        : await orderItemModel.findByOrderId(orderId);
+
+    const totalQty = (orderItems || []).reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+    const weightInGrams = Math.min(20000, Math.max(300, totalQty * 350));
+
+    try {
+        const receiverName = order.recipientName || order.recipient_name || order.receiverName || ghnInfoObj.receiverName || "Khach hang";
+        const phone = order.recipientPhone || order.recipient_phone || order.phone || ghnInfoObj.phone || "";
+        const address = order.shippingAddress || order.shipping_address || order.address || ghnInfoObj.address || "";
+
+        const ghnOrderRes = await ghnService.createShippingOrder({
+            toName: receiverName,
+            toPhone: phone,
+            toAddress: address,
+            toWardCode: ghnInfoObj.wardCode,
+            toDistrictId: ghnInfoObj.districtId,
+            weightInGrams,
+            items: (orderItems || []).map((it) => ({
+                title: it.title || "Sách",
+                quantity: it.quantity,
+                price: it.price || it.total
+            })),
+            codAmount: 0,
+            insuranceValue: Number(order.total) || 0,
+            clientOrderCode: order.id
+        });
+
+        const realGhnCode = ghnOrderRes?.order_code || null;
+        if (realGhnCode) {
+            ghnInfoObj.ghnCode = realGhnCode;
+            const pool = await connectDB();
+            const req = new sql.Request(pool);
+            await req
+                .input("id", sql.Char(36), order.id)
+                .input("ghn_code", sql.VarChar(255), realGhnCode)
+                .input("ghn_response", sql.NVarChar(sql.MAX), JSON.stringify(ghnOrderRes))
+                .input("ghn_info", sql.NVarChar(sql.MAX), JSON.stringify(ghnInfoObj))
+                .query(`UPDATE dbo.orders 
+                        SET ghn_code = @ghn_code, 
+                            ghn_response = @ghn_response, 
+                            ghn_info = @ghn_info, 
+                            updatedAt = GETDATE() 
+                        WHERE id = @id`);
+        }
+
+        return parseOrderJsonFields({
+            ...order,
+            ghn_code: realGhnCode,
+            ghn_response: ghnOrderRes,
+            ghn_info: ghnInfoObj
+        });
+    } catch {
+        return parseOrderJsonFields(order);
+    }
+}
+
+async function syncGhnDelivered(ghnCode) {
+    if (!ghnCode) return null;
+    const pool = await connectDB();
+    const req = new sql.Request(pool);
+    const orderRes = await req
+        .input("ghn_code", sql.VarChar(255), ghnCode)
+        .query("SELECT TOP 1 id, status, ghn_info FROM dbo.orders WHERE ghn_code = @ghn_code");
+    const order = orderRes.recordset[0];
+    if (!order || Number(order.status) === 3 || Number(order.status) === 4) {
+        return order || null;
+    }
+
+    let ghnInfoObj;
+    try {
+        ghnInfoObj = typeof order.ghn_info === "string" ? JSON.parse(order.ghn_info) : (order.ghn_info || {});
+    } catch {
+        ghnInfoObj = {};
+    }
+    ghnInfoObj.deliveredAt = new Date().toISOString();
+    ghnInfoObj.deliveryNote = "Giao hàng thành công xác nhận qua GHN Tracking";
+
+    const updateReq = new sql.Request(pool);
+    await updateReq
+        .input("id", sql.Char(36), order.id)
+        .input("ghn_info", sql.NVarChar(sql.MAX), JSON.stringify(ghnInfoObj))
+        .query("UPDATE dbo.orders SET status = 3, ghn_info = @ghn_info, updatedAt = GETDATE() WHERE id = @id AND status < 3");
+    return order;
+}
+
+async function releaseExpiredVnpayOrders() {
+    const pool = await connectDB();
+    const req = new sql.Request(pool);
+    const expiredRes = await req.query("SELECT id FROM dbo.orders WHERE payment_method = 'VNPAY' AND status = 0 AND createdAt < DATEADD(minute, -15, GETDATE())");
+    const expiredOrders = expiredRes.recordset || [];
+    const cancelledResults = [];
+    for (const exp of expiredOrders) {
+        try {
+            const cancelled = await cancelOrder(exp.id, null, {
+                isAdmin: true,
+                reason: "Tự động hủy do quá thời gian chờ thanh toán VNPAY (15 phút)"
+            });
+            cancelledResults.push(cancelled);
+        } catch {
+            continue;
+        }
+    }
+    return cancelledResults;
+}
+
 async function getShippingRule() {
     return await storePolicyService.getShippingPolicy();
 }
@@ -729,6 +956,9 @@ module.exports = {
     getOrderDetails,
     getAllOrdersForAdmin,
     reorder,
+    dispatchGhnForPaidOrder,
+    syncGhnDelivered,
+    releaseExpiredVnpayOrders,
     createPaymentUrlForOrder: paymentService.createPaymentUrlForOrder,
     processPaymentReturn: paymentService.processPaymentReturn,
     processPaymentIPN: paymentService.processPaymentIPN,

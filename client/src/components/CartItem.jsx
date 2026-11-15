@@ -4,9 +4,15 @@ import debounce from 'lodash.debounce';
 function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect }) {
     const [imgError, setImgError] = useState(false);
 
-    const rawStock = Number(item.stock ?? item.quantityInStock ?? 999);
-    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 999);
-    const isOutOfStock = maxStock === 0;
+    const rawStock = Number(
+        item.stockQuantity ?? 
+        item.stock ?? 
+        item.quantityInStock ?? 
+        item.quantity ?? 
+        0
+    );
+    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+    const isOutOfStock = maxStock === 0 || Boolean(item.isDeleted);
 
     const initialQuantity = isOutOfStock 
         ? 0 
@@ -96,7 +102,9 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                     <div className="cart-product-details">
                         <div className="cart-product-title" title={item.title}>{item.title}</div>
                         {item.author && <div className="cart-product-author">Tác giả: {item.author}</div>}
-                        {isOutOfStock ? (
+                        {item.isDeleted ? (
+                            <div className="cart-product-stock-out">Ngừng kinh doanh</div>
+                        ) : isOutOfStock ? (
                             <div className="cart-product-stock-out">Tạm hết hàng</div>
                         ) : maxStock < 10 ? (
                             <div className="cart-product-stock-warning">Chỉ còn {maxStock} cuốn trong kho</div>
