@@ -376,7 +376,7 @@ function AdminCatalogAnalyticsCharts({
                 <>
                   <strong className="catalog-detail-title">{hoveredBook.title}</strong>
                   <span className="catalog-detail-meta">
-                    {hoveredBook.totalSold || 0} cuốn • {formatVND(hoveredBook.totalRevenue)} • Tồn: {hoveredBook.currentStock || 0}
+                    {hoveredBook.totalSold || 0} cuốn • {formatVND(hoveredBook.totalRevenue)} • Tồn: {hoveredBook.currentStock ?? hoveredBook.quantity ?? hoveredBook.stock ?? 0}
                   </span>
                 </>
               ) : (
@@ -425,7 +425,7 @@ function AdminCatalogAnalyticsCharts({
                   <g
                     key={book.id}
                     className="catalog-svg-row"
-                    aria-label={`${book.title} — Tác giả: ${book.author || 'N/A'} | Tồn: ${book.currentStock || 0}`}
+                    aria-label={`${book.title} — Tác giả: ${book.author || 'N/A'} | Tồn: ${book.currentStock ?? book.quantity ?? book.stock ?? 0}`}
                     onMouseEnter={() => setHoverBookIdx(idx)}
                   >
                     <rect

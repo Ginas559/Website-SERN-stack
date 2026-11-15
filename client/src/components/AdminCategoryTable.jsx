@@ -170,7 +170,7 @@ function AdminCategoryTable({
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span className="admin-book-count-badge">
-                        {cat.bookCount || 0} sách
+                        {cat.bookCount ?? cat.book_count ?? 0} sách
                       </span>
                     </td>
                     <td>

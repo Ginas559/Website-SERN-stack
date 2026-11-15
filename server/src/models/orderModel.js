@@ -22,6 +22,45 @@ async function create(orderData, transaction = null) {
 
     try {
         const orderId = orderData.id || uuidv4();
+        let ghnPayload = null;
+        if (typeof orderData.ghnInfo === "object" && orderData.ghnInfo) {
+            ghnPayload = { ...orderData.ghnInfo };
+        } else if (typeof orderData.ghn_info === "object" && orderData.ghn_info) {
+            ghnPayload = { ...orderData.ghn_info };
+        } else if (typeof orderData.ghnInfo === "string") {
+            try {
+                ghnPayload = JSON.parse(orderData.ghnInfo);
+            } catch {
+                ghnPayload = {};
+            }
+        } else if (typeof orderData.ghn_info === "string") {
+            try {
+                ghnPayload = JSON.parse(orderData.ghn_info);
+            } catch {
+                ghnPayload = {};
+            }
+        }
+
+        const address = orderData.shippingAddress || orderData.shipping_address || orderData.address;
+        const name = orderData.recipientName || orderData.recipient_name || orderData.receiverName;
+        const phone = orderData.recipientPhone || orderData.recipient_phone || orderData.phone || orderData.phoneNumber;
+
+        if (address || name || phone) {
+            ghnPayload = ghnPayload || {};
+            if (address && !ghnPayload.address) {
+                ghnPayload.address = address;
+                ghnPayload.shippingAddress = address;
+            }
+            if (name && !ghnPayload.receiverName) {
+                ghnPayload.receiverName = name;
+                ghnPayload.recipientName = name;
+            }
+            if (phone && !ghnPayload.phone) {
+                ghnPayload.phone = phone;
+                ghnPayload.recipientPhone = phone;
+            }
+        }
+
         const req = new sql.Request(executor);
         const result = await req
             .input("id", sql.Char(36), orderId)
@@ -32,7 +71,7 @@ async function create(orderData, transaction = null) {
             .input("pay_url", sql.VarChar(1000), orderData.payUrl || orderData.pay_url || null)
             .input("discount", sql.Int, orderData.discount !== undefined && orderData.discount !== null ? Number(orderData.discount) : null)
             .input("payment_method", sql.VarChar(50), orderData.paymentMethod || orderData.payment_method || "COD")
-            .input("ghn_info", sql.NVarChar(sql.MAX), typeof orderData.ghnInfo === "object" ? JSON.stringify(orderData.ghnInfo) : (orderData.ghnInfo || null))
+            .input("ghn_info", sql.NVarChar(sql.MAX), ghnPayload ? JSON.stringify(ghnPayload) : (typeof orderData.ghnInfo === "object" ? JSON.stringify(orderData.ghnInfo) : (orderData.ghnInfo || null)))
             .input("ghn_response", sql.NVarChar(sql.MAX), typeof orderData.ghnResponse === "object" ? JSON.stringify(orderData.ghnResponse) : (orderData.ghnResponse || null))
             .input("ghn_code", sql.VarChar(255), orderData.ghnCode || orderData.ghn_code || null)
             .input("ghn_fee", sql.Int, Math.max(0, Number(orderData.ghnFee || orderData.ghn_fee) || 0))

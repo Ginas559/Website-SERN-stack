@@ -1,20 +1,26 @@
 import CartItem from './CartItem';
 
-function CartTable({ 
-    items, 
-    selectedItemIds, 
-    onToggleSelectAll, 
-    onToggleSelect, 
-    onUpdateQuantity, 
-    onRemoveItem, 
-    onClearCart 
+function CartTable({
+    items,
+    selectedItemIds,
+    onToggleSelectAll,
+    onToggleSelect,
+    onUpdateQuantity,
+    onRemoveItem,
+    onClearCart
 }) {
     const availableItems = items.filter((it) => {
-        const stock = Number(it.stock ?? it.quantityInStock ?? 999);
-        return stock > 0;
+        const rawStock = Number(
+            it.stockQuantity ??
+            it.stock ??
+            it.quantityInStock ??
+            it.quantity ??
+            0
+        );
+        return rawStock > 0 && !it.isDeleted;
     });
 
-    const isAllSelected = availableItems.length > 0 && availableItems.every((it) => 
+    const isAllSelected = availableItems.length > 0 && availableItems.every((it) =>
         selectedItemIds.includes(it.bookId || it.id)
     );
 
@@ -24,9 +30,9 @@ function CartTable({
                 <thead>
                     <tr>
                         <th className="cart-th-select">
-                            <input 
-                                type="checkbox" 
-                                checked={isAllSelected} 
+                            <input
+                                type="checkbox"
+                                checked={isAllSelected}
                                 disabled={availableItems.length === 0}
                                 onChange={onToggleSelectAll}
                                 aria-label="Chọn tất cả sản phẩm còn hàng"
@@ -43,7 +49,7 @@ function CartTable({
                     {items.map((item) => {
                         const itemId = item.bookId || item.id;
                         return (
-                            <CartItem 
+                            <CartItem
                                 key={itemId}
                                 item={item}
                                 isSelected={selectedItemIds.includes(itemId)}
@@ -58,8 +64,8 @@ function CartTable({
 
             <div className="cart-table-footer">
                 <div className="cart-footer-left">
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="cart-action-link-btn clear-all"
                         onClick={onClearCart}
                     >

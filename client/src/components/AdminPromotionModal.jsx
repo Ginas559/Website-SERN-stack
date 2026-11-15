@@ -22,14 +22,14 @@ function PromotionModalContent({
     if (mode === 'edit' && promotion) {
       return {
         code: promotion.code || '',
-        discount_type: promotion.discount_type || 'PERCENT',
+        discount_type: promotion.discount_type || promotion.discountType || 'PERCENT',
         value: promotion.value !== undefined ? String(promotion.value) : '',
-        maxDiscountValue: promotion.maxDiscountValue !== null && promotion.maxDiscountValue !== undefined ? String(promotion.maxDiscountValue) : '',
-        minimumOrderValue: promotion.minimumOrderValue !== undefined ? String(promotion.minimumOrderValue) : '0',
+        maxDiscountValue: promotion.maxDiscountValue !== null && promotion.maxDiscountValue !== undefined ? String(promotion.maxDiscountValue) : (promotion.max_discount_value !== null && promotion.max_discount_value !== undefined ? String(promotion.max_discount_value) : ''),
+        minimumOrderValue: promotion.minimumOrderValue !== undefined ? String(promotion.minimumOrderValue) : (promotion.minimum_order_value !== undefined ? String(promotion.minimum_order_value) : '0'),
         quantity: promotion.quantity !== undefined ? String(promotion.quantity) : '100',
         description: promotion.description || '',
-        startDate: toInputDate(promotion.startDate),
-        expiredAt: toInputDate(promotion.expiredAt),
+        startDate: toInputDate(promotion.startDate || promotion.start_date),
+        expiredAt: toInputDate(promotion.expiredAt || promotion.expired_at),
       }
     }
     const today = new Date()

@@ -28,11 +28,14 @@ function PaymentResult({
   searchString = '',
   onViewOrders,
   onContinueShopping,
+  onGoToCart,
 }) {
   const [loading, setLoading] = useState(true)
   const [paymentData, setPaymentData] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [retrying, setRetrying] = useState(false)
+  const [restoringCart, setRestoringCart] = useState(false)
+  const [restoreMessage, setRestoreMessage] = useState('')
 
   useEffect(() => {
     let isMounted = true
@@ -86,6 +89,24 @@ function PaymentResult({
     } catch (err) {
       alert(err.message || 'Không thể tạo lại liên kết thanh toán.')
       setRetrying(false)
+    }
+  }
+
+  const handleRestoreCart = async () => {
+    const orderId = paymentData?.order?.id
+    if (!orderId) return
+    setRestoringCart(true)
+    setRestoreMessage('')
+    try {
+      await orderService.reorder(orderId)
+      setRestoreMessage('Đã khôi phục các cuốn sách vào giỏ hàng thành công!')
+      if (onGoToCart) {
+        setTimeout(() => onGoToCart(), 800)
+      }
+    } catch (err) {
+      setRestoreMessage(err.message || 'Không thể khôi phục giỏ hàng.')
+    } finally {
+      setRestoringCart(false)
     }
   }
 
@@ -169,6 +190,11 @@ function PaymentResult({
             <strong>Thông tin giao nhận:</strong> {order?.recipientName || order?.recipient_name || order?.receiverName || ghnInfo?.receiverName || ghnInfo?.recipientName} ({order?.recipientPhone || order?.recipient_phone || order?.phone || ghnInfo?.phone || '---'}) — {order?.shippingAddress || order?.shipping_address || order?.address || ghnInfo?.address || '---'}
           </div>
         )}
+        {ghnInfo?.ghnDispatchError && (
+          <div className="payment-shipping-summary" role="alert">
+            {ghnInfo.ghnDispatchError}
+          </div>
+        )}
 
         <div className="payment-result-actions">
           {isSuccess ? (
@@ -201,6 +227,19 @@ function PaymentResult({
                 >
                   {retrying ? 'Đang tạo liên kết...' : 'Thanh toán lại ngay'}
                 </button>
+              )}
+              {order?.id && (
+                <button
+                  type="button"
+                  className="btn-restore-cart"
+                  onClick={handleRestoreCart}
+                  disabled={restoringCart}
+                >
+                  {restoringCart ? 'Đang khôi phục...' : '🛒 Khôi phục lại vào giỏ hàng'}
+                </button>
+              )}
+              {restoreMessage && (
+                <div className="payment-restore-msg">{restoreMessage}</div>
               )}
               {onViewOrders && (
                 <button 
