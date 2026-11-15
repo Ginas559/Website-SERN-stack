@@ -578,7 +578,7 @@ function OrderHistoryPage({
             </div>
 
             {reviewFeedback ? (
-              <div style={{ background: '#2d1818', border: '1px solid #5c2828', borderLeft: '4px solid #f87171', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', marginBottom: '14px', fontWeight: 500 }}>
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #ef4444', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '0.86rem', marginBottom: '14px', fontWeight: 500 }}>
                 {reviewFeedback}
               </div>
             ) : null}

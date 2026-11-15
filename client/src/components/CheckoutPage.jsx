@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import orderService from '../services/orderService';
 import discountService from '../services/discountService';
 import userService from '../services/userService';
+import { MapPinIcon, TruckIcon, CreditCardIcon, TagIcon } from './common/Icons';
 import {
     useShippingRule,
     loadShippingRule,
@@ -324,7 +325,8 @@ function CheckoutPage({
                     <div className="checkout-main-content">
                         <div className="checkout-section-card">
                             <h2 className="checkout-section-title">
-                                <span>📍</span> 1. Thông tin giao hàng
+                                <MapPinIcon size={18} style={{ color: '#0088a9' }} />
+                                <span>1. Thông tin giao hàng</span>
                             </h2>
                             <div className="checkout-form-grid">
                                 <div className="checkout-form-group">
@@ -439,7 +441,8 @@ function CheckoutPage({
 
                         <div className="checkout-section-card">
                             <h2 className="checkout-section-title">
-                                <span>🚚</span> 2. Phương thức vận chuyển
+                                <TruckIcon size={18} style={{ color: '#0088a9' }} />
+                                <span>2. Phương thức vận chuyển</span>
                             </h2>
                             <div className="shipping-option-box">
                                 <div className="shipping-option-info">
@@ -458,7 +461,8 @@ function CheckoutPage({
 
                         <div className="checkout-section-card">
                             <h2 className="checkout-section-title">
-                                <span>💳</span> 3. Phương thức thanh toán
+                                <CreditCardIcon size={18} style={{ color: '#0088a9' }} />
+                                <span>3. Phương thức thanh toán</span>
                             </h2>
                             <div className="payment-options-list">
                                 <label className={`payment-option-label ${paymentMethod === 'COD' ? 'selected' : ''}`}>
@@ -530,7 +534,10 @@ function CheckoutPage({
                             {appliedCoupon ? (
                                 <div className="applied-coupon-card">
                                     <div className="applied-coupon-info">
-                                        <span className="applied-coupon-badge">🏷️ {appliedCoupon.discount?.code || couponInput}</span>
+                                        <span className="applied-coupon-badge">
+                                            <TagIcon size={13} />
+                                            <span>{appliedCoupon.discount?.code || couponInput}</span>
+                                        </span>
                                         <span className="applied-coupon-text">
                                             {appliedCoupon.discount?.discount_type === 'PERCENT'
                                                 ? `Giảm ${appliedCoupon.discount?.value}% (tối đa ${formatCurrency(appliedCoupon.discount?.maxDiscountValue)})`

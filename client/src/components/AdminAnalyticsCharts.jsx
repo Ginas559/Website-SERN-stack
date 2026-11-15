@@ -1,5 +1,6 @@
 import { useState, memo } from 'react'
 import { buildMonotoneSplinePath, buildMonotoneAreaPath } from '../utils/chartGeometry'
+import { TrendingUpIcon, PackageIcon, UsersIcon } from './common/Icons'
 import './AdminAnalyticsCharts.css'
 
 function formatVND(value) {
@@ -154,9 +155,12 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
       <div className="chart-panel">
         <div className="chart-panel-header">
           <div className="chart-panel-title-group">
-            <h3 className="chart-panel-title">📈 Biến Động Doanh Thu Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</h3>
+            <h3 className="chart-panel-title">
+            <TrendingUpIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Biến Động Doanh Thu Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</span>
+          </h3>
             <p className="chart-panel-subtitle">
-              Tổng doanh thu kỳ: <strong style={{ color: '#e7b26a' }}>{formatVND(periodSummary.totalRevenue)}</strong> (đã bù ngày trống liên tục)
+              Tổng doanh thu kỳ: <strong style={{ color: '#0088a9' }}>{formatVND(periodSummary.totalRevenue)}</strong> (đã bù ngày trống liên tục)
             </p>
           </div>
 
@@ -261,7 +265,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
               <div className="chart-tooltip-date">{formatFullPeriod(activeRevItem.date, groupBy)}</div>
               <div className="chart-tooltip-row">
                 <span>Đã chốt thành công:</span>
-                <span className="chart-tooltip-val" style={{ color: '#e7b26a' }}>
+                <span className="chart-tooltip-val" style={{ color: '#0088a9' }}>
                   {formatVND(activeRevItem.revenue)} ({activeRevItem.completedOrdersCount || 0} đơn)
                 </span>
               </div>
@@ -302,8 +306,8 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
             >
               <defs>
                 <linearGradient id="goldAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#e7b26a" stopOpacity="0.34" />
-                  <stop offset="100%" stopColor="#e7b26a" stopOpacity="0.02" />
+                  <stop offset="0%" stopColor="#0088a9" stopOpacity="0.34" />
+                  <stop offset="100%" stopColor="#0088a9" stopOpacity="0.02" />
                 </linearGradient>
                 <linearGradient id="comboBarGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.38" />
@@ -361,7 +365,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                   {len > 1 ? (
                     <path
                       fill="none"
-                      stroke="#e7b26a"
+                      stroke="#0088a9"
                       strokeWidth="2.6"
                       strokeLinejoin="round"
                       strokeLinecap="round"
@@ -375,8 +379,8 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                       cx={getRevX(i)}
                       cy={getRevY(d.revenue || 0)}
                       r={hoverRevIdx === i ? 6 : 3.5}
-                      fill="#e7b26a"
-                      stroke="#1a1917"
+                      fill="#0088a9"
+                      stroke="#ffffff"
                       strokeWidth="1.8"
                     />
                   ))}
@@ -410,7 +414,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={getRevY(d.codRevenue || 0)}
                         r={hoverRevIdx === i ? 5.5 : 3.2}
                         fill="#f59e0b"
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.5"
                       />
                       <circle
@@ -418,7 +422,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={getRevY(d.vnpayRevenue || 0)}
                         r={hoverRevIdx === i ? 5.5 : 3.2}
                         fill="#10b981"
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.5"
                       />
                     </g>
@@ -462,7 +466,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={getRevY(d.revenue || 0)}
                         r={hoverRevIdx === i ? 5.5 : 3.2}
                         fill="#10b981"
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.5"
                       />
                       <circle
@@ -470,7 +474,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={getRevY(d.shippingRevenue || 0)}
                         r={hoverRevIdx === i ? 5.5 : 3.2}
                         fill="#3b82f6"
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.5"
                       />
                       <circle
@@ -478,7 +482,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={getRevY(d.pendingRevenue || 0)}
                         r={hoverRevIdx === i ? 5.5 : 3.2}
                         fill="#a855f7"
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.5"
                       />
                     </g>
@@ -517,7 +521,10 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
         <div className="chart-panel">
           <div className="chart-panel-header">
             <div className="chart-panel-title-group">
-              <h3 className="chart-panel-title">📦 Lượng Đơn Hàng Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</h3>
+              <h3 className="chart-panel-title">
+            <PackageIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Lượng Đơn Hàng Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</span>
+          </h3>
               <p className="chart-panel-subtitle">
                 Tổng trong kỳ: <strong style={{ color: '#fffaf1' }}>{periodSummary.totalOrders || 0} đơn</strong> ({periodSummary.completedOrders || 0} hoàn thành)
               </p>
@@ -665,7 +672,10 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
         <div className="chart-panel">
           <div className="chart-panel-header">
             <div className="chart-panel-title-group">
-              <h3 className="chart-panel-title">👥 Độc Giả Mới Đăng Ký Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</h3>
+              <h3 className="chart-panel-title">
+            <UsersIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Độc Giả Mới Đăng Ký Theo {groupBy === 'month' ? 'Tháng' : 'Ngày'}</span>
+          </h3>
               <p className="chart-panel-subtitle">
                 Tổng trong kỳ: <strong style={{ color: '#c084fc' }}>{periodSummary.totalNewUsers || 0} tài khoản</strong>
               </p>
@@ -692,7 +702,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                 </div>
                 <div className="chart-tooltip-row">
                   <span>Tích lũy trong kỳ:</span>
-                  <span className="chart-tooltip-val" style={{ color: '#e7b26a' }}>
+                  <span className="chart-tooltip-val" style={{ color: '#0088a9' }}>
                     {activeUserCumulative} tài khoản
                   </span>
                 </div>
@@ -743,7 +753,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                 {len > 1 ? (
                   <path
                     fill="none"
-                    stroke="#e7b26a"
+                    stroke="#0088a9"
                     strokeWidth="2"
                     strokeDasharray="4 3"
                     d={cumUserLinePath}
@@ -780,7 +790,7 @@ function AdminAnalyticsCharts({ revenueChart, loading }) {
                         cy={yUser}
                         r={hoverUserIdx === i ? 6 : (newUsers > 0 ? 4.4 : 2.5)}
                         fill={newUsers > 0 ? '#c084fc' : '#524a3f'}
-                        stroke="#1a1917"
+                        stroke="#ffffff"
                         strokeWidth="1.6"
                         className="chart-lollipop-dot"
                       />
