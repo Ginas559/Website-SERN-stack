@@ -10,7 +10,11 @@ const orderService = {
   },
   getUserOrders: (params = {}) => axiosClient.get('/orders', { params }),
   getOrderDetails: (orderId) => axiosClient.get(`/orders/${orderId}`),
-  cancelOrder: (orderId, reason = '') => axiosClient.patch(`/orders/${orderId}/cancel`, { reason }),
+  cancelOrder: (orderId, reason = '', currentStatus = null) =>
+    axiosClient.patch(`/orders/${orderId}/cancel`, {
+      reason,
+      ...(currentStatus !== null && currentStatus !== undefined ? { currentStatus } : {}),
+    }),
   reorder: (orderId) => axiosClient.post(`/orders/${orderId}/reorder`),
   getAdminOrders: (params = {}) => axiosClient.get('/orders/admin', { params }),
   updateOrderStatus: (orderId, data) => axiosClient.patch(`/orders/${orderId}/status`, data),

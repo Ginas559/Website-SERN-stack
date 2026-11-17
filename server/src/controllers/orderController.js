@@ -20,6 +20,7 @@ async function cancelOrder(req, res, next) {
         const isAdmin = Boolean(req.user.isAdmin);
         const result = await orderService.cancelOrder(req.params.id, userId, {
             reason: req.body.reason,
+            currentStatus: req.body.currentStatus,
             isAdmin
         });
         return res.status(200).json({

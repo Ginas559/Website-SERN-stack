@@ -184,11 +184,19 @@ async function processPaymentReturn(queryParams = {}) {
             }
         });
 
+        let finalOrder;
+        try {
+            const orderService = require("./orderService");
+            finalOrder = await orderService.dispatchGhnForPaidOrder(order.id) || updatedOrder;
+        } catch {
+            finalOrder = updatedOrder;
+        }
+
         return {
             isSuccess: true,
             responseCode,
             message,
-            order: updatedOrder
+            order: finalOrder
         };
     }
 
@@ -245,6 +253,12 @@ async function processPaymentIPN(queryParams = {}) {
                 paidAt: new Date().toISOString()
             }
         });
+        try {
+            const orderService = require("./orderService");
+            await orderService.dispatchGhnForPaidOrder(order.id);
+        } catch {
+            return { RspCode: "00", Message: "Confirm Success" };
+        }
         return { RspCode: "00", Message: "Confirm Success" };
     }
 

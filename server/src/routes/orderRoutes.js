@@ -106,6 +106,26 @@ router.post(
             .withMessage("Phí vận chuyển dự kiến phải là số nguyên không âm.")
             .bail()
             .toInt(),
+        body("toDistrictId")
+            .optional({ nullable: true })
+            .isInt({ min: 1 })
+            .withMessage("toDistrictId không hợp lệ.")
+            .bail()
+            .toInt(),
+        body("toWardCode")
+            .optional({ nullable: true })
+            .isString()
+            .trim(),
+        body("provinceId")
+            .optional({ nullable: true })
+            .isInt({ min: 1 })
+            .withMessage("provinceId không hợp lệ.")
+            .bail()
+            .toInt(),
+        body("provinceName")
+            .optional({ nullable: true })
+            .isString()
+            .trim(),
     ],
     validate,
     controller.createOrder
@@ -219,7 +239,13 @@ router.patch(
             .trim()
             .isLength({ max: 255 })
             .withMessage("Lý do hủy đơn không được vượt quá 255 ký tự.")
+            .bail(),
+        body("currentStatus")
+            .optional({ nullable: true })
+            .isInt({ min: 0, max: 4 })
+            .withMessage("Trạng thái hiện tại phải là số nguyên từ 0 đến 4.")
             .bail()
+            .toInt()
     ],
     validate,
     controller.cancelOrder
