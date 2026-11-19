@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    fetchWishlist, 
-    removeFromWishlist, 
-    clearWishlist 
+import {
+    fetchWishlist,
+    removeFromWishlist,
+    clearWishlist
 } from '../store/slices/wishlistSlice';
 import { addToCart } from '../store/slices/cartSlice';
 import WishlistCard from './WishlistCard';
@@ -21,7 +21,15 @@ function cleanWishlistData(rawList) {
         if (!id || seen.has(id)) continue;
         seen.add(id);
 
-        const stock = Math.max(0, Number(it.stock ?? it.quantityInStock ?? 999));
+        const rawStock = Number(
+            it.stockQuantity ??
+            it.quantityInStock ??
+            it.stock ??
+            it.quantity ??
+            0
+        );
+        const stock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(it.isDeleted || it.book_is_deleted || it.isDelete);
 
         result.push({
             ...it,
@@ -32,6 +40,8 @@ function cleanWishlistData(rawList) {
             price: Math.max(0, Number(it.price) || 0),
             discount: Math.max(0, Math.min(100, Number(it.discount) || 0)),
             stock,
+            stockQuantity: stock,
+            isDeleted,
             image: it.image || null
         });
     }
@@ -39,9 +49,9 @@ function cleanWishlistData(rawList) {
     return result;
 }
 
-function WishlistPage({ 
-    wishlist = null, 
-    onContinueShopping, 
+function WishlistPage({
+    wishlist = null,
+    onContinueShopping,
     onSelectBook,
     onAddToCartOverride,
     onRemoveOverride,
@@ -119,8 +129,21 @@ function WishlistPage({
             return;
         }
 
-        const rawStock = Number(book.stock ?? book.quantityInStock ?? 999);
-        const stockCount = Math.max(0, Number.isFinite(rawStock) ? rawStock : 999);
+        const rawStock = Number(
+            book.stockQuantity ??
+            book.quantityInStock ??
+            book.stock ??
+            book.quantity ??
+            0
+        );
+        const stockCount = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(book.isDeleted || book.book_is_deleted || book.isDelete);
+
+        if (isDeleted) {
+            triggerToast('Sản phẩm này đã ngừng kinh doanh.', 'warning');
+            return;
+        }
+
         if (stockCount <= 0) {
             triggerToast('Sản phẩm này tạm thời hết hàng trong kho.', 'warning');
             return;
@@ -172,7 +195,10 @@ function WishlistPage({
     };
 
     const handleAddAllToCart = () => {
-        const availableItems = items.filter((it) => it.stock > 0);
+        const availableItems = items.filter((it) => {
+            const rawStock = Number(it.stockQuantity ?? it.stock ?? it.quantity ?? 0);
+            return rawStock > 0 && !it.isDeleted;
+        });
         if (availableItems.length === 0) {
             triggerToast('Không có sách nào còn hàng để thêm vào giỏ.', 'warning');
             return;
@@ -196,7 +222,7 @@ function WishlistPage({
             availableItems.forEach((book) => {
                 const bookId = book.bookId || book.id;
                 const existingIndex = currentCart.findIndex((item) => (item.bookId || item.id) === bookId);
-                const stockCount = book.stock;
+                const stockCount = Math.max(0, Number(book.stock ?? book.stockQuantity ?? book.quantity ?? 0));
 
                 if (existingIndex >= 0) {
                     const currentQty = Number(currentCart[existingIndex].quantity) || 1;
@@ -290,22 +316,22 @@ function WishlistPage({
             <div className="wishlist-container">
                 <div className="wishlist-header-section">
                     <h1 className="wishlist-page-title">
-                        Danh sách yêu thích 
+                        Danh sách yêu thích
                         {items.length > 0 && <span className="wishlist-items-counter">({items.length} cuốn sách)</span>}
                     </h1>
 
                     {items.length > 0 && (
                         <div className="wishlist-header-actions">
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="wishlist-header-btn add-all"
                                 disabled={inStockCount === 0}
                                 onClick={handleAddAllToCart}
                             >
                                 🛒 Thêm tất cả vào giỏ ({inStockCount})
                             </button>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="wishlist-header-btn clear-all"
                                 onClick={() => setShowClearConfirmModal(true)}
                             >
@@ -333,7 +359,7 @@ function WishlistPage({
                         {items.map((item) => {
                             const itemId = item.bookId || item.id;
                             return (
-                                <WishlistCard 
+                                <WishlistCard
                                     key={itemId}
                                     item={item}
                                     onAddToCart={handleAddToCart}
@@ -356,15 +382,15 @@ function WishlistPage({
                                 Bạn có chắc chắn muốn xóa toàn bộ {items.length} cuốn sách khỏi danh sách yêu thích?
                             </p>
                             <div className="wishlist-modal-actions">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="wishlist-modal-btn cancel"
                                     onClick={() => setShowClearConfirmModal(false)}
                                 >
                                     Giữ lại sách
                                 </button>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="wishlist-modal-btn confirm"
                                     onClick={confirmClearAll}
                                 >

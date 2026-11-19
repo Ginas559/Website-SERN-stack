@@ -4,12 +4,18 @@ import debounce from 'lodash.debounce';
 function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect }) {
     const [imgError, setImgError] = useState(false);
 
-    const rawStock = Number(item.stock ?? item.quantityInStock ?? 999);
-    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 999);
-    const isOutOfStock = maxStock === 0;
+    const rawStock = Number(
+        item.stockQuantity ??
+        item.stock ??
+        item.quantityInStock ??
+        item.quantity ??
+        0
+    );
+    const maxStock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+    const isOutOfStock = maxStock === 0 || Boolean(item.isDeleted);
 
-    const initialQuantity = isOutOfStock 
-        ? 0 
+    const initialQuantity = isOutOfStock
+        ? 0
         : Math.max(1, Math.min(maxStock, Number(item.quantity) || 1));
 
     const [prevQuantity, setPrevQuantity] = useState(initialQuantity);
@@ -22,8 +28,8 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
 
     const price = Math.max(0, Number(item.price) || 0);
     const discount = Math.max(0, Math.min(100, Number(item.discount) || 0));
-    const finalPrice = discount > 0 
-        ? Math.round(price * (100 - discount) / 100) 
+    const finalPrice = discount > 0
+        ? Math.round(price * (100 - discount) / 100)
         : price;
     const itemTotal = isOutOfStock ? 0 : finalPrice * localQuantity;
 
@@ -71,9 +77,9 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
     return (
         <tr className={`cart-table-row ${isOutOfStock ? 'out-of-stock-row' : ''}`}>
             <td className="cart-cell-select">
-                <input 
-                    type="checkbox" 
-                    checked={Boolean(isSelected && !isOutOfStock)} 
+                <input
+                    type="checkbox"
+                    checked={Boolean(isSelected && !isOutOfStock)}
                     disabled={isOutOfStock}
                     onChange={() => onToggleSelect && onToggleSelect(item.bookId || item.id)}
                     aria-label={`Chọn sách ${item.title}`}
@@ -83,9 +89,9 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                 <div className="cart-product-info">
                     <div className="cart-product-cover-wrap">
                         {item.image && !imgError ? (
-                            <img 
-                                src={item.image} 
-                                alt={item.title} 
+                            <img
+                                src={item.image}
+                                alt={item.title}
                                 className="cart-product-img"
                                 onError={() => setImgError(true)}
                             />
@@ -96,7 +102,9 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                     <div className="cart-product-details">
                         <div className="cart-product-title" title={item.title}>{item.title}</div>
                         {item.author && <div className="cart-product-author">Tác giả: {item.author}</div>}
-                        {isOutOfStock ? (
+                        {item.isDeleted ? (
+                            <div className="cart-product-stock-out">Ngừng kinh doanh</div>
+                        ) : isOutOfStock ? (
                             <div className="cart-product-stock-out">Tạm hết hàng</div>
                         ) : maxStock < 10 ? (
                             <div className="cart-product-stock-warning">Chỉ còn {maxStock} cuốn trong kho</div>
@@ -120,8 +128,8 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                     <span className="cart-qty-disabled-text">Không khả dụng</span>
                 ) : (
                     <div className="cart-qty-control">
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="cart-qty-btn minus"
                             disabled={localQuantity <= 1}
                             onClick={() => handleQuantityChange(localQuantity - 1)}
@@ -129,18 +137,18 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                         >
                             −
                         </button>
-                        <input 
-                            type="number" 
-                            className="cart-qty-input" 
-                            value={localQuantity} 
-                            min="1" 
+                        <input
+                            type="number"
+                            className="cart-qty-input"
+                            value={localQuantity}
+                            min="1"
                             max={maxStock}
                             onChange={handleInputChange}
                             onKeyDown={handleKeyDown}
                             aria-label="Số lượng sách"
                         />
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="cart-qty-btn plus"
                             disabled={localQuantity >= maxStock}
                             onClick={() => handleQuantityChange(localQuantity + 1)}
@@ -157,9 +165,9 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                 </span>
             </td>
             <td className="cart-cell-action">
-                <button 
-                    type="button" 
-                    className="cart-remove-btn" 
+                <button
+                    type="button"
+                    className="cart-remove-btn"
                     onClick={() => onRemove && onRemove(item.bookId || item.id)}
                     title="Xóa cuốn sách này khỏi giỏ hàng"
                     aria-label="Xóa"

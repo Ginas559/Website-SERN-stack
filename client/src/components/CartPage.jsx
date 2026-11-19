@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-    fetchCart, 
-    updateCartItem, 
-    removeFromCart, 
+import {
+    fetchCart,
+    updateCartItem,
+    removeFromCart,
     clearCart,
-    validateCart 
+    validateCart
 } from '../store/slices/cartSlice';
 import CartTable from './CartTable';
 import CartSummary from './CartSummary';
@@ -24,9 +24,17 @@ function cleanCartData(rawList) {
         if (!id || seen.has(id)) continue;
         seen.add(id);
 
-        const stock = Math.max(0, Number(it.stock ?? it.quantityInStock ?? 999));
-        const safeQuantity = stock > 0 
-            ? Math.max(1, Math.min(stock, Number(it.quantity) || 1)) 
+        const rawStock = Number(
+            it.stockQuantity ??
+            it.stock ??
+            it.quantityInStock ??
+            it.quantity ??
+            0
+        );
+        const stock = Math.max(0, Number.isFinite(rawStock) ? rawStock : 0);
+        const isDeleted = Boolean(it.isDeleted || it.book_is_deleted || it.isDelete);
+        const safeQuantity = stock > 0 && !isDeleted
+            ? Math.max(1, Math.min(stock, Number(it.quantity) || 1))
             : 0;
 
         result.push({
@@ -38,20 +46,22 @@ function cleanCartData(rawList) {
             price: Math.max(0, Number(it.price) || 0),
             discount: Math.max(0, Math.min(100, Number(it.discount) || 0)),
             quantity: safeQuantity,
-            stock
+            stock,
+            stockQuantity: stock,
+            isDeleted
         });
     }
 
     return result;
 }
 
-function CartPage({ 
-    cart = null, 
-    onContinueShopping, 
-    onCheckout, 
-    onUpdateQuantityOverride, 
-    onRemoveItemOverride, 
-    onClearCartOverride 
+function CartPage({
+    cart = null,
+    onContinueShopping,
+    onCheckout,
+    onUpdateQuantityOverride,
+    onRemoveItemOverride,
+    onClearCartOverride
 }) {
     const dispatch = useDispatch();
     const reduxCart = useSelector((state) => state.cart);
@@ -127,14 +137,14 @@ function CartPage({
 
     const handleToggleSelect = (itemId) => {
         const item = items.find((it) => (it.bookId || it.id) === itemId);
-        if (item && item.stock <= 0) {
-            triggerToast('Sản phẩm này tạm thời hết hàng, không thể chọn mua.', 'warning');
+        if (item && (item.stock <= 0 || item.isDeleted)) {
+            triggerToast(item.isDeleted ? 'Sản phẩm này đã ngừng kinh doanh, không thể chọn mua.' : 'Sản phẩm này tạm thời hết hàng, không thể chọn mua.', 'warning');
             return;
         }
 
-        setSelectedItemIds((prev) => 
-            prev.includes(itemId) 
-                ? prev.filter((id) => id !== itemId) 
+        setSelectedItemIds((prev) =>
+            prev.includes(itemId)
+                ? prev.filter((id) => id !== itemId)
                 : [...prev, itemId]
         );
     };
@@ -179,8 +189,8 @@ function CartPage({
             const next = prev.map((item) => {
                 const id = item.bookId || item.id;
                 if (id === bookId) {
-                    const safeQuantity = item.stock > 0 
-                        ? Math.max(1, Math.min(item.stock, nextQuantity)) 
+                    const safeQuantity = item.stock > 0
+                        ? Math.max(1, Math.min(item.stock, nextQuantity))
                         : 0;
                     return { ...item, quantity: safeQuantity };
                 }
@@ -312,7 +322,7 @@ function CartPage({
             <div className="cart-container">
                 <div className="cart-header-section">
                     <h1 className="cart-page-title">
-                        Giỏ hàng mua sắm 
+                        Giỏ hàng mua sắm
                         {items.length > 0 && <span className="cart-items-counter">({items.length} đầu sách)</span>}
                     </h1>
                 </div>
@@ -333,7 +343,7 @@ function CartPage({
                 ) : (
                     <div className="cart-content-layout">
                         <div className="cart-main-column">
-                            <CartTable 
+                            <CartTable
                                 items={items}
                                 selectedItemIds={selectedItemIds}
                                 onToggleSelectAll={handleToggleSelectAll}
@@ -345,7 +355,7 @@ function CartPage({
                         </div>
 
                         <div className="cart-sidebar-column">
-                            <CartSummary 
+                            <CartSummary
                                 selectedCount={selectedCount}
                                 subtotal={subtotal}
                                 shippingFee={shippingFee}
@@ -368,15 +378,15 @@ function CartPage({
                                 Bạn có chắc chắn muốn xóa toàn bộ {items.length} sản phẩm khỏi giỏ hàng? Thao tác này không thể hoàn tác.
                             </p>
                             <div className="cart-modal-actions">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="cart-modal-btn cancel"
                                     onClick={() => setShowClearConfirmModal(false)}
                                 >
                                     Giữ lại sách
                                 </button>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="cart-modal-btn confirm"
                                     onClick={confirmClearCart}
                                 >
