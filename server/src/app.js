@@ -10,6 +10,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const shipperRoutes = require("./routes/shipperRoutes");
 const clientBookRoutes = require("./routes/clientBookRoutes");
 const clientCategoryRoutes = require("./routes/clientCategoryRoutes");
 const discountRoutes = require("./routes/discountRoutes");
@@ -43,6 +44,7 @@ app.use("/api/admin/orders", (req, res, next) => {
 app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/shipper", shipperRoutes);
 app.use("/api/payment", orderRoutes);
 app.use("/api/books", clientBookRoutes);
 app.use("/api/categories", clientCategoryRoutes);

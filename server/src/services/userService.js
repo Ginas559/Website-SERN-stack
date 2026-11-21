@@ -1,5 +1,7 @@
 const userModel = require("../models/userModel");
 const AppError = require("../utils/AppError");
+const { sql, connectDB } = require("../config/connectDB");
+const orderAssignmentModel = require("../models/orderAssignmentModel");
 
 function validateProfileUpdate({ fullName, phoneNumber, address, avatar }) {
     if (fullName !== undefined) {
@@ -128,7 +130,7 @@ async function getAdminUsers(queryParams = {}) {
         limit = 10,
         search,
         isDelete,
-        isAdmin,
+        role,
         isVerified,
         isVip,
         sortBy = "createdAt",
@@ -142,12 +144,16 @@ async function getAdminUsers(queryParams = {}) {
         throw new AppError("Số lượng mỗi trang phải từ 1 đến 100.", 400);
     }
 
+    const normalizedRole = role
+        ? ({ admin: "Admin", customer: "Customer", shipper: "Shipper" }[String(role).toLowerCase()] || role)
+        : role;
+
     return userModel.findAllForAdmin({
         page,
         limit,
         search,
         isDelete,
-        isAdmin,
+        role: normalizedRole,
         isVerified,
         isVip,
         sortBy,
@@ -179,7 +185,7 @@ async function blockUser(targetUserId, { blockReason = null } = {}, adminId) {
         throw new AppError("Không tìm thấy thông tin người dùng.", 404);
     }
 
-    if (user.isAdmin === 1) {
+    if (user.role === "Admin") {
         throw new AppError("Không thể chặn tài khoản Quản trị viên.", 403);
     }
 
@@ -192,7 +198,26 @@ async function blockUser(targetUserId, { blockReason = null } = {}, adminId) {
         return user;
     }
 
-    const blockedUser = await userModel.block(targetUserId, cleanReason);
+    const pool = await connectDB();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    let blockedUser;
+    try {
+        const acceptedAssignment = await orderAssignmentModel.findActiveAcceptedByShipperId(targetUserId, transaction);
+        if (acceptedAssignment) {
+            throw new AppError("Không thể khóa shipper đang có đơn đã nhận và đang giao. Vui lòng hoàn tất hoặc xử lý đơn trước.", 409);
+        }
+        blockedUser = await userModel.block(targetUserId, cleanReason, transaction);
+        if (!blockedUser) {
+            await transaction.rollback();
+            throw new AppError("Trạng thái người dùng đã thay đổi, vui lòng thử lại.", 409);
+        }
+        await orderAssignmentModel.cancelActiveByShipperId(targetUserId, "Tài khoản shipper đã bị khóa.", transaction);
+        await transaction.commit();
+    } catch (error) {
+        try { await transaction.rollback(); } catch { void error; }
+        throw error;
+    }
     if (!blockedUser) {
         throw new AppError("Trạng thái người dùng đã thay đổi, vui lòng thử lại.", 409);
     }

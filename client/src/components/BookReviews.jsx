@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import reviewService from '../services/reviewService'
+import { MaterialCommunityIcon } from './common/Icons'
 import './BookReviews.css'
 
 const STAR_LABELS = {
@@ -205,10 +206,10 @@ function BookReviews({
 
   const isAuthenticated = Boolean(localStorage.getItem('accessToken'))
   const currentUserId = currentUser?.id || null
-  const isAdminUser = Boolean(
+  const hasAdminRole = Boolean(
     isAuthenticated &&
     currentUser &&
-    (currentUser.isAdmin || currentUser.role === 'Admin' || currentUser.role === 'admin')
+    currentUser.role === 'Admin'
   )
 
   const applyReviewsResponse = useCallback((res, targetTab, fallbackPage, resetOtherTab = false) => {
@@ -576,7 +577,7 @@ function BookReviews({
       item.user_id &&
       String(item.user_id).toLowerCase() === String(currentUserId).toLowerCase()
     )
-    const canReplyToItem = isDiscussion || isAdminUser
+    const canReplyToItem = isDiscussion || hasAdminRole
     const isOwnReviewCard = !isDiscussion && isAuthor
     const isEditing = editingId === item.id
     const { displayName, avatarUrl, initialLetter } = getAuthorDisplay(
@@ -700,7 +701,7 @@ function BookReviews({
                 onClick={() => handleOpenReply(item.id, displayName, displayName)}
                 disabled={submitting}
               >
-                {isDiscussion ? '↩️ Trả lời' : '↩️ Phản hồi đánh giá'}
+                <><MaterialCommunityIcon name="arrow-u-turn-left" size={14} />{isDiscussion ? 'Trả lời' : 'Phản hồi đánh giá'}</>
               </button>
             ) : null}
             {isAuthor ? (
@@ -711,7 +712,7 @@ function BookReviews({
                   onClick={() => handleStartEdit(item, false)}
                   disabled={submitting}
                 >
-                  ✏️ Chỉnh sửa
+                  <><MaterialCommunityIcon name="pencil" size={14} />Chỉnh sửa</>
                 </button>
                 <button
                   type="button"
@@ -719,7 +720,7 @@ function BookReviews({
                   onClick={() => handleDeleteItem(item.id)}
                   disabled={submitting}
                 >
-                  {isDiscussion ? '🗑️ Xóa thảo luận' : '🗑️ Xóa đánh giá'}
+                  <><MaterialCommunityIcon name="delete" size={14} />{isDiscussion ? 'Xóa thảo luận' : 'Xóa đánh giá'}</>
                 </button>
               </>
             ) : null}
@@ -810,7 +811,7 @@ function BookReviews({
                             <span className="reply-target-name">{targetInfo.targetName}</span>
                           </span>
                         ) : null}
-                        {reply.user_isAdmin ? (
+                        {reply.user_role === 'Admin' ? (
                           <span className="admin-reply-badge">Quản trị viên</span>
                         ) : null}
                         {reply.isPurchased ? (
@@ -836,7 +837,7 @@ function BookReviews({
                           onClick={() => handleOpenReply(item.id, replyAuthor.displayName, replyAuthor.displayName)}
                           disabled={submitting}
                         >
-                          ↩️ Trả lời
+                          <><MaterialCommunityIcon name="arrow-u-turn-left" size={14} />Trả lời</>
                         </button>
                       ) : null}
                       {isReplyAuthor ? (
@@ -847,7 +848,7 @@ function BookReviews({
                             onClick={() => handleStartEdit(reply, true)}
                             disabled={submitting}
                           >
-                            ✏️ Chỉnh sửa
+                            <><MaterialCommunityIcon name="pencil" size={14} />Chỉnh sửa</>
                           </button>
                           <button
                             type="button"
@@ -855,7 +856,7 @@ function BookReviews({
                             onClick={() => handleDeleteItem(reply.id)}
                             disabled={submitting}
                           >
-                            🗑️ Xóa
+                            <><MaterialCommunityIcon name="delete" size={14} />Xóa</>
                           </button>
                         </>
                       ) : null}
@@ -926,7 +927,7 @@ function BookReviews({
             handleCancelReply()
           }}
         >
-          ⭐ Đánh giá từ người mua ({totalReviewCount})
+          <><MaterialCommunityIcon name="star" size={15} />Đánh giá từ người mua ({totalReviewCount})</>
         </button>
         <button
           type="button"
@@ -937,7 +938,7 @@ function BookReviews({
             handleCancelReply()
           }}
         >
-          💬 Hỏi đáp & Thảo luận ({totalDiscussionCount})
+          <><MaterialCommunityIcon name="message" size={15} />Hỏi đáp &amp; Thảo luận ({totalDiscussionCount})</>
         </button>
       </div>
 
@@ -992,7 +993,7 @@ function BookReviews({
             renderCommentCard(userReview, { isDiscussion: false, attachOwnRef: true, cardKeyPrefix: 'pinned-own' })
           ) : purchaseStatus.status === 'pending' ? (
             <div className="order-pending-banner">
-              <span className="banner-icon">⏳</span>
+               <span className="banner-icon"><MaterialCommunityIcon name="clock-outline" size={22} /></span>
               <div>
                 <strong>Đơn hàng đang xử lý hoặc đang trên đường giao:</strong>
                 <p className="banner-desc">
@@ -1002,7 +1003,7 @@ function BookReviews({
             </div>
           ) : !purchaseStatus.canReview ? (
             <div className="not-purchased-banner">
-              <span className="banner-icon">🛒</span>
+               <span className="banner-icon"><MaterialCommunityIcon name="cart" size={22} /></span>
               <div>
                 <strong>Chỉ dành cho độc giả đã nhận sách:</strong>
                 <p className="banner-desc">
@@ -1081,7 +1082,7 @@ function BookReviews({
               <div className="reviews-empty-box">Đang tải danh sách đánh giá...</div>
             ) : listReviews.length === 0 ? (
               <div className="reviews-empty-box">
-                <div className="reviews-empty-icon">💬</div>
+                 <div className="reviews-empty-icon"><MaterialCommunityIcon name="message" size={36} /></div>
                 <p>
                   {reviews.length > 0 && shouldRenderPinnedOwnReview
                     ? totalPages > 1
@@ -1153,7 +1154,7 @@ function BookReviews({
               <div className="reviews-empty-box">Đang tải danh sách thảo luận...</div>
             ) : discussions.length === 0 ? (
               <div className="reviews-empty-box">
-                <div className="reviews-empty-icon">💭</div>
+                <div className="reviews-empty-icon"><MaterialCommunityIcon name="message" size={36} /></div>
                 <p>Chưa có câu hỏi hay thảo luận nào. Hãy là người đầu tiên đặt câu hỏi về cuốn sách này!</p>
               </div>
             ) : (

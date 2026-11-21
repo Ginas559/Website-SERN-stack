@@ -35,12 +35,11 @@ router.get(
             .withMessage("Cờ trạng thái xóa phải là 0 hoặc 1.")
             .bail()
             .toInt(),
-        query("isAdmin")
+        query("role")
             .optional()
-            .isIn(["0", "1", 0, 1])
-            .withMessage("Cờ quản trị viên phải là 0 hoặc 1.")
-            .bail()
-            .toInt(),
+            .isIn(["Customer", "Admin", "Shipper", "customer", "admin", "shipper"])
+            .withMessage("Vai trò người dùng không hợp lệ.")
+            .bail(),
         query("isVerified")
             .optional()
             .isIn(["0", "1", 0, 1])

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
     fetchCart, 
@@ -10,6 +10,7 @@ import {
 import CartTable from './CartTable';
 import CartSummary from './CartSummary';
 import EmptyCart from './EmptyCart';
+import { MaterialCommunityIcon } from './common/Icons';
 import { useShippingRule, calculateSelectedItemsTotals, calculateShippingFee } from '../utils/pricing';
 import './Cart.css';
 
@@ -102,11 +103,18 @@ function CartPage({
 
     const [toast, setToast] = useState(null);
     const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+    const toastTimerRef = useRef(null);
+
+    useEffect(() => () => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    }, []);
 
     const triggerToast = useCallback((message, type = 'success') => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ message, type });
-        setTimeout(() => {
+        toastTimerRef.current = setTimeout(() => {
             setToast(null);
+            toastTimerRef.current = null;
         }, 3000);
     }, []);
 
@@ -197,7 +205,8 @@ function CartPage({
                 return item;
             });
             try {
-                localStorage.setItem('guestCart', JSON.stringify(next));
+            localStorage.setItem('guestCart', JSON.stringify(next));
+            window.dispatchEvent(new CustomEvent('sern:guest-cart-updated'));
             } catch {
                 return next;
             }
@@ -229,7 +238,8 @@ function CartPage({
         setLocalGuestItems((prev) => {
             const next = prev.filter((item) => (item.bookId || item.id) !== bookId);
             try {
-                localStorage.setItem('guestCart', JSON.stringify(next));
+            localStorage.setItem('guestCart', JSON.stringify(next));
+            window.dispatchEvent(new CustomEvent('sern:guest-cart-updated'));
             } catch {
                 return next;
             }
@@ -261,7 +271,8 @@ function CartPage({
             setLocalGuestItems([]);
             setSelectedItemIds([]);
             try {
-                localStorage.removeItem('guestCart');
+            localStorage.removeItem('guestCart');
+            window.dispatchEvent(new CustomEvent('sern:guest-cart-updated'));
             } catch {
                 return;
             }
@@ -371,7 +382,7 @@ function CartPage({
                     <div className="cart-modal-backdrop" onClick={() => setShowClearConfirmModal(false)}>
                         <div className="cart-modal-card" onClick={(e) => e.stopPropagation()}>
                             <div className="cart-modal-icon-wrap">
-                                <span className="cart-modal-icon">🗑️</span>
+                                <span className="cart-modal-icon"><MaterialCommunityIcon name="delete" size={28} /></span>
                             </div>
                             <h3 className="cart-modal-title">Xác nhận làm trống giỏ hàng</h3>
                             <p className="cart-modal-desc">

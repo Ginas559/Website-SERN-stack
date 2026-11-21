@@ -1,6 +1,19 @@
 function errorHandler(error, req, res, next) {
-    console.error(error);
-    res.status(error.statusCode || 500).json({ message: error.isOperational ? error.message : "Đã xảy ra lỗi máy chủ." });
+    const statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500;
+    const isOperational = Boolean(error.isOperational) && statusCode < 500;
+
+    if (!isOperational) {
+        console.error({
+            method: req.method,
+            path: req.originalUrl,
+            statusCode,
+            error
+        });
+    }
+
+    res.status(statusCode).json({
+        message: isOperational ? error.message : "Đã xảy ra lỗi máy chủ."
+    });
 }
 
 module.exports = errorHandler;

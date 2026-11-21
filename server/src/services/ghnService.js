@@ -1,5 +1,6 @@
 const AppError = require("../utils/AppError");
 const storePolicyService = require("./storePolicyService");
+const { DELIVERY_ZONE, resolveShippingZone } = require("../utils/shippingZone");
 
 const GHN_CONFIG = Object.freeze({
     get token() {
@@ -151,39 +152,41 @@ async function getWards(districtId) {
     return formatted;
 }
 
-function isInnerCityHcm(provinceName = "", provinceId = null) {
-    if (provinceId === 202) {
-        return true;
-    }
-    const normalized = String(provinceName || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d");
+async function validateAddressSelection({ provinceId, districtId, wardCode }) {
+    const normalizedProvinceId = Number(provinceId);
+    const normalizedDistrictId = Number(districtId);
+    const normalizedWardCode = String(wardCode || "").trim();
 
-    if (
-        normalized.includes("ho chi minh") ||
-        normalized.includes("hcm") ||
-        normalized.includes("sai gon") ||
-        normalized.includes("thu duc")
-    ) {
-        return true;
+    if (!Number.isInteger(normalizedProvinceId) || normalizedProvinceId < 1) {
+        throw new AppError("Vui lòng chọn Tỉnh/Thành hợp lệ từ danh sách GHN.", 400);
+    }
+    if (!Number.isInteger(normalizedDistrictId) || normalizedDistrictId < 1) {
+        throw new AppError("Vui lòng chọn Quận/Huyện hợp lệ từ danh sách GHN.", 400);
+    }
+    if (!normalizedWardCode) {
+        throw new AppError("Vui lòng chọn Phường/Xã hợp lệ từ danh sách GHN.", 400);
     }
 
-    const hcmKeywords = [
-        "quan 1", "quan 2", "quan 3", "quan 4", "quan 5", "quan 6",
-        "quan 7", "quan 8", "quan 9", "quan 10", "quan 11", "quan 12",
-        "q.1", "q.2", "q.3", "q.4", "q.5", "q.6", "q.7", "q.8", "q.9", "q.10", "q.11", "q.12",
-        "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "q11", "q12",
-        "binh thanh", "phu nhuan", "go vap", "tan binh", "tan phu",
-        "binh tan", "nha be", "hoc mon", "cu chi", "binh chanh", "can gio"
-    ];
+    const provinces = await getProvinces();
+    if (!provinces.some((province) => Number(province.provinceId) === normalizedProvinceId)) {
+        throw new AppError("Tỉnh/Thành đã chọn không tồn tại trong dữ liệu GHN.", 400);
+    }
 
-    return hcmKeywords.some((k) => {
-        const escaped = k.replace(".", "\\.");
-        const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
-        return regex.test(normalized);
-    });
+    const districts = await getDistricts(normalizedProvinceId);
+    if (!districts.some((district) => Number(district.districtId) === normalizedDistrictId)) {
+        throw new AppError("Quận/Huyện không thuộc Tỉnh/Thành đã chọn.", 400);
+    }
+
+    const wards = await getWards(normalizedDistrictId);
+    if (!wards.some((ward) => String(ward.wardCode) === normalizedWardCode)) {
+        throw new AppError("Phường/Xã không thuộc Quận/Huyện đã chọn.", 400);
+    }
+
+    return {
+        provinceId: normalizedProvinceId,
+        districtId: normalizedDistrictId,
+        wardCode: normalizedWardCode
+    };
 }
 
 async function calculateShippingFee({
@@ -195,13 +198,17 @@ async function calculateShippingFee({
     heightCm = 10,
     insuranceValue = 0,
     orderTotal = 0,
-    provinceName = "",
     provinceId = null
 }) {
+    const addressSelection = await validateAddressSelection({
+        provinceId,
+        districtId: toDistrictId,
+        wardCode: toWardCode
+    });
     const storePolicy = await storePolicyService.getShippingPolicy();
-    const isInnerCity = isInnerCityHcm(provinceName, provinceId);
+    const shippingZone = resolveShippingZone(addressSelection);
 
-    if (isInnerCity) {
+    if (shippingZone === DELIVERY_ZONE.INTERNAL_CITY) {
         const isFree = orderTotal >= storePolicy.freeThreshold;
         const fee = isFree ? 0 : storePolicy.standardFee;
         return {
@@ -380,7 +387,7 @@ module.exports = {
     getProvinces,
     getDistricts,
     getWards,
-    isInnerCityHcm,
+    validateAddressSelection,
     calculateShippingFee,
     createShippingOrder,
     getShippingOrderDetail,

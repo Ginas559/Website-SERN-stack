@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BookIcon, MaterialCommunityIcon } from './common/Icons';
 
 function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
     const [imgError, setImgError] = useState(false);
@@ -38,7 +39,7 @@ function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
                         onError={() => setImgError(true)}
                     />
                 ) : (
-                    <div className="wishlist-placeholder-cover">📖</div>
+                    <div className="wishlist-placeholder-cover"><BookIcon size={28} /></div>
                 )}
 
                 {discount > 0 && (
@@ -93,7 +94,7 @@ function WishlistCard({ item, onAddToCart, onRemove, onSelectBook }) {
                         disabled={!inStock}
                         onClick={() => onAddToCart && onAddToCart(item)}
                     >
-                        {isDeleted ? 'Ngừng kinh doanh' : inStock ? '🛒 Thêm vào giỏ' : 'Hết hàng'}
+                        {isDeleted ? 'Ngừng kinh doanh' : inStock ? <><MaterialCommunityIcon name="cart" size={15} />Thêm vào giỏ</> : 'Hết hàng'}
                     </button>
                 </div>
             </div>

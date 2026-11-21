@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToWishlist, removeFromWishlist } from '../store/slices/wishlistSlice';
+import { BookIcon, HeartIcon } from './common/Icons';
 
 function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
     const dispatch = useDispatch();
@@ -107,7 +108,7 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
                         className="book-cover-placeholder" 
                         style={{ display: book.image && !imgError ? "none" : "flex" }}
                     >
-                        📚
+                        <BookIcon size={36} />
                     </div>
 
                     {discount > 0 && (
@@ -121,7 +122,7 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
                         title={isFavorite ? 'Bỏ thích' : 'Thêm vào yêu thích'}
                         aria-label={isFavorite ? 'Bỏ thích' : 'Thêm vào yêu thích'}
                     >
-                        {isFavorite ? '❤️' : '🤍'}
+                        <HeartIcon size={20} />
                     </button>
                 </div>
 

@@ -49,7 +49,6 @@ async function calculateFee(req, res, next) {
             heightCm: req.body.heightCm,
             insuranceValue: req.body.insuranceValue,
             orderTotal: req.body.orderTotal,
-            provinceName: req.body.provinceName,
             provinceId: req.body.provinceId
         });
         return res.status(200).json({

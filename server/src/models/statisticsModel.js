@@ -36,9 +36,9 @@ async function getOverviewMetrics() {
     const usersQuery = `
         SELECT 
             COUNT(1) AS totalUsers,
-            COUNT(CASE WHEN isAdmin = 0 OR isAdmin IS NULL THEN 1 END) AS totalCustomers,
-            COUNT(CASE WHEN isVip = 1 AND (isAdmin = 0 OR isAdmin IS NULL) THEN 1 END) AS vipCustomers,
-            COUNT(CASE WHEN isAdmin = 1 THEN 1 END) AS adminCount
+            COUNT(CASE WHEN role = 'Customer' THEN 1 END) AS totalCustomers,
+            COUNT(CASE WHEN isVip = 1 AND role = 'Customer' THEN 1 END) AS vipCustomers,
+            COUNT(CASE WHEN role = 'Admin' THEN 1 END) AS adminCount
         FROM dbo.Users
         WHERE isDelete = 0
     `;
@@ -194,7 +194,7 @@ async function getUsersTimeSeries({ startDate, endDate, groupBy = "day" }) {
             CONVERT(VARCHAR(${dateLen}), createdAt, 120) AS [date],
             COUNT(1) AS newUsersCount
         FROM dbo.Users
-        WHERE isDelete = 0 AND (isAdmin = 0 OR isAdmin IS NULL)
+        WHERE isDelete = 0 AND role = 'Customer'
         ${dateCondition}
         GROUP BY CONVERT(VARCHAR(${dateLen}), createdAt, 120)
         ORDER BY [date] ASC

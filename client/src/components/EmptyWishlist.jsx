@@ -1,8 +1,10 @@
+import { HeartIcon } from './common/Icons';
+
 function EmptyWishlist({ onExploreBooks }) {
     return (
         <div className="wishlist-empty-container">
             <div className="wishlist-empty-icon-wrap">
-                <span className="wishlist-empty-icon">🤍</span>
+                <span className="wishlist-empty-icon"><HeartIcon size={42} /></span>
             </div>
             <h2 className="wishlist-empty-title">Danh sách yêu thích đang trống</h2>
             <p className="wishlist-empty-desc">

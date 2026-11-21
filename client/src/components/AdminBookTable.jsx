@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { RefreshIcon } from './common/Icons'
+import { RefreshIcon, BookIcon } from './common/Icons'
+import AdminConfirmModal from './AdminConfirmModal'
 
 function AdminBookTable({
   books = [],
@@ -19,6 +20,7 @@ function AdminBookTable({
 }) {
   const [sortBy, setSortBy] = useState('id')
   const [sortOrder, setSortOrder] = useState('desc')
+  const [pendingStatusBook, setPendingStatusBook] = useState(null)
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN').format(amount || 0) + ' đ'
@@ -115,7 +117,7 @@ function AdminBookTable({
 
       <div className="admin-table-wrapper">
         {loading && sortedBooks.length > 0 && <div className="admin-table-loading-bar" />}
-        <table className="admin-table">
+        <table className="admin-table admin-book-table">
           <thead>
             <tr>
               <th
@@ -194,7 +196,7 @@ function AdminBookTable({
                         {book.image ? (
                           <img src={book.image} alt={book.title} className="admin-book-thumb" />
                         ) : (
-                          <div className="admin-book-thumb-placeholder">📖</div>
+                          <div className="admin-book-thumb-placeholder"><BookIcon size={24} /></div>
                         )}
                         <div>
                           <div className="admin-book-title">{book.title}</div>
@@ -239,7 +241,7 @@ function AdminBookTable({
                         <button
                           type="button"
                           className={`admin-btn-action ${isHidden ? 'restore' : 'hide'}`}
-                          onClick={() => onToggleStatus(book)}
+                           onClick={() => setPendingStatusBook(book)}
                         >
                           {isHidden ? 'Hiện' : 'Ẩn'}
                         </button>
@@ -281,6 +283,15 @@ function AdminBookTable({
           </div>
         )}
       </div>
+      <AdminConfirmModal
+        isOpen={Boolean(pendingStatusBook)}
+        title={pendingStatusBook?.isDelete ? 'Xác nhận khôi phục ấn phẩm' : 'Xác nhận ẩn ấn phẩm'}
+        message={pendingStatusBook?.isDelete ? `Bạn có muốn khôi phục “${pendingStatusBook?.title || 'ấn phẩm này'}” để hiển thị lại không?` : `Bạn có muốn ẩn “${pendingStatusBook?.title || 'ấn phẩm này'}” khỏi cửa hàng không?`}
+        confirmLabel={pendingStatusBook?.isDelete ? 'Xác nhận khôi phục' : 'Xác nhận ẩn'}
+        danger={!pendingStatusBook?.isDelete}
+        onCancel={() => setPendingStatusBook(null)}
+        onConfirm={() => { const book = pendingStatusBook; setPendingStatusBook(null); onToggleStatus(book) }}
+      />
     </div>
   )
 }

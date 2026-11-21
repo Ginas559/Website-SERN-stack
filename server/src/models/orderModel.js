@@ -3,7 +3,7 @@ const { sql, connectDB } = require("../config/connectDB");
 const AppError = require("../utils/AppError");
 const orderItemModel = require("./orderItemModel");
 
-const orderColumns = "id, user_id, total, total_quantity, status, pay_url, discount, payment_method, ghn_info, ghn_response, ghn_code, ghn_fee, createdAt, updatedAt";
+const qualifiedOrderColumns = "dbo.orders.id, dbo.orders.user_id, dbo.orders.total, dbo.orders.total_quantity, dbo.orders.status, dbo.orders.pay_url, dbo.orders.discount, dbo.orders.payment_method, dbo.orders.ghn_info, dbo.orders.ghn_response, dbo.orders.ghn_code, dbo.orders.ghn_fee, dbo.orders.createdAt, dbo.orders.updatedAt";
 const insertedOrderColumns = "INSERTED.id, INSERTED.user_id, INSERTED.total, INSERTED.total_quantity, INSERTED.status, INSERTED.pay_url, INSERTED.discount, INSERTED.payment_method, INSERTED.ghn_info, INSERTED.ghn_response, INSERTED.ghn_code, INSERTED.ghn_fee, INSERTED.createdAt, INSERTED.updatedAt";
 
 function handleOrderWriteError(error) {
@@ -49,15 +49,12 @@ async function create(orderData, transaction = null) {
             ghnPayload = ghnPayload || {};
             if (address && !ghnPayload.address) {
                 ghnPayload.address = address;
-                ghnPayload.shippingAddress = address;
             }
             if (name && !ghnPayload.receiverName) {
                 ghnPayload.receiverName = name;
-                ghnPayload.recipientName = name;
             }
             if (phone && !ghnPayload.phone) {
                 ghnPayload.phone = phone;
-                ghnPayload.recipientPhone = phone;
             }
         }
 
@@ -73,8 +70,8 @@ async function create(orderData, transaction = null) {
             .input("payment_method", sql.VarChar(50), orderData.paymentMethod || orderData.payment_method || "COD")
             .input("ghn_info", sql.NVarChar(sql.MAX), ghnPayload ? JSON.stringify(ghnPayload) : (typeof orderData.ghnInfo === "object" ? JSON.stringify(orderData.ghnInfo) : (orderData.ghnInfo || null)))
             .input("ghn_response", sql.NVarChar(sql.MAX), typeof orderData.ghnResponse === "object" ? JSON.stringify(orderData.ghnResponse) : (orderData.ghnResponse || null))
-            .input("ghn_code", sql.VarChar(255), orderData.ghnCode || orderData.ghn_code || null)
-            .input("ghn_fee", sql.Int, Math.max(0, Number(orderData.ghnFee || orderData.ghn_fee) || 0))
+            .input("ghn_code", sql.VarChar(255), orderData.ghnCode || null)
+            .input("ghn_fee", sql.Int, Math.max(0, Number(orderData.ghnFee) || 0))
             .query(`INSERT INTO dbo.orders (id, user_id, total, total_quantity, status, pay_url, discount, payment_method, ghn_info, ghn_response, ghn_code, ghn_fee, createdAt, updatedAt)
                     OUTPUT ${insertedOrderColumns}
                     VALUES (@id, @user_id, @total, @total_quantity, @status, @pay_url, @discount, @payment_method, @ghn_info, @ghn_response, @ghn_code, @ghn_fee, GETDATE(), GETDATE())`);
@@ -100,7 +97,7 @@ async function createWithItems(orderData, items = [], externalTransaction = null
         return { ...createdOrder, items: createdItems };
     } catch (error) {
         if (isInternal) {
-            try { await tx.rollback(); } catch { return; }
+            try { await tx.rollback(); } catch { void error; }
         }
         throw error;
     }
@@ -110,7 +107,20 @@ async function findById(id, { includeItems = true } = {}) {
     const pool = await connectDB();
     const result = await pool.request()
         .input("id", sql.Char(36), id)
-        .query(`SELECT ${orderColumns} FROM dbo.orders WHERE id = @id`);
+        .query(`SELECT ${qualifiedOrderColumns},
+                       currentAssignment.status AS assignment_status,
+                       currentAssignment.note AS assignment_note,
+                       currentAssignment.completion_note AS assignment_completion_note,
+                       assignmentShipper.full_name AS assignment_shipper_name
+                FROM dbo.orders
+                OUTER APPLY (
+                    SELECT TOP 1 oa.status, oa.note, oa.completion_note, oa.shipper_id
+                    FROM dbo.order_assignments oa
+                    WHERE oa.order_id = dbo.orders.id
+                    ORDER BY oa.createdAt DESC, oa.id DESC
+                ) currentAssignment
+                LEFT JOIN dbo.Users assignmentShipper ON assignmentShipper.id = currentAssignment.shipper_id
+                WHERE dbo.orders.id = @id`);
 
     const order = result.recordset[0];
     if (!order) return null;
@@ -128,8 +138,8 @@ async function findByUserId(userId, { page = 1, limit = 10, status = null } = {}
     const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
     const offset = (safePage - 1) * safeLimit;
 
-    let whereSql = "WHERE user_id = @user_id";
-    if (status !== null && status !== undefined && status !== "") whereSql += " AND status = @status";
+    let whereSql = "WHERE dbo.orders.user_id = @user_id";
+    if (status !== null && status !== undefined && status !== "") whereSql += " AND dbo.orders.status = @status";
 
     const countReq = pool.request().input("user_id", sql.Char(36), userId);
     if (status !== null && status !== undefined && status !== "") countReq.input("status", sql.Int, Number(status));
@@ -142,8 +152,21 @@ async function findByUserId(userId, { page = 1, limit = 10, status = null } = {}
         .input("limit", sql.Int, safeLimit);
     if (status !== null && status !== undefined && status !== "") listReq.input("status", sql.Int, Number(status));
 
-    const listRes = await listReq.query(`SELECT ${orderColumns} FROM dbo.orders ${whereSql}
-                                         ORDER BY createdAt DESC
+    const listRes = await listReq.query(`SELECT ${qualifiedOrderColumns},
+                                               currentAssignment.id AS assignment_id,
+             currentAssignment.status AS assignment_status,
+             currentAssignment.isActive AS assignment_is_active,
+             currentAssignment.note AS assignment_note,
+             currentAssignment.completion_note AS assignment_completion_note
+                                         FROM dbo.orders
+                                         OUTER APPLY (
+                                              SELECT TOP 1 oa.id, oa.status, oa.isActive, oa.note, oa.completion_note
+                                             FROM dbo.order_assignments oa
+                                             WHERE oa.order_id = dbo.orders.id
+                                             ORDER BY oa.createdAt DESC, oa.id DESC
+                                         ) currentAssignment
+                                         ${whereSql}
+                                         ORDER BY dbo.orders.createdAt DESC
                                          OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
 
     return { orders: listRes.recordset, total, page: safePage, limit: safeLimit, totalPages: Math.ceil(total / safeLimit) };
@@ -258,6 +281,7 @@ async function findAllForAdmin({
     search = null,
     status = null,
     paymentMethod = null,
+    deliveryType = null,
     fromDate = null,
     toDate = null,
     sortBy = "createdAt",
@@ -296,6 +320,12 @@ async function findAllForAdmin({
         conditions.push("o.payment_method = @paymentMethod");
         countReq.input("paymentMethod", sql.VarChar(50), paymentMethod.trim().toUpperCase());
         listReq.input("paymentMethod", sql.VarChar(50), paymentMethod.trim().toUpperCase());
+    }
+
+    if (deliveryType) {
+        conditions.push("JSON_VALUE(o.ghn_info, '$.deliveryType') = @deliveryType");
+        countReq.input("deliveryType", sql.VarChar(20), deliveryType);
+        listReq.input("deliveryType", sql.VarChar(20), deliveryType);
     }
 
     if (fromDate) {
@@ -353,9 +383,26 @@ async function findAllForAdmin({
             o.updatedAt,
             u.full_name AS customer_name,
             u.email AS customer_email,
-            u.phone_number AS customer_phone
+            u.phone_number AS customer_phone,
+            currentAssignment.id AS assignment_id,
+            currentAssignment.shipper_id AS assignment_shipper_id,
+             currentAssignment.status AS assignment_status,
+             currentAssignment.isActive AS assignment_is_active,
+             currentAssignment.note AS assignment_note,
+             currentAssignment.completion_note AS assignment_completion_note,
+             currentAssignment.rejectionReason AS assignment_rejection_reason,
+            currentAssignment.cancellationReason AS assignment_cancellation_reason,
+            assignmentShipper.full_name AS assignment_shipper_name,
+            assignmentShipper.email AS assignment_shipper_email
         FROM dbo.orders o
         LEFT JOIN dbo.Users u ON o.user_id = u.id
+        OUTER APPLY (
+             SELECT TOP 1 oa.id, oa.shipper_id, oa.status, oa.isActive, oa.rejectionReason, oa.cancellationReason, oa.note, oa.completion_note
+            FROM dbo.order_assignments oa
+            WHERE oa.order_id = o.id
+            ORDER BY oa.createdAt DESC, oa.id DESC
+        ) currentAssignment
+        LEFT JOIN dbo.Users assignmentShipper ON assignmentShipper.id = currentAssignment.shipper_id
         ${whereClause}
         ORDER BY ${orderCol} ${dir}
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

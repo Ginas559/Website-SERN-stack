@@ -2,24 +2,28 @@ const crypto = require("crypto");
 const { sql, connectDB } = require("../config/connectDB");
 const AppError = require("../utils/AppError");
 
-const safeProfileColumns = "id, username, email, phone_number, full_name, address, avatar, isAdmin, isVip, isVerified, createdAt, updatedAt";
-const insertedSafeColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.isAdmin, INSERTED.isVip, INSERTED.isVerified, INSERTED.createdAt, INSERTED.updatedAt";
-const adminUserColumns = "id, username, email, phone_number, full_name, [address], avatar, isAdmin, createdAt, updatedAt, isDelete, blockReason, isVerified, isVip";
-const insertedAdminColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.[address], INSERTED.avatar, INSERTED.isAdmin, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.isVip";
-const publicColumns = "id, username, email, phone_number, full_name, address, avatar, isAdmin, createdAt, updatedAt, isDelete, blockReason, isVerified, verificationToken, isVip";
-const insertedPublicColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.isAdmin, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.verificationToken, INSERTED.isVip";
+const safeProfileColumns = "id, username, email, phone_number, full_name, address, avatar, role, isVip, isVerified, createdAt, updatedAt";
+const insertedSafeColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.role, INSERTED.isVip, INSERTED.isVerified, INSERTED.createdAt, INSERTED.updatedAt";
+const adminUserColumns = "id, username, email, phone_number, full_name, [address], avatar, role, createdAt, updatedAt, isDelete, blockReason, isVerified, isVip";
+const insertedAdminColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.[address], INSERTED.avatar, INSERTED.role, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.isVip";
+const publicColumns = "id, username, email, phone_number, full_name, address, avatar, role, createdAt, updatedAt, isDelete, blockReason, isVerified, verificationToken, isVip";
+const insertedPublicColumns = "INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.phone_number, INSERTED.full_name, INSERTED.address, INSERTED.avatar, INSERTED.role, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.blockReason, INSERTED.isVerified, INSERTED.verificationToken, INSERTED.isVip";
 
-async function findByEmail(email) {
+async function findByEmail(email, { includeDeleted = false } = {}) {
     const pool = await connectDB();
     const result = await pool.request().input("email", sql.NVarChar(255), email)
-        .query(`SELECT TOP 1 ${publicColumns}, [password] FROM dbo.Users WHERE email = @email`);
+        .query(`SELECT TOP 1 ${publicColumns}, [password] FROM dbo.Users
+                WHERE email = @email ${includeDeleted ? "" : "AND isDelete = 0"}
+                ORDER BY isDelete ASC, createdAt DESC`);
     return result.recordset[0] || null;
 }
 
-async function findByUsername(username) {
+async function findByUsername(username, { includeDeleted = false } = {}) {
     const pool = await connectDB();
-    const result = await pool.request().input("username", sql.VarChar(255), username)
-        .query(`SELECT TOP 1 ${publicColumns} FROM dbo.Users WHERE username = @username`);
+    const result = await pool.request().input("username", sql.NVarChar(255), username)
+        .query(`SELECT TOP 1 ${publicColumns} FROM dbo.Users
+                WHERE username = @username ${includeDeleted ? "" : "AND isDelete = 0"}
+                ORDER BY isDelete ASC, createdAt DESC`);
     return result.recordset[0] || null;
 }
 
@@ -41,11 +45,11 @@ async function create({ id, username, fullName, email, phone, address, passwordH
     const pool = await connectDB();
     const result = await pool.request()
         .input("id", sql.Char(36), id)
-        .input("username", sql.VarChar(255), username)
-        .input("fullName", sql.VarChar(255), fullName)
-        .input("email", sql.VarChar(255), email)
-        .input("phone", sql.VarChar(255), phone)
-        .input("address", sql.VarChar(255), address)
+        .input("username", sql.NVarChar(255), username)
+        .input("fullName", sql.NVarChar(255), fullName)
+        .input("email", sql.NVarChar(255), email)
+        .input("phone", sql.NVarChar(255), phone)
+        .input("address", sql.NVarChar(255), address)
         .input("password", sql.VarChar(255), passwordHash)
         .query(`INSERT INTO dbo.Users (id, username, full_name, email, phone_number, [address], [password]) OUTPUT ${insertedPublicColumns} VALUES (@id, @username, @fullName, @email, @phone, @address, @password)`);
     return result.recordset[0];
@@ -95,7 +99,7 @@ async function revokeUserRefreshTokens(userId) {
 
 async function saveResetToken(email, tokenHash, expiresAt) {
     const pool = await connectDB();
-    const result = await pool.request().input("email", sql.VarChar(255), email)
+    const result = await pool.request().input("email", sql.NVarChar(255), email)
         .input("tokenHash", sql.Char(64), tokenHash).input("expiresAt", sql.DateTime2, expiresAt)
         .query("UPDATE dbo.Users SET verificationToken = @tokenHash, resetPasswordExpiresAt = @expiresAt, resetPasswordUsedAt = NULL, updatedAt = SYSUTCDATETIME() OUTPUT INSERTED.id WHERE email = @email AND isDelete = 0");
     return result.recordset[0] || null;
@@ -148,7 +152,7 @@ async function changePassword(userId, currentPasswordHash, passwordHash) {
 
 function handleUserWriteError(error) {
     if (error && (error.number === 2601 || error.number === 2627)) {
-        throw new AppError("Thông tin người dùng (email hoặc số điện thoại) đã tồn tại trong hệ thống.", 409, error);
+        throw new AppError("Username hoặc email đã tồn tại trong hệ thống.", 409, error);
     }
     throw error;
 }
@@ -165,7 +169,7 @@ async function findStatusById(id) {
     const pool = await connectDB();
     const result = await pool.request()
         .input("id", sql.Char(36), id)
-        .query("SELECT TOP 1 id, isDelete, blockReason, isVerified, isVip FROM dbo.Users WHERE id = @id");
+        .query("SELECT TOP 1 id, isDelete, blockReason, isVerified, isVip, role FROM dbo.Users WHERE id = @id");
     return result.recordset[0] || null;
 }
 
@@ -180,7 +184,7 @@ async function updateProfile(id, { fullName, phoneNumber, address, avatar } = {}
     }
     if (phoneNumber !== undefined) {
         updates.push("phone_number = @phoneNumber");
-        req.input("phoneNumber", sql.VarChar(255), phoneNumber ? String(phoneNumber).trim() : null);
+        req.input("phoneNumber", sql.NVarChar(255), phoneNumber ? String(phoneNumber).trim() : null);
     }
     if (address !== undefined) {
         updates.push("[address] = @address");
@@ -188,7 +192,7 @@ async function updateProfile(id, { fullName, phoneNumber, address, avatar } = {}
     }
     if (avatar !== undefined) {
         updates.push("avatar = @avatar");
-        req.input("avatar", sql.VarChar(255), avatar ? String(avatar).trim() : null);
+        req.input("avatar", sql.NVarChar(255), avatar ? String(avatar).trim() : null);
     }
 
     try {
@@ -207,7 +211,7 @@ async function findAllForAdmin({
     limit = 10,
     search,
     isDelete,
-    isAdmin,
+    role,
     isVerified,
     isVip,
     sortBy = "createdAt",
@@ -228,10 +232,10 @@ async function findAllForAdmin({
         listReq.input("isDelete", sql.TinyInt, Number(isDelete));
     }
 
-    if (isAdmin !== null && isAdmin !== undefined) {
-        whereClauses.push("isAdmin = @isAdmin");
-        countReq.input("isAdmin", sql.TinyInt, Number(isAdmin));
-        listReq.input("isAdmin", sql.TinyInt, Number(isAdmin));
+    if (role !== null && role !== undefined) {
+        whereClauses.push("role = @role");
+        countReq.input("role", sql.VarChar(20), String(role));
+        listReq.input("role", sql.VarChar(20), String(role));
     }
 
     if (isVerified !== null && isVerified !== undefined) {
@@ -295,9 +299,9 @@ async function findByIdAdmin(id) {
     return result.recordset[0] || null;
 }
 
-async function block(id, blockReason = null) {
-    const pool = await connectDB();
-    const result = await pool.request()
+async function block(id, blockReason = null, transaction = null) {
+    const executor = transaction || await connectDB();
+    const result = await new sql.Request(executor)
         .input("id", sql.Char(36), id)
         .input("blockReason", sql.NVarChar(255), blockReason ? String(blockReason).trim() : null)
         .query(`UPDATE dbo.Users
@@ -309,13 +313,17 @@ async function block(id, blockReason = null) {
 
 async function restore(id) {
     const pool = await connectDB();
-    const result = await pool.request()
-        .input("id", sql.Char(36), id)
-        .query(`UPDATE dbo.Users
-                SET isDelete = 0, blockReason = NULL, updatedAt = GETDATE()
-                OUTPUT ${insertedAdminColumns}
-                WHERE id = @id AND isDelete = 1`);
-    return result.recordset[0] || null;
+    try {
+        const result = await pool.request()
+            .input("id", sql.Char(36), id)
+            .query(`UPDATE dbo.Users
+                    SET isDelete = 0, blockReason = NULL, updatedAt = GETDATE()
+                    OUTPUT ${insertedAdminColumns}
+                    WHERE id = @id AND isDelete = 1`);
+        return result.recordset[0] || null;
+    } catch (error) {
+        handleUserWriteError(error);
+    }
 }
 
 async function changeStatus(id, { isDelete, blockReason = null } = {}) {

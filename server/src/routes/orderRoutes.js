@@ -107,25 +107,21 @@ router.post(
             .bail()
             .toInt(),
         body("toDistrictId")
-            .optional({ nullable: true })
+            .notEmpty()
             .isInt({ min: 1 })
             .withMessage("toDistrictId không hợp lệ.")
             .bail()
             .toInt(),
         body("toWardCode")
-            .optional({ nullable: true })
+            .notEmpty()
             .isString()
             .trim(),
         body("provinceId")
-            .optional({ nullable: true })
+            .notEmpty()
             .isInt({ min: 1 })
             .withMessage("provinceId không hợp lệ.")
             .bail()
             .toInt(),
-        body("provinceName")
-            .optional({ nullable: true })
-            .isString()
-            .trim(),
     ],
     validate,
     controller.createOrder
@@ -161,6 +157,11 @@ router.get(
             .isIn(SUPPORTED_PAYMENT_METHODS)
             .withMessage("Phương thức thanh toán không hợp lệ.")
             .bail(),
+        query("deliveryType")
+            .optional()
+            .isIn(["INTERNAL", "GHN"])
+            .withMessage("Loại giao hàng không hợp lệ.")
+            .bail(),
         query("sortBy")
             .optional()
             .isIn(["createdAt", "total", "total_quantity", "status", "customer_name", "id"])
@@ -184,6 +185,33 @@ router.get(
     ],
     validate,
     controller.getAllOrdersForAdmin
+);
+
+router.post(
+    "/admin/:id/assignment",
+    restrictTo("Admin"),
+    [
+        param("id")
+            .isUUID()
+            .withMessage("Mã đơn hàng không hợp lệ (phải là UUID).")
+            .bail(),
+        body("shipperId")
+            .notEmpty()
+            .isUUID()
+            .withMessage("ID shipper không hợp lệ (phải là UUID).")
+            .bail(),
+        body("note")
+            .optional({ nullable: true })
+            .isString()
+            .withMessage("Ghi chú phân công phải là chuỗi.")
+            .bail()
+            .trim()
+            .isLength({ max: 1000 })
+            .withMessage("Ghi chú phân công không được vượt quá 1000 ký tự.")
+            .bail()
+    ],
+    validate,
+    controller.assignOrderToShipper
 );
 
 router.get(

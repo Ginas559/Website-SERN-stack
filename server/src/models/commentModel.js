@@ -54,9 +54,9 @@ async function create({ userId, bookId, parentId = null, rate = null, value = nu
                         OR EXISTS (
                             SELECT 1
                             FROM dbo.Users au
-                            WHERE au.id = @user_id
-                              AND au.isAdmin = 1
-                              AND au.isDelete = 0
+                             WHERE au.id = @user_id
+                               AND au.role = 'Admin'
+                               AND au.isDelete = 0
                         )
                     )
               )
@@ -78,7 +78,7 @@ async function findById(id, { includeDeleted = false } = {}) {
                u.full_name AS user_full_name, 
                u.username AS user_username, 
                u.avatar AS user_avatar,
-               COALESCE(u.isAdmin, 0) AS user_isAdmin,
+                u.role AS user_role,
                b.title AS book_title,
                parent_u.full_name AS parent_user_full_name,
                parent_u.username AS parent_user_username
@@ -110,7 +110,7 @@ async function findUserReview(userId, bookId) {
                    u.full_name AS user_full_name,
                    u.username AS user_username,
                    u.avatar AS user_avatar,
-                   COALESCE(u.isAdmin, 0) AS user_isAdmin
+                     u.role AS user_role
             FROM dbo.comments c
             LEFT JOIN dbo.Users u ON c.user_id = u.id
             WHERE c.user_id = @user_id
@@ -145,7 +145,7 @@ async function findRepliesByParentIds(parentIds = []) {
                u.full_name AS user_full_name,
                u.username AS user_username,
                u.avatar AS user_avatar,
-               COALESCE(u.isAdmin, 0) AS user_isAdmin,
+                u.role AS user_role,
                parent_u.full_name AS parent_user_full_name,
                parent_u.username AS parent_user_username
         FROM dbo.comments c
@@ -176,7 +176,7 @@ async function executeBookReviewsList(pool, whereClause, { bookId, hasRateFilter
                u.full_name AS user_full_name, 
                u.username AS user_username, 
                u.avatar AS user_avatar,
-               COALESCE(u.isAdmin, 0) AS user_isAdmin
+                u.role AS user_role
         FROM dbo.comments c
         LEFT JOIN dbo.Users u ON c.user_id = u.id
         ${whereClause}

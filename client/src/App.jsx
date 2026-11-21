@@ -12,6 +12,7 @@ import CheckoutPage from './components/CheckoutPage'
 import PaymentResult from './components/PaymentResult'
 import OrderHistoryPage from './components/OrderHistoryPage'
 import UserProfile from './components/UserProfile'
+import ShipperAssignments from './components/ShipperAssignments'
 import AppLayout from './components/layout/AppLayout'
 import { fetchBooks, fetchBookById, invalidateBooks } from './store/slices/bookSlice'
 import { fetchPublicCategories } from './store/slices/categorySlice'
@@ -50,8 +51,12 @@ function readStoredUser() {
   }
 }
 
-function isUserAdmin(userObj) {
-  return Boolean(userObj && (userObj.isAdmin || userObj.role === 'Admin' || userObj.role === 'admin'))
+function hasAdminRole(userObj) {
+  return Boolean(userObj && userObj.role === 'Admin')
+}
+
+function isUserShipper(userObj) {
+  return Boolean(userObj && userObj.role === 'Shipper')
 }
 
 function getInitialRoute(storedUser) {
@@ -63,7 +68,8 @@ function getInitialRoute(storedUser) {
     parsed.tab = 'account'
   }
   return sanitizeRoute(parsed, {
-    isAdmin: isUserAdmin(storedUser),
+    hasAdminRole: hasAdminRole(storedUser),
+    isShipper: isUserShipper(storedUser),
     hasUser: Boolean(storedUser),
     hasCheckoutItems: false,
   })
@@ -106,17 +112,25 @@ function App() {
   const [adminTab, setAdminTab] = useState(initialRoute.adminTab)
   const [bookViewOptions, setBookViewOptions] = useState(null)
   const [checkoutData, setCheckoutData] = useState({ items: [], total: 0 })
+  const [guestCartVersion, setGuestCartVersion] = useState(0)
   const [isPaymentReturn, setIsPaymentReturn] = useState(hasInitialPaymentReturn)
   const completedCheckoutRef = useRef(false)
   const cartState = useSelector((state) => state.cart)
   const wishlistState = useSelector((state) => state.wishlist)
-  const isAdmin = isUserAdmin(user)
+  const hasAdminRoleAccess = hasAdminRole(user)
+  const isShipper = isUserShipper(user)
 
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
   const [form, setForm] = useState(() => createEmptyAuthForm(resetToken))
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const handleGuestCartUpdated = () => setGuestCartVersion((version) => version + 1)
+    window.addEventListener('sern:guest-cart-updated', handleGuestCartUpdated)
+    return () => window.removeEventListener('sern:guest-cart-updated', handleGuestCartUpdated)
+  }, [])
 
   const applyRouteState = useCallback((route, viewOptions = null) => {
     setActiveTab(route.tab)
@@ -157,7 +171,8 @@ function App() {
     }
     const effectiveUser = liveUser || null
     const authorized = sanitizeRoute(nextRoute, {
-      isAdmin: isUserAdmin(effectiveUser),
+      hasAdminRole: hasAdminRole(effectiveUser),
+      isShipper: isUserShipper(effectiveUser),
       hasUser: Boolean(effectiveUser),
       hasCheckoutItems: allowCheckout || checkoutData.items.length > 0,
     })
@@ -283,7 +298,8 @@ function App() {
       }
       const parsed = parseRouteFromSearch(window.location.search)
       const authorized = sanitizeRoute(parsed, {
-        isAdmin: isUserAdmin(liveUser),
+        hasAdminRole: hasAdminRole(liveUser),
+        isShipper: isUserShipper(liveUser),
         hasUser: Boolean(liveUser),
         hasCheckoutItems: hadCompletedCheckout ? false : checkoutData.items.length > 0,
       })
@@ -318,7 +334,8 @@ function App() {
           dispatch(fetchWishlist())
         }
         const sanitized = sanitizeRoute({ tab: activeTab, bookId: selectedBookId, adminTab }, {
-          isAdmin: isUserAdmin(liveUser),
+          hasAdminRole: hasAdminRole(liveUser),
+          isShipper: isUserShipper(liveUser),
           hasUser: Boolean(liveUser),
           hasCheckoutItems: false,
         })
@@ -420,6 +437,7 @@ function App() {
         setForm(createEmptyAuthForm())
         dispatch(syncGuestCart())
         dispatch(syncGuestWishlist())
+        navigateTo({ tab: 'books', bookId: null }, { replace: true })
         setMessage('Đăng nhập thành công.')
       }
     } catch (submitError) {
@@ -443,6 +461,7 @@ function App() {
   }, [])
 
   const guestCartCount = (() => {
+    void guestCartVersion
     try {
       const g = JSON.parse(localStorage.getItem('guestCart') || '[]')
       return Array.isArray(g) ? g.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0) : 0
@@ -470,7 +489,8 @@ function App() {
       cartBadgeCount={cartBadgeCount}
       wishlistBadgeCount={wishlistBadgeCount}
       user={user}
-      isAdmin={isAdmin}
+      hasAdminRole={hasAdminRoleAccess}
+      isShipper={isShipper}
       onQuickSearch={(query) => {
         setFilters((prev) => ({ ...prev, search: query }))
         setPage(1)
@@ -496,11 +516,13 @@ function App() {
             navigateTo({ tab: 'cart' }, { replace: true })
           }}
         />
-      ) : activeTab === 'admin' && isAdmin ? (
+      ) : activeTab === 'admin' && hasAdminRoleAccess ? (
         <AdminDashboard
           activeAdminTab={adminTab}
           onAdminTabChange={(nextAdminTab) => navigateTo({ tab: 'admin', adminTab: nextAdminTab })}
         />
+      ) : activeTab === 'shipper' && isShipper ? (
+        <ShipperAssignments />
       ) : activeTab === 'checkout' ? (
         <CheckoutPage 
           checkoutItems={checkoutData.items}
