@@ -1,0 +1,203 @@
+.payment-result-wrapper {
+  min-height: calc(100vh - 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  background-color: #20201f;
+  color: #f3eadb;
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.payment-result-card {
+  background: #2a2a28;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  border: 1px solid #3d3d3a;
+  max-width: 580px;
+  width: 100%;
+  padding: 36px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.payment-result-badge-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+.success-card .payment-result-badge-icon {
+  background-color: #064e3b;
+  color: #34d399;
+  border: 2px solid #059669;
+}
+
+.fail-card .payment-result-badge-icon {
+  background-color: #450a0a;
+  color: #f87171;
+  border: 2px solid #dc2626;
+}
+
+.payment-result-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #e7b26a;
+  margin: 0 0 8px 0;
+}
+
+.payment-result-subtitle {
+  font-size: 14px;
+  color: #b9b0a7;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+  max-width: 440px;
+}
+
+.payment-result-info-box {
+  width: 100%;
+  background: #24221f;
+  border: 1px solid #3d3a35;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+.info-label {
+  color: #8a8175;
+  font-weight: 500;
+}
+
+.info-value {
+  color: #f3eadb;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+
+.info-value.highlight {
+  font-family: monospace;
+  color: #e7b26a;
+  font-size: 12.5px;
+}
+
+.info-value.total-price {
+  color: #4ade80;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.status-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-pill.status-1 {
+  background-color: #064e3b;
+  color: #34d399;
+}
+
+.status-pill.status-0 {
+  background-color: #451a03;
+  color: #f59e0b;
+}
+
+.payment-shipping-summary {
+  width: 100%;
+  font-size: 13px;
+  color: #b9b0a7;
+  background: #1e1e1c;
+  border: 1px solid #3d3d3a;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.payment-result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.btn-primary-action {
+  background-color: #c77736;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary-action:hover {
+  background-color: #a95d26;
+}
+
+.btn-primary-action.retry-btn {
+  background-color: #d97706;
+}
+
+.btn-primary-action.retry-btn:hover {
+  background-color: #b45309;
+}
+
+.btn-secondary-action {
+  background-color: transparent;
+  color: #f3eadb;
+  border: 1px solid #4d4d48;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary-action:hover {
+  background-color: #3d3d3a;
+  border-color: #e7b26a;
+}
+
+.loading-state {
+  padding: 60px 30px;
+}
+
+.payment-result-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #3d3d3a;
+  border-top: 4px solid #e7b26a;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 24px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
