@@ -8,7 +8,9 @@ const { refreshTokenExpiresIn, resetTokenExpiresMinutes } = require("../config/c
 const { sendPasswordResetEmail } = require("./emailService");
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
-const publicUser = (user) => ({ id: user.id, username: user.username, fullName: user.full_name, email: user.email, isAdmin: Boolean(user.isAdmin) });
+const publicUser = (user) => {
+    return { id: user.id, username: user.username, fullName: user.full_name, email: user.email, role: user.role };
+};
 
 function refreshExpiresAt() {
     return new Date(Date.now() + (refreshTokenExpiresIn.endsWith("d") ? Number.parseInt(refreshTokenExpiresIn, 10) * 86400000 : 604800000));
@@ -48,7 +50,7 @@ async function register({ username, fullName, email, phone, address, password })
 }
 
 async function login({ email, password }) {
-    const user = await userModel.findByEmail(normalizeEmail(email));
+    const user = await userModel.findByEmail(normalizeEmail(email), { includeDeleted: true });
     if (!user || !(await bcrypt.compare(password, user.password))) {
         throw new AppError("Email hoặc mật khẩu không chính xác.", 401);
     }

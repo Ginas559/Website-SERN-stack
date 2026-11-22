@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const { accessTokenSecret, refreshTokenSecret, accessTokenExpiresIn, refreshTokenExpiresIn } = require("../config/config");
 
 function generateAccessToken(user) {
-    return jwt.sign({ id: user.id, email: user.email, isAdmin: Boolean(user.isAdmin) }, accessTokenSecret, { expiresIn: accessTokenExpiresIn });
+    return jwt.sign({ id: user.id, email: user.email, role: user.role }, accessTokenSecret, { expiresIn: accessTokenExpiresIn });
 }
 
 function generateRefreshToken(user, tokenId) {
