@@ -1,4 +1,5 @@
 const orderService = require("../services/orderService");
+const orderAssignmentService = require("../services/orderAssignmentService");
 
 async function createOrder(req, res, next) {
     try {
@@ -17,11 +18,10 @@ async function createOrder(req, res, next) {
 async function cancelOrder(req, res, next) {
     try {
         const userId = req.user.id;
-        const isAdmin = Boolean(req.user.isAdmin);
         const result = await orderService.cancelOrder(req.params.id, userId, {
             reason: req.body.reason,
             currentStatus: req.body.currentStatus,
-            isAdmin
+            actorRole: req.user.role
         });
         return res.status(200).json({
             status: "success",
@@ -61,6 +61,24 @@ async function getAllOrdersForAdmin(req, res, next) {
     }
 }
 
+async function assignOrderToShipper(req, res, next) {
+    try {
+        const result = await orderAssignmentService.assignInternalOrderToShipper({
+            orderId: req.params.id,
+            shipperId: req.body.shipperId,
+            assignedBy: req.user.id,
+            note: req.body.note
+        });
+        return res.status(201).json({
+            status: "success",
+            message: "Phân công đơn hàng cho shipper thành công.",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
 async function getUserOrders(req, res, next) {
     try {
         const userId = req.user.id;
@@ -78,8 +96,7 @@ async function getUserOrders(req, res, next) {
 async function getOrderDetails(req, res, next) {
     try {
         const userId = req.user.id;
-        const isAdmin = Boolean(req.user.isAdmin);
-        const result = await orderService.getOrderDetails(req.params.id, userId, { isAdmin });
+        const result = await orderService.getOrderDetails(req.params.id, userId, { actorRole: req.user.role });
         return res.status(200).json({
             status: "success",
             data: result
@@ -106,12 +123,11 @@ async function reorder(req, res, next) {
 async function createPaymentUrl(req, res, next) {
     try {
         const userId = req.user.id;
-        const isAdmin = Boolean(req.user.isAdmin);
         const ipAddr = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1";
         const result = await orderService.createPaymentUrlForOrder(req.params.id, userId, {
             ipAddr,
             returnUrl: req.body.returnUrl,
-            isAdmin
+            actorRole: req.user.role
         });
         return res.status(200).json({
             status: "success",
@@ -165,6 +181,7 @@ module.exports = {
     getUserOrders,
     getOrderDetails,
     getAllOrdersForAdmin,
+    assignOrderToShipper,
     reorder,
     createPaymentUrl,
     handleVNPayReturn,

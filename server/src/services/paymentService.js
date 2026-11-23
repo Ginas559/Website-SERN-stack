@@ -108,7 +108,7 @@ function verifyPaymentSignature(queryParams = {}) {
     return calculatedHash.toLowerCase() === String(secureHash).toLowerCase();
 }
 
-async function createPaymentUrlForOrder(orderId, userId, { ipAddr = "127.0.0.1", returnUrl = null, isAdmin = false } = {}) {
+async function createPaymentUrlForOrder(orderId, userId, { ipAddr = "127.0.0.1", returnUrl = null, actorRole = null } = {}) {
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -118,7 +118,7 @@ async function createPaymentUrlForOrder(orderId, userId, { ipAddr = "127.0.0.1",
         throw new AppError("Không tìm thấy đơn hàng.", 404);
     }
 
-    if (!isAdmin && order.user_id !== userId) {
+    if (actorRole !== "Admin" && order.user_id !== userId) {
         throw new AppError("Bạn không có quyền thanh toán đơn hàng này.", 403);
     }
 

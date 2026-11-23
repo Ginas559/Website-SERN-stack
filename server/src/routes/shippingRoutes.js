@@ -37,23 +37,19 @@ router.post(
     "/calculate-fee",
     [
         body("provinceId")
-            .optional({ nullable: true })
+            .notEmpty()
             .isInt({ min: 1 })
             .withMessage("Mã tỉnh thành provinceId không hợp lệ.")
             .bail()
             .toInt(),
-        body("provinceName")
-            .optional({ nullable: true })
-            .isString()
-            .trim(),
         body("toDistrictId")
-            .optional({ nullable: true })
+            .notEmpty()
             .isInt({ min: 1 })
             .withMessage("Mã quận huyện toDistrictId không hợp lệ.")
             .bail()
             .toInt(),
         body("toWardCode")
-            .optional({ nullable: true })
+            .notEmpty()
             .isString()
             .trim(),
         body("orderTotal")
