@@ -1,16 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
+import BookReviews from "./BookReviews";
 import { addToCart } from "../store/slices/cartSlice";
 import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
 
-function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSelectBook, onAddToCart }) {
+function BookDetail({
+    book,
+    loading = false,
+    error = "",
+    onRetry,
+    onBack,
+    onSelectBook,
+    onAddToCart,
+    currentUser,
+    onRequireLogin,
+    initialReviewTab = 'reviews',
+    scrollToReviews = false,
+    scrollToOwnReview = false
+}) {
     const dispatch = useDispatch();
     const reduxWishlist = useSelector((state) => state.wishlist);
     const isAuthenticated = Boolean(sessionStorage.getItem('accessToken'));
 
     const [quantity, setQuantity] = useState(1);
     const [addedNotice, setAddedNotice] = useState(false);
+    const [optimisticFavorite, setOptimisticFavorite] = useState(null);
 
     const isFavoriteRedux = isAuthenticated && book && Array.isArray(reduxWishlist.items)
         ? reduxWishlist.items.some((it) => (it.bookId || it.id) === book.id)
@@ -26,7 +41,26 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
         }
     });
 
-    const isFavorite = isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal;
+    const isFavorite = optimisticFavorite !== null
+        ? optimisticFavorite
+        : (isFavoriteRedux !== null ? isFavoriteRedux : isFavoriteLocal);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasDiscussionTab = searchParams.get('tab') === 'discussion';
+        const hasReviewFocus = searchParams.get('focus') === 'review';
+        const hasReviewHash = window.location.hash === '#book-reviews-section';
+
+        if (hasDiscussionTab || hasReviewFocus || hasReviewHash || scrollToReviews || scrollToOwnReview) {
+            const timer = setTimeout(() => {
+                const section = document.getElementById('book-reviews-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 180);
+            return () => clearTimeout(timer);
+        }
+    }, [book?.id, scrollToReviews, scrollToOwnReview]);
 
     if (loading) {
         return (
@@ -108,6 +142,7 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
 
     const handleToggleFavorite = () => {
         const nextState = !isFavorite;
+        setOptimisticFavorite(nextState);
         setIsFavoriteLocal(nextState);
 
         if (isAuthenticated) {
@@ -200,12 +235,12 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                     <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "16px 0", flexWrap: "wrap" }}>
                         {inStock ? (
                             <>
-                                <div style={{ display: "inline-flex", border: "1px solid #d9d0c2", borderRadius: "8px", background: "#ffffff", overflow: "hidden" }}>
+                                <div style={{ display: "inline-flex", alignItems: "center", height: "42px", border: "1px solid #d9d0c2", borderRadius: "8px", background: "#ffffff", overflow: "hidden", boxSizing: "border-box" }}>
                                     <button
                                         type="button"
                                         disabled={quantity <= 1}
                                         onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                        style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
+                                        style={{ width: "38px", height: "100%", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}
                                     >
                                         −
                                     </button>
@@ -216,13 +251,27 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                                         max={stockCount}
                                         onKeyDown={(e) => { if (['e', 'E', '+', '-', '.', ','].includes(e.key)) e.preventDefault(); }}
                                         onChange={(e) => setQuantity(Math.max(1, Math.min(stockCount, parseInt(e.target.value, 10) || 1)))}
-                                        style={{ width: "46px", textAlign: "center", border: "none", borderLeft: "1px solid #d9d0c2", borderRight: "1px solid #d9d0c2", fontWeight: "700", color: "#20201f" }}
+                                        style={{
+                                            width: "52px",
+                                            minWidth: "48px",
+                                            height: "100%",
+                                            textAlign: "center",
+                                            border: "none",
+                                            borderLeft: "1px solid #d9d0c2",
+                                            borderRight: "1px solid #d9d0c2",
+                                            fontWeight: "700",
+                                            color: "#20201f",
+                                            padding: "0 4px",
+                                            boxSizing: "border-box",
+                                            outline: "none",
+                                            fontSize: "15px"
+                                        }}
                                     />
                                     <button
                                         type="button"
                                         disabled={quantity >= stockCount}
                                         onClick={() => setQuantity(Math.min(stockCount, quantity + 1))}
-                                        style={{ width: "34px", height: "34px", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer" }}
+                                        style={{ width: "38px", height: "100%", border: "none", background: "#f5ede0", color: "#20201f", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}
                                     >
                                         +
                                     </button>
@@ -231,14 +280,19 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                                     type="button"
                                     onClick={handleAdd}
                                     style={{
-                                        padding: "10px 22px",
+                                        height: "42px",
+                                        padding: "0 22px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
                                         background: "#c77736",
                                         color: "#fff",
                                         border: "none",
                                         borderRadius: "8px",
                                         fontWeight: "700",
                                         cursor: "pointer",
-                                        transition: "background 0.2s"
+                                        transition: "background 0.2s",
+                                        boxSizing: "border-box"
                                     }}
                                 >
                                     🛒 Thêm vào giỏ hàng
@@ -286,6 +340,15 @@ function BookDetail({ book, loading = false, error = "", onRetry, onBack, onSele
                     </div>
                 </div>
             </div>
+
+            <BookReviews
+                key={`${book.id}-${initialReviewTab}`}
+                bookId={book.id}
+                currentUser={currentUser}
+                onRequireLogin={onRequireLogin}
+                initialTab={initialReviewTab}
+                scrollToOwnReview={scrollToOwnReview}
+            />
 
             {Array.isArray(book.relatedBooks) && book.relatedBooks.length > 0 ? (
                 <div className="related-section">

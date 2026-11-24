@@ -73,10 +73,10 @@ function WishlistPage({
     }, [isAuthenticated, reduxWishlist.items, localGuestItems]);
 
     useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && reduxWishlist.fetchStatus === 'idle') {
             dispatch(fetchWishlist());
         }
-    }, [isAuthenticated, dispatch]);
+    }, [isAuthenticated, reduxWishlist.fetchStatus, dispatch]);
 
     const [toast, setToast] = useState(null);
     const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);

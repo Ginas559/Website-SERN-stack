@@ -1,5 +1,15 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import orderService from '../services/orderService';
+import discountService from '../services/discountService';
+import userService from '../services/userService';
+import {
+    useShippingRule,
+    loadShippingRule,
+    calculateDiscountedUnitPrice,
+    calculateSelectedItemsTotals,
+    calculateShippingFee,
+    getPaymentMethodLabel
+} from '../utils/pricing';
 import './Checkout.css';
 
 function formatCurrency(amount) {
@@ -26,17 +36,25 @@ function CheckoutPage({
         }
     }, [checkoutItems]);
 
+    const initialAddress = currentUser?.address || '';
     const [form, setForm] = useState(() => ({
         fullName: currentUser?.fullName || '',
         phone: currentUser?.phone || currentUser?.phoneNumber || '',
         email: currentUser?.email || '',
-        address: currentUser?.address || '',
+        address: initialAddress,
         note: ''
     }));
 
+    const [defaultAddress, setDefaultAddress] = useState(initialAddress);
+    const [isChangingAddress, setIsChangingAddress] = useState(!initialAddress);
+    const [saveAsDefaultAddress, setSaveAsDefaultAddress] = useState(false);
+
     const [paymentMethod, setPaymentMethod] = useState('COD');
     const [couponInput, setCouponInput] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [appliedDiscount, setAppliedDiscount] = useState(0);
+    const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+    const [availableDiscounts, setAvailableDiscounts] = useState([]);
     const [toast, setToast] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successOrder, setSuccessOrder] = useState(null);
@@ -48,47 +66,103 @@ function CheckoutPage({
         }, 3200);
     }, []);
 
+    useEffect(() => {
+        let isCurrent = true;
+        discountService.getActiveDiscounts({ page: 1, limit: 10 })
+            .then((res) => {
+                if (!isCurrent) return;
+                const list = Array.isArray(res) ? res : res?.discounts || [];
+                setAvailableDiscounts(list);
+            })
+            .catch(() => {
+                if (!isCurrent) return;
+                setAvailableDiscounts([]);
+            });
+        return () => {
+            isCurrent = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let isCurrent = true;
+        if (localStorage.getItem('accessToken')) {
+            userService.getProfile()
+                .then((res) => {
+                    if (!isCurrent) return;
+                    const profile = res.data || res;
+                    if (profile) {
+                        setForm((prev) => ({
+                            fullName: prev.fullName || profile.fullName || profile.full_name || '',
+                            phone: prev.phone || profile.phone || profile.phoneNumber || profile.phone_number || '',
+                            email: prev.email || profile.email || '',
+                            address: prev.address || profile.address || '',
+                            note: prev.note
+                        }));
+                        if (profile.address) {
+                            setDefaultAddress(profile.address);
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+        return () => {
+            isCurrent = false;
+        };
+    }, []);
+
     const handleChangeForm = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
     };
 
-    const { selectedCount, subtotal } = useMemo(() => {
-        let count = 0;
-        let sum = 0;
-        items.forEach((item) => {
-            const finalPrice = item.discount > 0 
-                ? Math.round(item.price * (100 - item.discount) / 100) 
-                : item.price;
-            const qty = Math.max(1, Number(item.quantity) || 1);
-            count += qty;
-            sum += finalPrice * qty;
-        });
-        return { selectedCount: count, subtotal: sum };
-    }, [items]);
+    const shippingRule = useShippingRule();
 
-    const shippingFee = subtotal >= 250000 || subtotal === 0 ? 0 : 25000;
+    const { selectedCount, subtotal } = useMemo(
+        () => calculateSelectedItemsTotals(items),
+        [items]
+    );
+
+    const shippingFee = calculateShippingFee(subtotal, shippingRule);
     const finalTotal = Math.max(0, subtotal + shippingFee - appliedDiscount);
 
-    const handleApplyCoupon = (e) => {
-        e.preventDefault();
-        const code = couponInput.trim().toUpperCase();
+    const handleApplyCoupon = useCallback(async (e, overrideCode) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const code = (overrideCode || couponInput).trim().toUpperCase();
         if (!code) {
             triggerToast('Vui lòng nhập mã giảm giá.', 'warning');
             return;
         }
 
-        if (code === 'BOOKWEB10') {
-            const discountValue = Math.round(subtotal * 0.1);
-            setAppliedDiscount(discountValue);
-            triggerToast('Áp dụng mã BOOKWEB10 thành công: Giảm 10% đơn hàng.', 'success');
-        } else if (code === 'FREESHIP') {
-            setAppliedDiscount(shippingFee);
-            triggerToast('Áp dụng mã FREESHIP thành công: Miễn phí vận chuyển.', 'success');
-        } else {
-            triggerToast('Mã giảm giá không hợp lệ hoặc đã hết hạn.', 'warning');
+        if (subtotal <= 0) {
+            triggerToast('Đơn hàng không có sản phẩm để áp dụng mã.', 'warning');
+            return;
         }
-    };
+
+        setIsValidatingCoupon(true);
+        try {
+            const res = await discountService.validatePromotion({
+                code,
+                subtotal
+            });
+            setAppliedCoupon(res);
+            setAppliedDiscount(Number(res.discountAmount) || 0);
+            setCouponInput(code);
+            triggerToast(res.message || `Áp dụng mã ${code} thành công: Giảm ${formatCurrency(res.discountAmount)}.`, 'success');
+        } catch (err) {
+            setAppliedCoupon(null);
+            setAppliedDiscount(0);
+            triggerToast(err.message || 'Mã giảm giá không hợp lệ hoặc đã hết hạn.', 'warning');
+        } finally {
+            setIsValidatingCoupon(false);
+        }
+    }, [couponInput, subtotal, triggerToast]);
+
+    const handleRemoveCoupon = useCallback(() => {
+        setAppliedCoupon(null);
+        setAppliedDiscount(0);
+        setCouponInput('');
+        triggerToast('Đã gỡ mã giảm giá.', 'info');
+    }, [triggerToast]);
 
     const handlePlaceOrder = (e) => {
         e.preventDefault();
@@ -129,14 +203,24 @@ function CheckoutPage({
 
         setIsSubmitting(true);
 
+        const activeCouponCode = appliedCoupon?.discount?.code || (appliedCoupon ? couponInput.trim().toUpperCase() : undefined);
+
         const orderPayload = {
             receiverName: form.fullName.trim(),
+            recipientName: form.fullName.trim(),
+            fullName: form.fullName.trim(),
             phone: phoneTrimmed,
+            phoneNumber: phoneTrimmed,
+            recipientPhone: phoneTrimmed,
             address: form.address.trim(),
+            shippingAddress: form.address.trim(),
             note: form.note.trim() || undefined,
             paymentMethod,
-            couponCode: couponInput.trim() || undefined,
-            selectedBookIds: items.map((it) => Number(it.book_id || it.id))
+            couponCode: activeCouponCode,
+            setAsDefaultAddress: saveAsDefaultAddress,
+            saveAsDefaultAddress: saveAsDefaultAddress,
+            expectedShippingFee: shippingFee,
+            selectedBookIds: items.map((it) => Number(it.book_id || it.bookId || it.id))
         };
 
         orderService.createOrder(orderPayload)
@@ -146,8 +230,18 @@ function CheckoutPage({
                     onOrderCompleted(createdOrder);
                 }
 
-                if (paymentMethod === 'VNPAY' && createdOrder.pay_url) {
-                    window.location.href = createdOrder.pay_url;
+                if (saveAsDefaultAddress && currentUser) {
+                    try {
+                        const updatedUser = { ...currentUser, address: form.address.trim() };
+                        localStorage.setItem('user', JSON.stringify(updatedUser));
+                    } catch {
+                        return;
+                    }
+                }
+
+                const redirectPayUrl = createdOrder.pay_url || createdOrder.payUrl || createdOrder.paymentUrl;
+                if (paymentMethod === 'VNPAY' && redirectPayUrl) {
+                    window.location.href = redirectPayUrl;
                     return;
                 }
 
@@ -158,16 +252,27 @@ function CheckoutPage({
                     phone: phoneTrimmed,
                     address: form.address.trim(),
                     total: createdOrder.total ?? finalTotal,
-                    paymentMethod: paymentMethod === 'COD' 
-                        ? 'Thanh toán khi nhận hàng (COD)' 
-                        : paymentMethod === 'VNPAY' 
-                            ? 'Cổng thanh toán VNPAY' 
-                            : 'Chuyển khoản ngân hàng',
+                    paymentMethod: getPaymentMethodLabel(paymentMethod, 'checkout'),
                     itemsCount: selectedCount
                 });
             })
             .catch((err) => {
                 setIsSubmitting(false);
+                const status = err?.status || err?.response?.status;
+                if (status === 409) {
+                    loadShippingRule({ force: true });
+                    if (activeCouponCode) {
+                        discountService.validatePromotion({ code: activeCouponCode, subtotal })
+                            .then((res) => {
+                                setAppliedCoupon(res);
+                                setAppliedDiscount(Number(res.discountAmount) || 0);
+                            })
+                            .catch(() => {
+                                setAppliedCoupon(null);
+                                setAppliedDiscount(0);
+                            });
+                    }
+                }
                 triggerToast(err.message || 'Không thể tạo đơn hàng. Vui lòng thử lại.', 'warning');
             });
     };
@@ -269,15 +374,53 @@ function CheckoutPage({
                                     <label className="checkout-label">
                                         Địa chỉ nhận hàng <span className="required">*</span>
                                     </label>
-                                    <input 
-                                        type="text" 
-                                        name="address"
-                                        maxLength={255}
-                                        className="checkout-input"
-                                        placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành..."
-                                        value={form.address}
-                                        onChange={handleChangeForm}
-                                    />
+                                    {defaultAddress && !isChangingAddress ? (
+                                        <div className="checkout-default-address-card">
+                                            <div className="checkout-default-address-meta">
+                                                <span className="checkout-default-badge">[Mặc định]</span>
+                                                <span className="checkout-default-text">{form.address}</span>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                className="checkout-change-address-btn"
+                                                onClick={() => setIsChangingAddress(true)}
+                                            >
+                                                + Giao đến địa chỉ khác / Thay đổi
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="checkout-new-address-wrapper">
+                                            <input 
+                                                type="text" 
+                                                name="address"
+                                                maxLength={255}
+                                                className="checkout-input"
+                                                placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành..."
+                                                value={form.address}
+                                                onChange={handleChangeForm}
+                                            />
+                                            {defaultAddress && (
+                                                <button 
+                                                    type="button" 
+                                                    className="checkout-revert-address-btn"
+                                                    onClick={() => {
+                                                        setIsChangingAddress(false);
+                                                        setForm((prev) => ({ ...prev, address: defaultAddress }));
+                                                    }}
+                                                >
+                                                    ← Sử dụng lại địa chỉ mặc định
+                                                </button>
+                                            )}
+                                            <label className="checkout-save-default-checkbox">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={saveAsDefaultAddress} 
+                                                    onChange={(e) => setSaveAsDefaultAddress(e.target.checked)} 
+                                                />
+                                                <span>Đặt làm địa chỉ mặc định cho các lần sau</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="checkout-form-group full-width">
@@ -348,20 +491,6 @@ function CheckoutPage({
                                     </div>
                                 </label>
 
-                                <label className={`payment-option-label ${paymentMethod === 'BANK' ? 'selected' : ''}`}>
-                                    <input 
-                                        type="radio" 
-                                        name="paymentMethod" 
-                                        value="BANK"
-                                        checked={paymentMethod === 'BANK'}
-                                        onChange={() => setPaymentMethod('BANK')}
-                                        className="payment-radio"
-                                    />
-                                    <div className="payment-option-text">
-                                        <span className="payment-title">Chuyển khoản trực tiếp</span>
-                                        <span className="payment-desc">Chuyển khoản trực tiếp qua tài khoản ngân hàng chính thức của SERN Bookstore.</span>
-                                    </div>
-                                </label>
                             </div>
                         </div>
                     </div>
@@ -373,9 +502,7 @@ function CheckoutPage({
                             <div className="checkout-items-list">
                                 {items.map((item) => {
                                     const id = item.bookId || item.id;
-                                    const itemPrice = item.discount > 0 
-                                        ? Math.round(item.price * (100 - item.discount) / 100) 
-                                        : item.price;
+                                    const itemPrice = calculateDiscountedUnitPrice(item.price, item.discount);
                                     const itemQty = Number(item.quantity) || 1;
                                     const itemTotal = itemPrice * itemQty;
 
@@ -400,18 +527,65 @@ function CheckoutPage({
                                 })}
                             </div>
 
-                            <form onSubmit={handleApplyCoupon} className="coupon-section">
-                                <input 
-                                    type="text" 
-                                    className="coupon-input"
-                                    placeholder="Mã giảm giá (BOOKWEB10)"
-                                    value={couponInput}
-                                    onChange={(e) => setCouponInput(e.target.value)}
-                                />
-                                <button type="submit" className="coupon-btn">
-                                    Áp dụng
-                                </button>
-                            </form>
+                            {appliedCoupon ? (
+                                <div className="applied-coupon-card">
+                                    <div className="applied-coupon-info">
+                                        <span className="applied-coupon-badge">🏷️ {appliedCoupon.discount?.code || couponInput}</span>
+                                        <span className="applied-coupon-text">
+                                            {appliedCoupon.discount?.discount_type === 'PERCENT'
+                                                ? `Giảm ${appliedCoupon.discount?.value}% (tối đa ${formatCurrency(appliedCoupon.discount?.maxDiscountValue)})`
+                                                : `Giảm ${formatCurrency(appliedCoupon.discount?.value)}`}
+                                        </span>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        className="remove-coupon-btn" 
+                                        onClick={handleRemoveCoupon}
+                                        title="Hủy áp dụng mã"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleApplyCoupon} className="coupon-section">
+                                    <input 
+                                        type="text" 
+                                        className="coupon-input"
+                                        placeholder="Nhập mã ưu đãi..."
+                                        value={couponInput}
+                                        onChange={(e) => setCouponInput(e.target.value)}
+                                        disabled={isValidatingCoupon}
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        className="coupon-btn" 
+                                        disabled={isValidatingCoupon || !couponInput.trim()}
+                                    >
+                                        {isValidatingCoupon ? 'Đang kiểm tra...' : 'Áp dụng'}
+                                    </button>
+                                </form>
+                            )}
+
+                            {!appliedCoupon && availableDiscounts.length > 0 && (
+                                <div className="checkout-avail-promo-section">
+                                    <div className="checkout-avail-promo-title">Mã ưu đãi khả dụng:</div>
+                                    <div className="checkout-avail-promo-list">
+                                        {availableDiscounts.map((d) => (
+                                            <div 
+                                                key={d.id || d.code}
+                                                className="checkout-promo-chip"
+                                                onClick={() => handleApplyCoupon(null, d.code)}
+                                            >
+                                                <span className="checkout-promo-chip-code">{d.code}</span>
+                                                <span className="checkout-promo-chip-desc">
+                                                    {d.discount_type === 'PERCENT' ? `-${d.value}%` : `-${formatCurrency(d.value)}`}
+                                                    {d.minimumOrderValue > 0 ? ` (từ ${formatCurrency(d.minimumOrderValue)})` : ''}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="checkout-calc-list">
                                 <div className="checkout-calc-row">
@@ -462,7 +636,21 @@ function CheckoutPage({
                         <div className="checkout-success-details">
                             <div className="checkout-success-row">
                                 <span className="checkout-success-label">Mã tham chiếu đơn:</span>
-                                <span className="checkout-success-value">{successOrder.orderCode}</span>
+                                <span className="checkout-success-value">
+                                    {successOrder.orderCode}
+                                    <button 
+                                        type="button" 
+                                        className="order-copy-id-btn" 
+                                        title="Sao chép toàn bộ mã đơn"
+                                        onClick={() => {
+                                            if (navigator?.clipboard?.writeText) {
+                                                navigator.clipboard.writeText(successOrder.orderCode).catch(() => {});
+                                            }
+                                        }}
+                                    >
+                                        📋 Chép mã
+                                    </button>
+                                </span>
                             </div>
                             <div className="checkout-success-row">
                                 <span className="checkout-success-label">Người nhận hàng:</span>
@@ -512,4 +700,3 @@ function CheckoutPage({
 }
 
 export default CheckoutPage;
-

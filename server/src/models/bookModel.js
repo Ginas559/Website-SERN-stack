@@ -1,8 +1,9 @@
 const { sql, connectDB } = require("../config/connectDB");
 const AppError = require("../utils/AppError");
 
+const MAX_INT32 = 2147483647;
 const bookColumns = "id, title, author, price, description, image, publication_date, createdAt, updatedAt, isDelete, quantity, discount, purchase_price";
-const publicBookColumns = "id, title, author, price, description, image, publication_date, discount";
+const publicBookColumns = "id, title, author, price, description, image, publication_date, quantity, discount";
 const insertedBookColumns = "INSERTED.id, INSERTED.title, INSERTED.author, INSERTED.price, INSERTED.description, INSERTED.image, INSERTED.publication_date, INSERTED.createdAt, INSERTED.updatedAt, INSERTED.isDelete, INSERTED.quantity, INSERTED.discount, INSERTED.purchase_price";
 
 async function syncBookCategories(transaction, bookId, categoryIds) {
@@ -192,7 +193,7 @@ async function findAllWithColumns(columns, {
 
     const offset = (page - 1) * limit;
 
-    request.input("offset", sql.Int, offset);
+    request.input("offset", sql.BigInt, offset);
     request.input("limit", sql.Int, limit);
 
     const dataQuery = `SELECT ${columns.split(", ").map((col) => `b.${col}`).join(", ")}
@@ -229,12 +230,25 @@ async function findAllWithColumns(columns, {
         }
     }
 
+    const priceRangeCondition = includeDeleted ? "" : "WHERE isDelete = 0";
+    const priceRangeResult = await pool.request().query(
+        `SELECT ISNULL(MIN(price), 0) AS minPrice, ISNULL(MAX(price), 0) AS maxPrice FROM dbo.books ${priceRangeCondition}`
+    );
+    const rawMaxPrice = Number(priceRangeResult.recordset[0]?.maxPrice) || 0;
+    const roundedMaxPrice = rawMaxPrice > 0
+        ? Math.min(MAX_INT32, Math.ceil(rawMaxPrice / 10000) * 10000)
+        : 500000;
+
     return {
         books,
         total,
         page,
         limit,
         totalPages: Math.ceil(total / limit) || 1,
+        priceRange: {
+            min: 0,
+            max: roundedMaxPrice,
+        },
     };
 }
 

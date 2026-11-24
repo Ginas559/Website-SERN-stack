@@ -5,14 +5,17 @@ const orderItemModel = require("../models/orderItemModel");
 const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
 const paymentService = require("./paymentService");
+const discountService = require("./discountService");
+const storePolicyService = require("./storePolicyService");
+const discountModel = require("../models/discountModel");
+const userModel = require("../models/userModel");
 const AppError = require("../utils/AppError");
-
-function calculateItemPrice(price, discount = 0) {
-    const rawPrice = Math.max(0, Number(price) || 0);
-    const rate = Math.max(0, Math.min(100, Number(discount) || 0));
-    if (rate <= 0) return rawPrice;
-    return Math.round(rawPrice * (1 - rate / 100));
-}
+const {
+    SUPPORTED_PAYMENT_METHODS,
+    calculateDiscountedUnitPrice,
+    calculateShippingFee,
+    calculateSelectedItemsTotals
+} = require("../utils/pricing");
 
 function validatePhoneNumber(phone) {
     const trimmed = typeof phone === "string" ? phone.trim() : "";
@@ -45,33 +48,23 @@ function validateAddress(address) {
     return trimmed;
 }
 
-function calculateShippingFee(subtotal) {
-    if (subtotal >= 250000 || subtotal === 0) return 0;
-    return 25000;
-}
-
-function calculateDiscountValue(couponCode, subtotal, shippingFee) {
-    if (!couponCode || typeof couponCode !== "string") return 0;
-    const clean = couponCode.trim().toUpperCase();
-    if (clean === "BOOKWEB10") {
-        return Math.round(subtotal * 0.1);
-    }
-    if (clean === "FREESHIP") {
-        return shippingFee;
-    }
-    return 0;
-}
 
 async function createOrderFromCart(userId, orderPayload = {}) {
     if (!userId) {
         throw new AppError("Người dùng không hợp lệ.", 401);
     }
 
-    const receiverName = validateReceiverName(orderPayload.receiverName || orderPayload.fullName);
-    const phone = validatePhoneNumber(orderPayload.phone || orderPayload.phoneNumber);
-    const address = validateAddress(orderPayload.address);
+    const receiverName = validateReceiverName(orderPayload.receiverName || orderPayload.fullName || orderPayload.recipientName || orderPayload.recipient_name || orderPayload.customerName);
+    const phone = validatePhoneNumber(orderPayload.phone || orderPayload.phoneNumber || orderPayload.recipientPhone || orderPayload.recipient_phone);
+    const address = validateAddress(orderPayload.address || orderPayload.shippingAddress || orderPayload.shipping_address);
     const note = orderPayload.note && typeof orderPayload.note === "string" ? orderPayload.note.trim().slice(0, 500) : null;
-    const paymentMethod = orderPayload.paymentMethod === "VNPAY" ? "VNPAY" : orderPayload.paymentMethod === "BANK" ? "BANK" : "COD";
+    const rawPaymentMethod = orderPayload.paymentMethod === undefined || orderPayload.paymentMethod === null || orderPayload.paymentMethod === ""
+        ? "COD"
+        : String(orderPayload.paymentMethod).trim().toUpperCase();
+    if (!SUPPORTED_PAYMENT_METHODS.includes(rawPaymentMethod)) {
+        throw new AppError("Phương thức thanh toán không hợp lệ (hiện chỉ hỗ trợ COD hoặc VNPAY).", 400);
+    }
+    const paymentMethod = rawPaymentMethod;
 
     const cart = await cartModel.findByUserId(userId);
     if (!cart) {
@@ -110,37 +103,58 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         }
     }
 
-    let subtotal = 0;
-    let totalQuantity = 0;
-    const orderItems = [];
+    const { subtotal, totalQuantity, lineItems } = calculateSelectedItemsTotals(targetItems);
+    const orderItems = lineItems.map(({ bookId, quantity, total }) => ({ bookId, quantity, total }));
 
-    for (const item of targetItems) {
-        const qty = Math.max(1, Number(item.quantity) || 1);
-        const unitPrice = calculateItemPrice(item.price, item.discount);
-        const lineTotal = unitPrice * qty;
+    const shippingRule = await storePolicyService.getShippingPolicy();
+    const shippingFee = calculateShippingFee(subtotal, shippingRule);
+    if (
+        orderPayload.expectedShippingFee !== undefined &&
+        orderPayload.expectedShippingFee !== null &&
+        orderPayload.expectedShippingFee !== "" &&
+        Number(orderPayload.expectedShippingFee) !== shippingFee
+    ) {
+        const formattedFee = Number(shippingFee).toLocaleString("vi-VN");
+        throw new AppError(
+            `Phí vận chuyển vừa được cửa hàng cập nhật thành ${formattedFee}đ, vui lòng kiểm tra lại tổng thanh toán trước khi xác nhận đặt hàng.`,
+            409
+        );
+    }
+    let discountValue = 0;
+    let appliedDiscountId = null;
+    let appliedCouponCode = null;
 
-        subtotal += lineTotal;
-        totalQuantity += qty;
-        orderItems.push({
-            bookId: item.book_id,
-            quantity: qty,
-            total: lineTotal
+    if (orderPayload.couponCode && typeof orderPayload.couponCode === "string" && orderPayload.couponCode.trim()) {
+        const cleanCoupon = orderPayload.couponCode.trim().toUpperCase();
+        if (cleanCoupon.length > 50) {
+            throw new AppError("Mã khuyến mãi không được vượt quá 50 ký tự.", 400);
+        }
+        const promoResult = await discountService.validateAndCalculatePromotion({
+            code: cleanCoupon,
+            subtotal,
+            shippingRule
         });
+        discountValue = promoResult.discountAmount;
+        appliedDiscountId = promoResult.discount.id;
+        appliedCouponCode = promoResult.discount.code;
     }
 
-    const shippingFee = calculateShippingFee(subtotal);
-    const discountValue = calculateDiscountValue(orderPayload.couponCode, subtotal, shippingFee);
     const finalTotal = Math.max(0, subtotal + shippingFee - discountValue);
 
     const ghnInfo = {
         receiverName,
+        recipientName: receiverName,
+        fullName: receiverName,
         phone,
+        phoneNumber: phone,
+        recipientPhone: phone,
         address,
+        shippingAddress: address,
         note,
         subtotal,
         shippingFee,
         discountValue,
-        couponCode: orderPayload.couponCode ? String(orderPayload.couponCode).trim().toUpperCase() : null
+        couponCode: appliedCouponCode
     };
 
     const orderId = uuidv4();
@@ -166,11 +180,17 @@ async function createOrderFromCart(userId, orderPayload = {}) {
             paymentMethod,
             payUrl,
             ghnFee: shippingFee,
-            discount: orderPayload.discountId ? Number(orderPayload.discountId) : null,
+            discount: appliedDiscountId || null,
             ghnInfo
         }, transaction);
 
         const createdDetails = await orderItemModel.createMany(createdOrder.id, orderItems, transaction);
+        if (appliedDiscountId) {
+            const incremented = await discountModel.incrementUsedCount(appliedDiscountId, transaction);
+            if (!incremented) {
+                throw new AppError("Mã khuyến mãi đã hết lượt sử dụng, vui lòng thử lại.", 400);
+            }
+        }
 
         for (const item of orderItems) {
             await bookModel.deductStock(item.bookId, item.quantity, transaction);
@@ -195,6 +215,14 @@ async function createOrderFromCart(userId, orderPayload = {}) {
 
         await transaction.commit();
 
+        if (orderPayload.setAsDefaultAddress || orderPayload.saveAsDefaultAddress) {
+            await userModel.updateProfile(userId, {
+                fullName: receiverName,
+                phoneNumber: phone,
+                address
+            });
+        }
+
         return {
             ...createdOrder,
             ghn_info: ghnInfo,
@@ -210,7 +238,7 @@ async function createOrderFromCart(userId, orderPayload = {}) {
     }
 }
 
-async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } = {}) {
+async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, currentStatus = null } = {}) {
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -222,6 +250,10 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
 
     if (!isAdmin && order.user_id !== userId) {
         throw new AppError("Bạn không có quyền hủy đơn hàng này.", 403);
+    }
+
+    if (currentStatus !== null && currentStatus !== undefined && order.status !== Number(currentStatus)) {
+        throw new AppError("Trạng thái đơn hàng đã thay đổi trước đó, vui lòng tải lại danh sách.", 409);
     }
 
     if (order.status === 4) {
@@ -241,7 +273,8 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
     await transaction.begin();
 
     try {
-        const updatedOrder = await orderModel.updateStatus(orderId, 4, order.status, transaction);
+        const expectedCancelStatus = currentStatus !== null && currentStatus !== undefined ? Number(currentStatus) : order.status;
+        const updatedOrder = await orderModel.updateStatus(orderId, 4, expectedCancelStatus, transaction);
 
         let ghnInfoObj = {};
         try {
@@ -266,6 +299,10 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false } =
 
         for (const item of orderItems) {
             await bookModel.restoreStock(item.book_id, item.quantity, transaction);
+        }
+
+        if (order.discount) {
+            await discountModel.decrementUsedCount(order.discount, transaction);
         }
 
         await transaction.commit();
@@ -301,12 +338,16 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
         throw new AppError("Không tìm thấy đơn hàng.", 404);
     }
 
+    if (currentStatus !== null && currentStatus !== undefined && order.status !== Number(currentStatus)) {
+        throw new AppError("Trạng thái đơn hàng đã thay đổi trước đó, vui lòng tải lại danh sách.", 409);
+    }
+
     if (order.status === safeNext) {
         return parseOrderJsonFields(order);
     }
 
     if (safeNext === 4) {
-        return await cancelOrder(orderId, null, { isAdmin: true, reason: note });
+        return await cancelOrder(orderId, null, { isAdmin: true, reason: note, currentStatus });
     }
 
     if (order.status === 4) {
@@ -379,10 +420,25 @@ function parseOrderJsonFields(order) {
         }
     }
 
+    const info = ghnInfo || {};
+    const recipientName = order.recipientName || order.recipient_name || order.receiverName || order.fullName || order.customerName || info.receiverName || info.recipientName || info.fullName || null;
+    const recipientPhone = order.recipientPhone || order.recipient_phone || order.phoneNumber || order.phone || info.phone || info.phoneNumber || info.recipientPhone || null;
+    const shippingAddress = order.shippingAddress || order.shipping_address || order.address || info.address || info.shippingAddress || null;
+
     return {
         ...order,
         ghn_info: ghnInfo || null,
-        ghn_response: ghnResponse || null
+        ghn_response: ghnResponse || null,
+        recipientName,
+        recipient_name: recipientName,
+        receiverName: recipientName,
+        recipientPhone,
+        recipient_phone: recipientPhone,
+        phone: recipientPhone,
+        phoneNumber: recipientPhone,
+        shippingAddress,
+        shipping_address: shippingAddress,
+        address: shippingAddress
     };
 }
 
@@ -411,12 +467,21 @@ async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {
     const orderIds = result.orders.map((o) => o.id);
     const allItems = await orderItemModel.findByOrderIds(orderIds);
 
+    const pool = await connectDB();
+    const reviewedRes = await new sql.Request(pool)
+        .input("userId", sql.Char(36), userId)
+        .query("SELECT DISTINCT book_id FROM dbo.comments WHERE user_id = @userId AND isDelete = 0 AND rate IS NOT NULL");
+    const reviewedBookIds = new Set(reviewedRes.recordset.map((r) => Number(r.book_id)));
+
     const itemsByOrderId = new Map();
     for (const item of allItems) {
         if (!itemsByOrderId.has(item.order_id)) {
             itemsByOrderId.set(item.order_id, []);
         }
-        itemsByOrderId.get(item.order_id).push(item);
+        itemsByOrderId.get(item.order_id).push({
+            ...item,
+            isReviewed: reviewedBookIds.has(Number(item.book_id))
+        });
     }
 
     const enrichedOrders = result.orders.map((order) => {
@@ -468,7 +533,7 @@ async function getAllOrdersForAdmin(filters = {}) {
     let parsedPaymentMethod = null;
     if (filters.paymentMethod && typeof filters.paymentMethod === "string") {
         const cleanPm = filters.paymentMethod.trim().toUpperCase();
-        if (!["COD", "VNPAY", "BANK"].includes(cleanPm)) {
+        if (!SUPPORTED_PAYMENT_METHODS.includes(cleanPm)) {
             throw new AppError("Phương thức thanh toán không hợp lệ.", 400);
         }
         parsedPaymentMethod = cleanPm;
@@ -580,7 +645,7 @@ async function reorder(orderId, userId) {
             continue;
         }
 
-        const unitPrice = calculateItemPrice(book.price, book.discount);
+        const unitPrice = calculateDiscountedUnitPrice(book.price, book.discount);
         const lineTotal = unitPrice * finalQty;
 
         itemsToAdd.push({
@@ -652,6 +717,10 @@ async function reorder(orderId, userId) {
     }
 }
 
+async function getShippingRule() {
+    return await storePolicyService.getShippingPolicy();
+}
+
 module.exports = {
     createOrderFromCart,
     cancelOrder,
@@ -665,9 +734,10 @@ module.exports = {
     processPaymentIPN: paymentService.processPaymentIPN,
     generatePaymentUrl: paymentService.generatePaymentUrl,
     verifyPaymentSignature: paymentService.verifyPaymentSignature,
-    calculateItemPrice,
+    getShippingRule,
+    calculateItemPrice: calculateDiscountedUnitPrice,
     calculateShippingFee,
-    calculateDiscountValue,
+    calculateDiscountValue: discountService.calculateDiscountValue,
     validatePhoneNumber,
     validateReceiverName,
     validateAddress

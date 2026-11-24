@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { getPaymentMethodLabel } from '../utils/pricing'
 
 const orderStatusLabels = {
   0: { label: 'Chờ xác nhận', color: '#f59e0b', bg: '#451a03' },
@@ -15,13 +16,15 @@ function formatCurrency(amount) {
 function formatDate(dateStr) {
   if (!dateStr) return ''
   try {
-    return new Date(dateStr).toLocaleString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    const raw = String(dateStr).trim()
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/)
+    if (match) {
+      const [, year, month, day, hours, minutes] = match
+      return `${hours}:${minutes} ${day}/${month}/${year}`
+    }
+    const d = new Date(raw)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
   } catch {
     return dateStr
   }
@@ -36,9 +39,13 @@ function AdminOrderTable({
   search = '',
   statusFilter = 'all',
   paymentMethodFilter = 'all',
+  sortBy = 'createdAt',
+  sortOrder = 'DESC',
   onSearchChange,
   onStatusFilterChange,
   onPaymentMethodFilterChange,
+  onSortChange,
+  onResetFilters,
   onPageChange,
   onUpdateStatus,
 }) {
@@ -47,6 +54,31 @@ function AdminOrderTable({
   const [nextStatus, setNextStatus] = useState(1)
   const [adminNote, setAdminNote] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
+  const [copiedOrderId, setCopiedOrderId] = useState(null)
+
+  const renderSortIndicator = (field) => {
+    if (sortBy === field) {
+      return (
+        <span className="admin-sort-indicator active">
+          {sortOrder?.toUpperCase() === 'ASC' ? '▲' : '▼'}
+        </span>
+      )
+    }
+    return <span className="admin-sort-indicator">↕</span>
+  }
+
+  const handleCopyOrderId = useCallback((id) => {
+    if (!id) return
+    const markDone = () => {
+      setCopiedOrderId(id)
+      setTimeout(() => setCopiedOrderId(null), 2000)
+    }
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(id).then(markDone).catch(markDone)
+    } else {
+      markDone()
+    }
+  }, [])
 
   const handleOpenStatusModal = (order) => {
     setStatusModalOrder(order)
@@ -88,46 +120,96 @@ function AdminOrderTable({
             onChange={(e) => onSearchChange(e.target.value)}
           />
           <select
-            className="admin-select"
+            className="admin-filter-select"
             value={statusFilter}
             onChange={(e) => onStatusFilterChange(e.target.value)}
           >
             <option value="all">Tất cả trạng thái</option>
             <option value="0">Chờ xác nhận (0)</option>
             <option value="1">Đã thanh toán (1)</option>
-            <option value="2">Đang giao (2)</option>
+            <option value="2">Đang giao hàng (2)</option>
             <option value="3">Hoàn thành (3)</option>
             <option value="4">Đã hủy (4)</option>
           </select>
           <select
-            className="admin-select"
+            className="admin-filter-select"
             value={paymentMethodFilter}
             onChange={(e) => onPaymentMethodFilterChange(e.target.value)}
           >
             <option value="all">Tất cả phương thức</option>
             <option value="COD">COD (Tiền mặt)</option>
             <option value="VNPAY">VNPAY Sandbox</option>
-            <option value="BANK">Chuyển khoản</option>
           </select>
+          <button
+            type="button"
+            className="admin-btn-reset-filters"
+            onClick={onResetFilters}
+            title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về mặc định ban đầu"
+          >
+            🔄 Xóa bộ lọc
+          </button>
         </div>
       </div>
 
       <div className="admin-table-wrapper">
+        {loading && orders.length > 0 && <div className="admin-table-loading-bar" />}
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: '130px' }}>Mã đơn</th>
-              <th style={{ minWidth: '180px' }}>Khách hàng</th>
-              <th>Ngày đặt</th>
-              <th>Sản phẩm</th>
-              <th>Tổng tiền</th>
-              <th>Phương thức</th>
-              <th>Trạng thái</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'id' ? 'sorted' : ''}`}
+                style={{ width: '150px' }}
+                onClick={() => onSortChange && onSortChange('id')}
+                title="Nhấn để sắp xếp theo Mã đơn"
+              >
+                Mã đơn {renderSortIndicator('id')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'customer_name' ? 'sorted' : ''}`}
+                style={{ minWidth: '190px' }}
+                onClick={() => onSortChange && onSortChange('customer_name')}
+                title="Nhấn để sắp xếp theo Tên khách hàng"
+              >
+                Khách hàng {renderSortIndicator('customer_name')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'createdAt' ? 'sorted' : ''}`}
+                style={{ width: '155px' }}
+                onClick={() => onSortChange && onSortChange('createdAt')}
+                title="Nhấn để sắp xếp theo Ngày đặt (Mới nhất / Cũ nhất)"
+              >
+                Ngày đặt {renderSortIndicator('createdAt')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'total_quantity' ? 'sorted' : ''}`}
+                style={{ width: '115px', textAlign: 'center' }}
+                onClick={() => onSortChange && onSortChange('total_quantity')}
+                title="Nhấn để sắp xếp theo Số lượng sản phẩm"
+              >
+                Sản phẩm {renderSortIndicator('total_quantity')}
+              </th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'total' ? 'sorted' : ''}`}
+                style={{ width: '135px' }}
+                onClick={() => onSortChange && onSortChange('total')}
+                title="Nhấn để sắp xếp theo Tổng tiền"
+              >
+                Tổng tiền {renderSortIndicator('total')}
+              </th>
+              <th style={{ width: '120px' }}>Phương thức</th>
+              <th
+                className={`admin-th-sortable ${sortBy === 'status' ? 'sorted' : ''}`}
+                style={{ width: '145px', textAlign: 'center' }}
+                onClick={() => onSortChange && onSortChange('status')}
+                title="Nhấn để sắp xếp theo Trạng thái đơn"
+              >
+                Trạng thái {renderSortIndicator('status')}
+              </th>
               <th style={{ width: '170px', textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            {loading ? (
+          <tbody className={loading && orders.length > 0 ? 'admin-tbody-loading' : ''}>
+            {loading && orders.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ textAlign: 'center', padding: '40px 0' }}>
                   <div className="admin-spinner" style={{ margin: '0 auto 12px' }} />
@@ -146,9 +228,19 @@ function AdminOrderTable({
                 return (
                   <tr key={order.id}>
                     <td>
-                      <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#e7b26a' }}>
-                        #{order.id.slice(0, 8)}...
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#e7b26a' }} title={`Mã đầy đủ: #${order.id}`}>
+                          #{order.id.slice(0, 8)}...
+                        </span>
+                        <button
+                          type="button"
+                          className="order-copy-id-btn"
+                          title="Sao chép toàn bộ mã đơn"
+                          onClick={() => handleCopyOrderId(order.id)}
+                        >
+                          {copiedOrderId === order.id ? '✓' : '📋'}
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <div style={{ fontWeight: '600', color: '#fffaf1' }}>
@@ -171,17 +263,13 @@ function AdminOrderTable({
                     </td>
                     <td>
                       <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>
-                        {order.payment_method === 'VNPAY' ? 'VNPAY' : order.payment_method === 'BANK' ? 'BANK' : 'COD'}
+                        {getPaymentMethodLabel(order.payment_method, 'compact')}
                       </span>
                     </td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       <span
+                        className="admin-status-badge"
                         style={{
-                          display: 'inline-block',
-                          padding: '4px 10px',
-                          borderRadius: '999px',
-                          fontSize: '0.75rem',
-                          fontWeight: '700',
                           color: statusMeta.color,
                           backgroundColor: statusMeta.bg,
                         }}
@@ -193,7 +281,7 @@ function AdminOrderTable({
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                         <button
                           type="button"
-                          className="admin-btn-action"
+                          className="admin-btn-action detail"
                           onClick={() => setDetailModalOrder(order)}
                           title="Xem chi tiết"
                         >
@@ -201,10 +289,9 @@ function AdminOrderTable({
                         </button>
                         <button
                           type="button"
-                          className="admin-btn-action"
+                          className="admin-btn-action edit"
                           onClick={() => handleOpenStatusModal(order)}
                           title="Cập nhật trạng thái"
-                          style={{ borderColor: '#e7b26a', color: '#e7b26a' }}
                         >
                           ✏️ Đổi
                         </button>
@@ -220,139 +307,246 @@ function AdminOrderTable({
 
       {totalPages > 1 && (
         <div className="admin-pagination">
-          <button
-            type="button"
-            className="admin-page-btn"
-            disabled={page <= 1}
-            onClick={() => onPageChange(page - 1)}
-          >
-            ← Trước
-          </button>
-          <span className="admin-page-info">
-            Trang {page} / {totalPages} (Tổng {total} đơn)
-          </span>
-          <button
-            type="button"
-            className="admin-page-btn"
-            disabled={page >= totalPages}
-            onClick={() => onPageChange(page + 1)}
-          >
-            Sau →
-          </button>
-        </div>
-      )}
-
-      {detailModalOrder && (
-        <div className="admin-modal-backdrop" onClick={() => setDetailModalOrder(null)}>
-          <div className="admin-modal" style={{ maxWidth: '620px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <h2 className="admin-modal-title">Chi tiết đơn hàng #{detailModalOrder.id.slice(0, 8)}...</h2>
-              <button
-                type="button"
-                className="admin-modal-close"
-                onClick={() => setDetailModalOrder(null)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ background: '#222220', padding: '14px', borderRadius: '10px', fontSize: '0.9rem', lineHeight: '1.6' }}>
-                <div><strong>Khách hàng:</strong> {detailModalOrder.customer_name || '---'}</div>
-                <div><strong>Email:</strong> {detailModalOrder.customer_email || '---'} | <strong>SĐT:</strong> {detailModalOrder.customer_phone || '---'}</div>
-                <div><strong>Ngày đặt:</strong> {formatDate(detailModalOrder.createdAt)}</div>
-                <div><strong>Phương thức:</strong> {detailModalOrder.payment_method}</div>
-                <div><strong>Trạng thái:</strong> {orderStatusLabels[detailModalOrder.status]?.label || '---'}</div>
-              </div>
-
-              {detailModalOrder.items && detailModalOrder.items.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#e7b26a' }}>Danh sách sản phẩm ({detailModalOrder.items.length})</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                    {detailModalOrder.items.map((it) => (
-                      <div key={it.book_id || it.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#2a2a28', padding: '8px 12px', borderRadius: '8px', fontSize: '0.85rem' }}>
-                        <div>
-                          <strong>{it.title || `Sách #${it.book_id}`}</strong>
-                          <span style={{ color: '#b9b0a7', marginLeft: '8px' }}>x{it.quantity}</span>
-                        </div>
-                        <span style={{ fontWeight: '700', color: '#4ade80' }}>{formatCurrency(it.total)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #3d3d3a', paddingTop: '12px' }}>
-                <span style={{ fontSize: '1rem', fontWeight: '700' }}>Tổng giá trị:</span>
-                <span style={{ fontSize: '1.3rem', fontWeight: '800', color: '#e7b26a' }}>{formatCurrency(detailModalOrder.total)}</span>
-              </div>
-            </div>
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="admin-btn-secondary"
-                onClick={() => setDetailModalOrder(null)}
-              >
-                Đóng
-              </button>
-            </div>
+          <div className="admin-pagination-info">
+            Hiển thị <strong>{orders.length}</strong> / <strong>{total}</strong> đơn hàng
+          </div>
+          <div className="admin-pagination-controls">
+            <button
+              type="button"
+              className="admin-page-btn"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+            >
+              &laquo; Trang trước
+            </button>
+            <span className="admin-page-current">
+              Trang {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              className="admin-page-btn"
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+            >
+              Trang sau &raquo;
+            </button>
           </div>
         </div>
       )}
 
-      {statusModalOrder && (
-        <div className="admin-modal-backdrop" onClick={handleCloseStatusModal}>
-          <div className="admin-modal" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleSubmitStatusUpdate}>
+      {detailModalOrder && (() => {
+        const ghnInfo = typeof detailModalOrder.ghn_info === 'string'
+          ? (() => { try { return JSON.parse(detailModalOrder.ghn_info) } catch { return {} } })()
+          : (detailModalOrder.ghn_info || {})
+        const items = Array.isArray(detailModalOrder.items) ? detailModalOrder.items : []
+
+        return (
+          <div className="admin-modal-overlay">
+            <div className="admin-modal-box user-detail">
               <div className="admin-modal-header">
-                <h2 className="admin-modal-title">Cập nhật trạng thái đơn hàng</h2>
+                <div>
+                  <h2 className="admin-modal-title">
+                    Chi tiết Đơn hàng #{detailModalOrder.id.slice(0, 8)}...
+                  </h2>
+                  <div className="admin-order-id-full">
+                    Mã UUID: <code>{detailModalOrder.id}</code>
+                    <button
+                      type="button"
+                      className="order-copy-id-btn"
+                      title="Sao chép toàn bộ mã đơn"
+                      onClick={() => handleCopyOrderId(detailModalOrder.id)}
+                    >
+                      {copiedOrderId === detailModalOrder.id ? '✓ Đã chép' : '📋 Chép mã'}
+                    </button>
+                  </div>
+                </div>
                 <button
                   type="button"
                   className="admin-modal-close"
-                  onClick={handleCloseStatusModal}
+                  onClick={() => setDetailModalOrder(null)}
                 >
-                  ✕
+                  &times;
                 </button>
               </div>
-              <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: '#b9b0a7' }}>
-                  Đơn hàng <strong>#{statusModalOrder.id.slice(0, 8)}...</strong> hiện tại là: <strong>{orderStatusLabels[statusModalOrder.status]?.label}</strong>.
-                </p>
 
-                <div className="admin-form-group">
-                  <label className="admin-label">Chuyển sang trạng thái mới *</label>
-                  <select
-                    className="admin-select"
-                    style={{ width: '100%' }}
-                    value={nextStatus}
-                    onChange={(e) => setNextStatus(Number(e.target.value))}
-                  >
-                    <option value="0">Chờ xác nhận (0)</option>
-                    <option value="1">Đã xác nhận / Đã thanh toán (1)</option>
-                    <option value="2">Đang giao hàng (2)</option>
-                    <option value="3">Hoàn thành (3)</option>
-                    <option value="4">Hủy đơn hàng (4 - Hoàn trả kho)</option>
-                  </select>
+              <div className="admin-modal-body" style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div className="admin-user-detail-grid">
+                  <div className="admin-user-detail-field">
+                    <span className="label">Người nhận hàng:</span>
+                    <span className="value">
+                      {detailModalOrder.recipientName || detailModalOrder.recipient_name || detailModalOrder.receiverName || detailModalOrder.fullName || detailModalOrder.customer_name || '---'}
+                    </span>
+                  </div>
+                  <div className="admin-user-detail-field">
+                    <span className="label">Số điện thoại:</span>
+                    <span className="value">
+                      {detailModalOrder.recipientPhone || detailModalOrder.recipient_phone || detailModalOrder.phoneNumber || detailModalOrder.customer_phone || '---'}
+                    </span>
+                  </div>
+                  <div className="admin-user-detail-field" style={{ gridColumn: 'span 2' }}>
+                    <span className="label">Địa chỉ giao hàng:</span>
+                    <span className="value">
+                      {detailModalOrder.shippingAddress || detailModalOrder.shipping_address || detailModalOrder.address || '---'}
+                    </span>
+                  </div>
+                  <div className="admin-user-detail-field">
+                    <span className="label">Phương thức thanh toán:</span>
+                    <span className="value">
+                      {getPaymentMethodLabel(detailModalOrder.payment_method, 'full')}
+                    </span>
+                  </div>
+                  <div className="admin-user-detail-field">
+                    <span className="label">Trạng thái đơn:</span>
+                    <span className="value">
+                      <span className="admin-status-badge" style={{ color: orderStatusLabels[detailModalOrder.status]?.color, backgroundColor: orderStatusLabels[detailModalOrder.status]?.bg }}>
+                        {orderStatusLabels[detailModalOrder.status]?.label || '---'}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="admin-user-detail-field">
+                    <span className="label">Ngày đặt hàng:</span>
+                    <span className="value">{formatDate(detailModalOrder.createdAt)}</span>
+                  </div>
+                  <div className="admin-user-detail-field">
+                    <span className="label">Email khách hàng:</span>
+                    <span className="value">{detailModalOrder.customer_email || '---'}</span>
+                  </div>
                 </div>
 
-                <div className="admin-form-group">
-                  <label className="admin-label">Ghi chú quản trị (Tùy chọn)</label>
-                  <textarea
-                    className="admin-textarea"
-                    rows="3"
-                    value={adminNote}
-                    onChange={(e) => setAdminNote(e.target.value)}
-                    placeholder="Ví dụ: Đã đóng gói giao cho shipper, liên hệ khách thành công..."
-                  />
+                {items.length > 0 && (
+                  <div className="admin-order-items-box">
+                    <h4 className="admin-order-section-title">
+                      Danh sách ấn phẩm ({items.length} đầu sách)
+                    </h4>
+                    <div className="admin-order-items-scroll">
+                      {items.map((it) => (
+                        <div key={it.book_id || it.id} className="admin-order-item-card">
+                          <img
+                            src={it.image || 'https://placehold.co/48x64/20201f/f3eadb?text=Book'}
+                            alt={it.title}
+                            className="admin-order-item-thumb"
+                          />
+                          <div className="admin-order-item-info">
+                            <div className="admin-order-item-title">{it.title || `Sách #${it.book_id}`}</div>
+                            <div className="admin-order-item-qty">Số lượng: x{it.quantity}</div>
+                          </div>
+                          <div className="admin-order-item-price">
+                            {formatCurrency(it.total)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="admin-order-calc-breakdown">
+                  {ghnInfo.subtotal > 0 && ghnInfo.subtotal !== detailModalOrder.total && (
+                    <div className="admin-order-calc-row">
+                      <span>Tạm tính tiền sách:</span>
+                      <span>{formatCurrency(ghnInfo.subtotal)}</span>
+                    </div>
+                  )}
+                  {ghnInfo.shippingFee !== undefined && (
+                    <div className="admin-order-calc-row">
+                      <span>Phí vận chuyển:</span>
+                      <span>{ghnInfo.shippingFee > 0 ? formatCurrency(ghnInfo.shippingFee) : 'Miễn phí'}</span>
+                    </div>
+                  )}
+                  {(ghnInfo.discountValue > 0 || detailModalOrder.discount > 0) && (
+                    <div className="admin-order-calc-row discount">
+                      <span>Voucher giảm giá {ghnInfo.couponCode ? `(${ghnInfo.couponCode})` : ''}:</span>
+                      <span>-{formatCurrency(ghnInfo.discountValue || detailModalOrder.discount)}</span>
+                    </div>
+                  )}
+                  <div className="admin-order-calc-row total">
+                    <span>Tổng thanh toán:</span>
+                    <span className="admin-order-total-highlight">{formatCurrency(detailModalOrder.total)}</span>
+                  </div>
                 </div>
               </div>
-              <div className="admin-modal-footer">
+
+              <div className="admin-modal-actions" style={{ padding: '16px 28px' }}>
+                <button
+                  type="button"
+                  className="admin-btn-secondary"
+                  onClick={() => setDetailModalOrder(null)}
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {statusModalOrder && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-box block-confirm">
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">
+                Cập nhật Trạng thái Đơn hàng
+              </h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={handleCloseStatusModal}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitStatusUpdate} className="admin-modal-form">
+              <div className="admin-order-status-current-box">
+                <span style={{ color: '#b9b0a7' }}>
+                  Đơn hàng <strong>#{statusModalOrder.id.slice(0, 8)}...</strong> hiện tại:
+                </span>
+                <span
+                  className="admin-status-badge"
+                  style={{
+                    color: orderStatusLabels[statusModalOrder.status]?.color,
+                    backgroundColor: orderStatusLabels[statusModalOrder.status]?.bg,
+                  }}
+                >
+                  {orderStatusLabels[statusModalOrder.status]?.label}
+                </span>
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-form-label">
+                  Chuyển sang trạng thái mới <span className="req">*</span>
+                </label>
+                <select
+                  className="admin-form-select"
+                  value={nextStatus}
+                  onChange={(e) => setNextStatus(Number(e.target.value))}
+                >
+                  <option value="0">Chờ xác nhận (0)</option>
+                  <option value="1">Đã xác nhận / Đã thanh toán (1)</option>
+                  <option value="2">Đang giao hàng (2)</option>
+                  <option value="3">Hoàn thành (3)</option>
+                  <option value="4">Hủy đơn hàng (4 - Hoàn trả kho)</option>
+                </select>
+              </div>
+
+              <div className="admin-form-group">
+                <label className="admin-form-label">Ghi chú quản trị (Tùy chọn)</label>
+                <textarea
+                  className="admin-form-textarea"
+                  rows="3"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder="Ví dụ: Đã đóng gói giao cho shipper, liên hệ khách thành công..."
+                />
+              </div>
+
+              <div className="admin-modal-actions">
                 <button
                   type="button"
                   className="admin-btn-secondary"
                   onClick={handleCloseStatusModal}
                   disabled={isUpdating}
                 >
-                  Hủy
+                  Hủy bỏ
                 </button>
                 <button
                   type="submit"
@@ -371,4 +565,3 @@ function AdminOrderTable({
 }
 
 export default AdminOrderTable
-

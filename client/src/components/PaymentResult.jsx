@@ -54,7 +54,13 @@ function PaymentResult({
         }
       } catch (err) {
         if (isMounted) {
-          setErrorMessage(err.message || 'Xác thực thanh toán thất bại.')
+          const fallbackData = err?.response?.data?.data || err?.response?.data
+          if (fallbackData && (fallbackData.order || fallbackData.isSuccess !== undefined)) {
+            setPaymentData(fallbackData)
+            setErrorMessage(err.message || fallbackData.message || 'Xác thực thanh toán thất bại.')
+          } else {
+            setErrorMessage(err.message || 'Xác thực thanh toán thất bại.')
+          }
           setLoading(false)
         }
       }
@@ -158,9 +164,9 @@ function PaymentResult({
           </div>
         </div>
 
-        {ghnInfo?.receiverName && (
+        {(order?.recipientName || order?.recipient_name || order?.receiverName || ghnInfo?.receiverName || ghnInfo?.recipientName) && (
           <div className="payment-shipping-summary">
-            <strong>Thông tin giao nhận:</strong> {ghnInfo.receiverName} ({ghnInfo.phone}) — {ghnInfo.address}
+            <strong>Thông tin giao nhận:</strong> {order?.recipientName || order?.recipient_name || order?.receiverName || ghnInfo?.receiverName || ghnInfo?.recipientName} ({order?.recipientPhone || order?.recipient_phone || order?.phone || ghnInfo?.phone || '---'}) — {order?.shippingAddress || order?.shipping_address || order?.address || ghnInfo?.address || '---'}
           </div>
         )}
 

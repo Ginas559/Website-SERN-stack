@@ -1,6 +1,13 @@
 const cartModel = require("../models/cartModel");
 const bookModel = require("../models/bookModel");
+const discountService = require("./discountService");
+const storePolicyService = require("./storePolicyService");
 const AppError = require("../utils/AppError");
+const {
+    calculateDiscountedUnitPrice,
+    calculateShippingFee,
+    calculateSelectedItemsTotals
+} = require("../utils/pricing");
 
 function validateBookId(id) {
     const bookId = Number(id);
@@ -21,13 +28,6 @@ function validateQuantity(quantity, max = 1000) {
     return num;
 }
 
-function calculateUnitPrice(price, discount = 0) {
-    const rawPrice = Math.max(0, Number(price) || 0);
-    const rate = Math.max(0, Math.min(100, Number(discount) || 0));
-    if (rate <= 0) return rawPrice;
-    return Math.round(rawPrice * (1 - rate / 100));
-}
-
 function handleCartWriteError(error) {
     if (error && (error.number === 2601 || error.number === 2627 || error.number === 1205)) {
         throw new AppError("Trạng thái giỏ hàng đã thay đổi, vui lòng thử lại.", 409, error);
@@ -46,7 +46,7 @@ async function getCart(userId) {
         author: item.author,
         price: item.price,
         discount: item.discount,
-        unitPrice: calculateUnitPrice(item.price, item.discount),
+        unitPrice: calculateDiscountedUnitPrice(item.price, item.discount),
         image: item.image,
         stockQuantity: Math.max(0, Number(item.stock_quantity) || 0),
         isDeleted: item.book_is_deleted === 1,
@@ -58,11 +58,16 @@ async function getCart(userId) {
 
     const syncedCart = await cartModel.syncTotals(cart.id);
 
+    const shippingRule = await storePolicyService.getShippingPolicy();
+    const shippingFee = calculateShippingFee(syncedCart.total, shippingRule);
+
     return {
         id: syncedCart.id,
         userId: syncedCart.user_id,
         total: syncedCart.total,
         totalQuantity: syncedCart.total_quantity,
+        shippingFee,
+        shippingRule,
         discountId: syncedCart.discount_id,
         createdAt: syncedCart.createdAt,
         updatedAt: syncedCart.updatedAt,
@@ -92,7 +97,7 @@ async function addItem(userId, { bookId, quantity = 1 }) {
         throw new AppError(`Số lượng sách yêu cầu vượt quá tồn kho (hiện còn ${book.quantity} cuốn).`, 400);
     }
 
-    const unitPrice = calculateUnitPrice(book.price, book.discount);
+    const unitPrice = calculateDiscountedUnitPrice(book.price, book.discount);
     const itemTotal = unitPrice * targetQuantity;
 
     try {
@@ -137,7 +142,7 @@ async function updateItemQuantity(userId, bookId, quantity) {
         return await getCart(userId);
     }
 
-    const unitPrice = calculateUnitPrice(book.price, book.discount);
+    const unitPrice = calculateDiscountedUnitPrice(book.price, book.discount);
     const itemTotal = unitPrice * validQuantity;
 
     try {
@@ -200,7 +205,7 @@ async function calculateCartSummary(userId) {
         if (!item.title || item.book_is_deleted === null) continue;
         const originalPrice = Math.max(0, Number(item.price) || 0);
         const discountRate = Math.max(0, Math.min(100, Number(item.discount) || 0));
-        const unitPrice = calculateUnitPrice(originalPrice, discountRate);
+        const unitPrice = calculateDiscountedUnitPrice(originalPrice, discountRate);
         const quantity = Math.max(0, Number(item.quantity) || 0);
 
         subtotal += originalPrice * quantity;
@@ -213,12 +218,17 @@ async function calculateCartSummary(userId) {
         throw new AppError("Tổng giá trị giỏ hàng vượt quá giới hạn xử lý tối đa của hệ thống.", 400);
     }
 
+    const shippingRule = await storePolicyService.getShippingPolicy();
+    const shippingFee = calculateShippingFee(finalTotal, shippingRule);
+
     return {
         cartId: cart.id,
         userId,
         subtotal,
         discountTotal,
         finalTotal,
+        shippingFee,
+        shippingRule,
         totalQuantity,
         itemCount: details.length,
     };
@@ -256,7 +266,7 @@ async function validateCart(userId) {
         const isNotFound = !item.title || item.book_is_deleted === null;
         const originalPrice = isNotFound ? 0 : Math.max(0, Number(item.price) || 0);
         const discountRate = isNotFound ? 0 : Math.max(0, Math.min(100, Number(item.discount) || 0));
-        const currentUnitPrice = calculateUnitPrice(originalPrice, discountRate);
+        const currentUnitPrice = calculateDiscountedUnitPrice(originalPrice, discountRate);
         const quantity = Math.max(0, Number(item.quantity) || 0);
         const currentTotal = currentUnitPrice * quantity;
         const stockQuantity = isNotFound ? 0 : Math.max(0, Number(item.stock_quantity) || 0);
@@ -353,7 +363,7 @@ async function syncCart(userId) {
             continue;
         }
 
-        const unitPrice = calculateUnitPrice(item.price, item.discount);
+        const unitPrice = calculateDiscountedUnitPrice(item.price, item.discount);
         const expectedTotal = unitPrice * item.quantity;
         if (item.total !== expectedTotal) {
             try {
@@ -373,6 +383,81 @@ async function syncCart(userId) {
     return await validateCart(userId);
 }
 
+async function applyCoupon(userId, { code, selectedBookIds = null } = {}) {
+    if (!userId) throw new AppError("Người dùng không hợp lệ.", 401);
+    if (!code || typeof code !== "string" || !code.trim()) {
+        throw new AppError("Vui lòng cung cấp mã khuyến mãi.", 400);
+    }
+    const cleanCode = code.trim().toUpperCase();
+    if (cleanCode.length > 50) {
+        throw new AppError("Mã khuyến mãi không được vượt quá 50 ký tự.", 400);
+    }
+
+    const cart = await cartModel.findByUserId(userId);
+    if (!cart) {
+        throw new AppError("Giỏ hàng không tồn tại.", 404);
+    }
+
+    const details = await cartModel.getCartDetails(cart.id);
+    if (!details || details.length === 0) {
+        throw new AppError("Giỏ hàng của bạn đang trống, không thể áp dụng mã khuyến mãi.", 400);
+    }
+
+    let targetItems = details;
+    if (Array.isArray(selectedBookIds) && selectedBookIds.length > 0) {
+        const cartBookIds = new Set(details.map((item) => Number(item.book_id)));
+        for (const id of selectedBookIds) {
+            const numId = Number(id);
+            if (!Number.isInteger(numId) || numId <= 0 || !cartBookIds.has(numId)) {
+                throw new AppError(`Sản phẩm với mã ID ${id} không có trong giỏ hàng của bạn.`, 400);
+            }
+        }
+        const selectedSet = new Set(selectedBookIds.map((id) => Number(id)));
+        targetItems = details.filter((item) => selectedSet.has(Number(item.book_id)));
+    }
+
+    if (targetItems.length === 0) {
+        throw new AppError("Không có sản phẩm nào được chọn để áp dụng khuyến mãi.", 400);
+    }
+
+    for (const item of targetItems) {
+        if (item.book_is_deleted === 1) {
+            throw new AppError(`Sản phẩm "${item.title || item.book_id}" đã ngừng kinh doanh, không thể áp dụng mã.`, 400);
+        }
+        if (Number(item.stock_quantity) <= 0) {
+            throw new AppError(`Sản phẩm "${item.title || item.book_id}" hiện đã hết hàng, không thể áp dụng mã.`, 400);
+        }
+        if (item.quantity > item.stock_quantity) {
+            throw new AppError(`Số lượng sách "${item.title || item.book_id}" trong giỏ vượt quá tồn kho (hiện còn ${item.stock_quantity} cuốn).`, 400);
+        }
+    }
+
+    const { subtotal } = calculateSelectedItemsTotals(targetItems);
+    const promoResult = await discountService.validateAndCalculatePromotion({
+        code,
+        subtotal
+    });
+
+    return {
+        isValid: true,
+        couponCode: promoResult.discount.code,
+        subtotal,
+        shippingFee: promoResult.shippingFee,
+        shippingRule: promoResult.shippingRule,
+        discountAmount: promoResult.discountAmount,
+        finalTotal: promoResult.finalTotal,
+        discount: {
+            code: promoResult.discount.code,
+            discount_type: promoResult.discount.discount_type,
+            value: promoResult.discount.value,
+            maxDiscountValue: promoResult.discount.maxDiscountValue,
+            minimumOrderValue: promoResult.discount.minimumOrderValue,
+            description: promoResult.discount.description
+        },
+        message: promoResult.message
+    };
+}
+
 module.exports = {
     getCart,
     addItem,
@@ -382,4 +467,5 @@ module.exports = {
     calculateCartSummary,
     validateCart,
     syncCart,
+    applyCoupon,
 };

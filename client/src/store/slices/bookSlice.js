@@ -78,6 +78,13 @@ const initialState = {
   limit: 10,
   totalPages: 1,
   adminTotalPages: 1,
+  priceRange: { min: 0, max: 500000 },
+  booksQueryKey: null,
+  adminBooksQueryKey: null,
+  selectedBookAttemptedId: null,
+  booksNeedsReload: false,
+  adminBooksNeedsReload: false,
+  selectedBookNeedsReload: false,
   clientBooksLoading: false,
   clientBooksError: null,
   clientBooksRequestId: null,
@@ -99,7 +106,19 @@ const bookSlice = createSlice({
         state.bookDetailLoading = false
         state.bookDetailError = null
         state.bookDetailRequestId = null
+        state.selectedBookAttemptedId = null
+        state.selectedBookNeedsReload = false
       }
+    },
+    clearBookError: (state) => {
+      state.clientBooksError = null
+      state.bookDetailError = null
+      state.adminBooksError = null
+    },
+    invalidateBooks: (state) => {
+      state.booksNeedsReload = true
+      state.adminBooksNeedsReload = true
+      state.selectedBookNeedsReload = true
     },
   },
   extraReducers: (builder) => {
@@ -108,6 +127,8 @@ const bookSlice = createSlice({
         state.clientBooksLoading = true
         state.clientBooksError = null
         state.clientBooksRequestId = action.meta.requestId
+        state.booksQueryKey = JSON.stringify(action.meta.arg || {})
+        state.booksNeedsReload = false
       })
       .addCase(fetchBooks.fulfilled, (state, action) => {
         if (state.clientBooksRequestId !== action.meta.requestId) return
@@ -119,6 +140,9 @@ const bookSlice = createSlice({
           state.page = action.payload.page || 1
           state.limit = action.payload.limit || 8
           state.totalPages = action.payload.totalPages || 1
+          if (action.payload.priceRange) {
+            state.priceRange = action.payload.priceRange
+          }
         } else if (Array.isArray(action.payload)) {
           state.books = action.payload
           state.total = action.payload.length
@@ -134,12 +158,15 @@ const bookSlice = createSlice({
         state.bookDetailLoading = true
         state.bookDetailError = null
         state.bookDetailRequestId = action.meta.requestId
+        state.selectedBookAttemptedId = Number(action.meta.arg) || null
+        state.selectedBookNeedsReload = false
       })
       .addCase(fetchBookById.fulfilled, (state, action) => {
         if (state.bookDetailRequestId !== action.meta.requestId) return
         state.bookDetailLoading = false
         state.bookDetailRequestId = null
         state.selectedBook = action.payload
+        state.selectedBookNeedsReload = false
       })
       .addCase(fetchBookById.rejected, (state, action) => {
         if (state.bookDetailRequestId !== action.meta.requestId) return
@@ -151,6 +178,8 @@ const bookSlice = createSlice({
         state.adminBooksLoading = true
         state.adminBooksError = null
         state.adminBooksRequestId = action.meta.requestId
+        state.adminBooksQueryKey = JSON.stringify(action.meta.arg || {})
+        state.adminBooksNeedsReload = false
       })
       .addCase(fetchAdminBooks.fulfilled, (state, action) => {
         if (state.adminBooksRequestId !== action.meta.requestId) return
@@ -175,6 +204,8 @@ const bookSlice = createSlice({
       .addCase(createBook.fulfilled, (state, action) => {
         state.adminBooks.unshift(action.payload)
         state.adminTotal += 1
+        state.booksNeedsReload = true
+        state.adminBooksNeedsReload = true
       })
       .addCase(updateBook.fulfilled, (state, action) => {
         const index = state.adminBooks.findIndex((b) => b.id === action.payload.id)
@@ -184,15 +215,34 @@ const bookSlice = createSlice({
         if (state.selectedBook?.id === action.payload.id) {
           state.selectedBook = action.payload
         }
+        state.booksNeedsReload = true
+        state.adminBooksNeedsReload = true
+        state.selectedBookNeedsReload = true
       })
       .addCase(updateBookStatus.fulfilled, (state, action) => {
         const index = state.adminBooks.findIndex((b) => b.id === action.payload.id)
         if (index !== -1) {
           state.adminBooks[index] = action.payload
         }
+        state.booksNeedsReload = true
+        state.adminBooksNeedsReload = true
+        if (state.selectedBook?.id === action.payload.id) {
+          state.selectedBookNeedsReload = true
+        }
       })
+      .addMatcher(
+        (action) =>
+          action.type === 'categories/createCategory/fulfilled' ||
+          action.type === 'categories/updateCategory/fulfilled' ||
+          action.type === 'categories/updateCategoryStatus/fulfilled',
+        (state) => {
+          state.booksNeedsReload = true
+          state.adminBooksNeedsReload = true
+          state.selectedBookNeedsReload = true
+        }
+      )
   },
 })
 
-export const { setSelectedBook } = bookSlice.actions
+export const { setSelectedBook, clearBookError, invalidateBooks } = bookSlice.actions
 export default bookSlice.reducer
