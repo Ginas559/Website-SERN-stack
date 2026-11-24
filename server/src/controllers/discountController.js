@@ -33,7 +33,10 @@ async function adminUpdate(req, res) {
 }
 
 async function adminChangeStatus(req, res) {
-    const discount = await discountService.changeDiscountStatus(req.params.id, req.body.isDelete);
+    const discount = await discountService.changeDiscountStatus(
+        req.params.id,
+        req.body.isDelete
+    );
     res.json(discount);
 }
 
@@ -56,5 +59,5 @@ module.exports = {
     adminUpdate,
     adminChangeStatus,
     adminGetAll,
-    adminGetById
+    adminGetById,
 };

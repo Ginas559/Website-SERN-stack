@@ -23,7 +23,19 @@ function formatDiscountResponse(discount) {
     };
 }
 
-function validateDiscountData({ code, discount_type, value, maxDiscountValue, minimumOrderValue, quantity, startDate, expiredAt }, isUpdate = false) {
+function validateDiscountData(
+    {
+        code,
+        discount_type,
+        value,
+        maxDiscountValue,
+        minimumOrderValue,
+        quantity,
+        startDate,
+        expiredAt
+    },
+    isUpdate = false
+) {
     if (!isUpdate || code !== undefined) {
         if (!code || typeof code !== "string" || !code.trim()) {
             throw new AppError("Mã khuyến mãi không được để trống.", 400);
@@ -114,7 +126,10 @@ async function getDiscountByCode(code) {
         throw new AppError("Mã khuyến mãi không hợp lệ.", 400);
     }
 
-    const discount = await discountModel.findByCode(code.trim().toUpperCase(), { includeDeleted: false });
+    const discount = await discountModel.findByCode(
+        code.trim().toUpperCase(),
+        { includeDeleted: false }
+    );
     if (!discount) {
         throw new AppError("Mã khuyến mãi không tồn tại hoặc đã hết hiệu lực.", 404);
     }
@@ -139,7 +154,10 @@ async function createDiscount(discountData) {
     validateDiscountData(discountData, false);
 
     const cleanCode = discountData.code.trim().toUpperCase();
-    const existing = await discountModel.findByCode(cleanCode, { includeDeleted: false });
+    const existing = await discountModel.findByCode(
+        cleanCode,
+        { includeDeleted: false }
+    );
     if (existing) {
         throw new AppError("Mã khuyến mãi này đã tồn tại và đang hoạt động.", 409);
     }
@@ -170,7 +188,10 @@ async function updateDiscount(id, discountData) {
     if (discountData.code) {
         const cleanCode = discountData.code.trim().toUpperCase();
         if (cleanCode !== existing.code) {
-            const duplicate = await discountModel.findByCode(cleanCode, { includeDeleted: false });
+            const duplicate = await discountModel.findByCode(
+                cleanCode,
+                { includeDeleted: false }
+            );
             if (duplicate && duplicate.id !== numId) {
                 throw new AppError("Mã khuyến mãi này đã tồn tại và đang hoạt động.", 409);
             }
@@ -179,7 +200,10 @@ async function updateDiscount(id, discountData) {
 
     const updated = await discountModel.update(numId, discountData);
     if (!updated) {
-        throw new AppError("Trạng thái chương trình khuyến mãi đã thay đổi, vui lòng thử lại.", 409);
+        throw new AppError(
+            "Trạng thái chương trình khuyến mãi đã thay đổi, vui lòng thử lại.",
+            409
+        );
     }
 
     return updated;
@@ -205,7 +229,10 @@ async function changeDiscountStatus(id, isDelete) {
     if (targetFlag === 1) {
         updated = await discountModel.softDelete(numId);
     } else {
-        const activeDuplicate = await discountModel.findByCode(existing.code, { includeDeleted: false });
+        const activeDuplicate = await discountModel.findByCode(
+            existing.code,
+            { includeDeleted: false }
+        );
         if (activeDuplicate && activeDuplicate.id !== numId) {
             throw new AppError("Mã khuyến mãi này đã tồn tại và đang hoạt động.", 409);
         }
@@ -213,13 +240,22 @@ async function changeDiscountStatus(id, isDelete) {
     }
 
     if (!updated) {
-        throw new AppError("Trạng thái chương trình khuyến mãi đã thay đổi, vui lòng thử lại.", 409);
+        throw new AppError(
+            "Trạng thái chương trình khuyến mãi đã thay đổi, vui lòng thử lại.",
+            409
+        );
     }
 
     return updated;
 }
 
-async function getAdminDiscounts({ page = 1, limit = 10, search = "", status = "all", isDelete = null } = {}) {
+async function getAdminDiscounts({
+    page = 1,
+    limit = 10,
+    search = "",
+    status = "all",
+    isDelete = null
+} = {}) {
     const safePage = Math.max(1, Number(page) || 1);
     const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
 
@@ -228,7 +264,10 @@ async function getAdminDiscounts({ page = 1, limit = 10, search = "", status = "
         limit: safeLimit,
         search,
         status,
-        isDelete: isDelete !== null && isDelete !== undefined && isDelete !== "" ? Number(isDelete) : null
+        isDelete:
+            isDelete !== null && isDelete !== undefined && isDelete !== ""
+                ? Number(isDelete)
+                : null
     });
 }
 
@@ -248,33 +287,50 @@ async function getAdminDiscountById(id) {
 
 function calculateDiscountValue(discount, subtotal) {
     if (!discount || !subtotal || subtotal <= 0) return 0;
+
     let discountAmount;
     if (discount.discount_type === "PERCENT") {
         discountAmount = Math.round((subtotal * discount.value) / 100);
-        if (discount.maxDiscountValue !== null && discount.maxDiscountValue !== undefined && discount.maxDiscountValue > 0) {
+        if (
+            discount.maxDiscountValue !== null &&
+            discount.maxDiscountValue !== undefined &&
+            discount.maxDiscountValue > 0
+        ) {
             discountAmount = Math.min(discountAmount, discount.maxDiscountValue);
         }
     } else {
         discountAmount = Math.min(discount.value, subtotal);
     }
+
     return Math.max(0, Math.min(discountAmount, subtotal));
 }
 
-async function validateAndCalculatePromotion({ code, subtotal = 0, shippingRule = null }) {
+async function validateAndCalculatePromotion({
+    code,
+    subtotal = 0,
+    shippingRule = null
+}) {
     if (!code || typeof code !== "string" || !code.trim()) {
         throw new AppError("Vui lòng nhập mã khuyến mãi.", 400);
     }
 
     const numSubtotal = Number(subtotal);
     if (!Number.isFinite(numSubtotal) || numSubtotal <= 0) {
-        throw new AppError("Tổng giá trị đơn hàng phải lớn hơn 0 để áp dụng mã khuyến mãi.", 400);
+        throw new AppError(
+            "Tổng giá trị đơn hàng phải lớn hơn 0 để áp dụng mã khuyến mãi.",
+            400
+        );
     }
 
-    const activeShippingRule = shippingRule || await storePolicyService.getShippingPolicy();
+    const activeShippingRule =
+        shippingRule || await storePolicyService.getShippingPolicy();
     const numShippingFee = calculateShippingFee(numSubtotal, activeShippingRule);
     const cleanCode = code.trim().toUpperCase();
 
-    const discount = await discountModel.findByCode(cleanCode, { includeDeleted: false });
+    const discount = await discountModel.findByCode(
+        cleanCode,
+        { includeDeleted: false }
+    );
     if (!discount) {
         throw new AppError("Mã khuyến mãi không tồn tại hoặc đã hết hiệu lực.", 404);
     }
@@ -294,22 +350,38 @@ async function validateAndCalculatePromotion({ code, subtotal = 0, shippingRule 
 
     if (discount.minimumOrderValue > 0 && numSubtotal < discount.minimumOrderValue) {
         const formattedMin = Number(discount.minimumOrderValue).toLocaleString("vi-VN");
-        throw new AppError(`Đơn hàng phải từ ${formattedMin} đ để áp dụng mã khuyến mãi này.`, 400);
+        throw new AppError(
+            `Đơn hàng phải từ ${formattedMin} đ để áp dụng mã khuyến mãi này.`,
+            400
+        );
     }
 
     let discountAmount = calculateDiscountValue(discount, numSubtotal);
     if (isShippingPromotion(discount)) {
         if (numShippingFee <= 0) {
-            if (activeShippingRule.standardFee === 0 || activeShippingRule.freeThreshold === 0) {
-                throw new AppError("Cửa hàng hiện đang miễn phí vận chuyển cho toàn bộ đơn hàng, không cần áp dụng mã hỗ trợ phí ship này.", 400);
+            if (
+                activeShippingRule.standardFee === 0 ||
+                activeShippingRule.freeThreshold === 0
+            ) {
+                throw new AppError(
+                    "Cửa hàng hiện đang miễn phí vận chuyển cho toàn bộ đơn hàng, không cần áp dụng mã hỗ trợ phí ship này.",
+                    400
+                );
             }
-            const formattedThreshold = Number(activeShippingRule.freeThreshold).toLocaleString("vi-VN");
-            throw new AppError(`Đơn hàng đã đạt mức miễn phí vận chuyển (từ ${formattedThreshold}đ), không cần áp dụng mã hỗ trợ phí ship này.`, 400);
+            const formattedThreshold =
+                Number(activeShippingRule.freeThreshold).toLocaleString("vi-VN");
+            throw new AppError(
+                `Đơn hàng đã đạt mức miễn phí vận chuyển (từ ${formattedThreshold}đ), không cần áp dụng mã hỗ trợ phí ship này.`,
+                400
+            );
         }
         discountAmount = Math.min(discountAmount, numShippingFee);
     }
 
-    const finalTotal = Math.max(0, numSubtotal + numShippingFee - discountAmount);
+    const finalTotal = Math.max(
+        0,
+        numSubtotal + numShippingFee - discountAmount
+    );
 
     return {
         isValid: true,

@@ -237,7 +237,8 @@ async function decrementUsedCount(id, transaction = null) {
     const result = await new sql.Request(executor)
         .input("id", sql.Int, Number(id))
         .query(`UPDATE dbo.discounts
-                SET usedCount = CASE WHEN usedCount > 0 THEN usedCount - 1 ELSE 0 END, updatedAt = GETDATE()
+                SET usedCount = CASE WHEN usedCount > 0 THEN usedCount - 1 ELSE 0 END,
+                    updatedAt = GETDATE()
                 OUTPUT ${insertedColumns}
                 WHERE id = @id AND isDelete = 0`);
 
@@ -254,6 +255,6 @@ module.exports = {
     restore,
     incrementUsedCount,
     decrementUsedCount,
-    handleDiscountWriteError
+    handleDiscountWriteError,
 };
 

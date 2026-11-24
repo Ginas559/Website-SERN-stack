@@ -21,21 +21,31 @@ const statisticsRoutes = require("./routes/statisticsRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
+
 app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
-app.get("/", (req, res) => res.json({ message: "SERN Bookstore Backend is running." }));
+
+app.get("/", (req, res) =>
+    res.json({ message: "SERN Bookstore Backend is running." })
+);
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/users", webRoutes);
+
 app.use("/api/admin/books", bookRoutes);
 app.use("/api/admin/categories", categoryRoutes);
 app.use("/api/books", clientBookRoutes);
+app.use("/api/categories", clientCategoryRoutes);
+
 app.use("/api/admin/discounts", adminDiscountRoutes);
+app.use("/api/discounts", discountRoutes);
 app.use("/api/admin/store-policies", adminStorePolicyRoutes);
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/statistics", statisticsRoutes);
+
 app.use("/api/admin/orders", (req, res, next) => {
     req.url = `/admin${req.url === "/" ? "" : req.url}`;
     orderRoutes(req, res, next);
@@ -44,9 +54,11 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", orderRoutes);
-app.use("/api/categories", clientCategoryRoutes);
-app.use("/api/discounts", discountRoutes);
 app.use("/api", reviewRoutes);
-app.use((req, res) => res.status(404).json({ message: "Không tìm thấy endpoint." }));
+
+app.use((req, res) =>
+    res.status(404).json({ message: "Không tìm thấy endpoint." })
+);
 app.use(errorHandler);
+
 module.exports = app;
