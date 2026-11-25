@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useMemo } from 'react'
 import debounce from 'lodash.debounce'
+import { RefreshIcon } from './common/Icons'
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -187,7 +188,8 @@ function AdminReviewTable({
             onClick={handleResetFilters}
             title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
       </div>
@@ -269,27 +271,27 @@ function AdminReviewTable({
 
                 return (
                   <tr key={rev.id} className={isHidden ? 'admin-row-muted' : ''}>
-                    <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#e7b26a' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#0088a9' }}>
                       #{rev.id}
                     </td>
                     <td>
-                      <div style={{ fontWeight: '600', color: '#fffaf1' }}>
-                        {rev.book_title || <span style={{ color: '#8c857b' }}>Sách #{rev.book_id}</span>}
+                      <div style={{ fontWeight: '600', color: '#0f172a' }}>
+                        {rev.book_title || <span style={{ color: '#64748b' }}>Sách #{rev.book_id}</span>}
                       </div>
-                      <div style={{ fontSize: '0.78rem', color: '#b9b0a7' }}>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
                         ID sách: #{rev.book_id}
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontWeight: '600', color: '#e2dacd', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <div style={{ fontWeight: '600', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                         <span>{rev.user_name || rev.user_full_name || rev.user_username || 'Khách hàng'}</span>
                         {rev.parent_id && (rev.parent_user_full_name || rev.parent_user_username) ? (
                           <span
                             style={{
                               fontSize: '0.76rem',
-                              color: '#fbbf24',
-                              background: '#372a15',
-                              border: '1px solid #78350f',
+                              color: '#0088a9',
+                              background: '#e6f4f8',
+                              border: '1px solid #bce1ec',
                               borderRadius: '4px',
                               padding: '1px 5px',
                               fontWeight: '500'
@@ -301,7 +303,7 @@ function AdminReviewTable({
                         ) : null}
                       </div>
                       {rev.user_username ? (
-                        <div style={{ fontSize: '0.78rem', color: '#8c857b' }}>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
                           @{rev.user_username}
                         </div>
                       ) : null}
@@ -310,15 +312,15 @@ function AdminReviewTable({
                       {isRating ? (
                         <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
                           {'★'.repeat(rev.rate)}{'☆'.repeat(5 - rev.rate)}
-                          <span style={{ fontSize: '0.8rem', marginLeft: '4px', color: '#b9b0a7' }}>
+                          <span style={{ fontSize: '0.8rem', marginLeft: '4px', color: '#64748b' }}>
                             ({rev.rate})
                           </span>
                         </span>
                       ) : rev.parent_id ? (
                         <span
                           style={{
-                            background: '#2e1f47',
-                            color: '#d8b4fe',
+                            background: '#f3e8ff',
+                            color: '#7e22ce',
                             padding: '3px 8px',
                             borderRadius: '12px',
                             fontSize: '0.78rem'
@@ -329,8 +331,8 @@ function AdminReviewTable({
                       ) : (
                         <span
                           style={{
-                            background: '#1e3a5f',
-                            color: '#93c5fd',
+                            background: '#e0f2fe',
+                            color: '#0369a1',
                             padding: '3px 8px',
                             borderRadius: '12px',
                             fontSize: '0.78rem'
@@ -344,7 +346,7 @@ function AdminReviewTable({
                       <div
                         style={{
                           fontSize: '0.88rem',
-                          color: '#e2dacd',
+                          color: '#0f172a',
                           lineHeight: 1.4,
                           maxWidth: '300px',
                           display: '-webkit-box',
@@ -355,12 +357,12 @@ function AdminReviewTable({
                         }}
                         title={rev.value || ''}
                       >
-                        {rev.value || <span style={{ fontStyle: 'italic', color: '#8c857b' }}>Không có nội dung</span>}
+                        {rev.value || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Không có nội dung</span>}
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {isHidden ? (
-                        <span className="admin-status-badge blocked" style={{ background: '#3b1818', color: '#fca5a5', border: '1px solid #7f1d1d' }}>
+                        <span className="admin-status-badge blocked" style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}>
                           🔒 Đã ẩn
                         </span>
                       ) : (
@@ -369,7 +371,7 @@ function AdminReviewTable({
                         </span>
                       )}
                     </td>
-                    <td style={{ fontSize: '0.82rem', color: '#a8a29e' }}>
+                    <td style={{ fontSize: '0.82rem', color: '#64748b' }}>
                       {formatDate(rev.createdAt)}
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -447,30 +449,30 @@ function AdminReviewTable({
             </div>
 
             <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', background: '#21201d', padding: '14px', borderRadius: '10px', border: '1px solid #383530' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: '#8c857b', display: 'block' }}>Ấn phẩm sách:</span>
-                  <strong style={{ color: '#fffaf1', fontSize: '0.95rem' }}>{selectedReview.book_title || `Sách #${selectedReview.book_id}`}</strong>
-                  <div style={{ fontSize: '0.78rem', color: '#e7b26a' }}>Mã sách: #{selectedReview.book_id}</div>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>Ấn phẩm sách:</span>
+                  <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{selectedReview.book_title || `Sách #${selectedReview.book_id}`}</strong>
+                  <div style={{ fontSize: '0.78rem', color: '#0088a9' }}>Mã sách: #{selectedReview.book_id}</div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: '#8c857b', display: 'block' }}>Người gửi:</span>
-                  <strong style={{ color: '#fffaf1', fontSize: '0.95rem' }}>{selectedReview.user_full_name || selectedReview.user_username || 'Độc giả'}</strong>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>Người gửi:</span>
+                  <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{selectedReview.user_full_name || selectedReview.user_username || 'Độc giả'}</strong>
                   {selectedReview.user_username ? (
-                    <div style={{ fontSize: '0.78rem', color: '#a8a29e' }}>@{selectedReview.user_username}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>@{selectedReview.user_username}</div>
                   ) : null}
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 2px' }}>
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: '#8c857b', marginRight: '8px' }}>Hình thức:</span>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>Hình thức:</span>
                   {selectedReview.rate !== null && selectedReview.rate !== undefined ? (
                     <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: '1rem' }}>
                       {selectedReview.rate} ★ (Đánh giá chất lượng)
                     </span>
                   ) : selectedReview.parent_id ? (
-                    <span style={{ color: '#d8b4fe', fontWeight: 600 }}>
+                    <span style={{ color: '#7e22ce', fontWeight: 600 }}>
                       ↩️ Trả lời {selectedReview.parent_user_full_name || selectedReview.parent_user_username ? `@${selectedReview.parent_user_full_name || selectedReview.parent_user_username}` : `bình luận #${selectedReview.parent_id}`}
                     </span>
                   ) : (
@@ -480,7 +482,7 @@ function AdminReviewTable({
                   )}
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: '#8c857b', marginRight: '8px' }}>Trạng thái:</span>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>Trạng thái:</span>
                   {selectedReview.isDelete ? (
                     <span style={{ color: '#fca5a5', fontWeight: 600 }}>🔒 Đang bị ẩn</span>
                   ) : (
@@ -490,16 +492,16 @@ function AdminReviewTable({
               </div>
 
               <div>
-                <span style={{ fontSize: '0.8rem', color: '#8c857b', display: 'block', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '6px' }}>
                   Nội dung nhận xét:
                 </span>
                 <div
                   style={{
-                    background: '#1a1917',
-                    border: '1px solid #383530',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '8px',
                     padding: '14px',
-                    color: '#f3eadb',
+                    color: '#0f172a',
                     fontSize: '0.92rem',
                     lineHeight: 1.6,
                     maxHeight: '220px',
@@ -508,16 +510,16 @@ function AdminReviewTable({
                     wordBreak: 'break-word'
                   }}
                 >
-                  {selectedReview.value || <span style={{ fontStyle: 'italic', color: '#8c857b' }}>Người dùng không để lại bình luận văn bản.</span>}
+                  {selectedReview.value || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Người dùng không để lại bình luận văn bản.</span>}
                 </div>
               </div>
 
-              <div style={{ fontSize: '0.8rem', color: '#8c857b', textAlign: 'right' }}>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'right' }}>
                 Thời gian tạo: {formatDate(selectedReview.createdAt)}
               </div>
             </div>
 
-            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderTop: '1px solid #383530' }}>
+            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderTop: '1px solid #e2e8f0' }}>
               <button
                 type="button"
                 className={`admin-btn-action ${selectedReview.isDelete ? 'restore' : 'danger'}`}

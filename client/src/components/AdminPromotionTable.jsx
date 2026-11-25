@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useMemo } from 'react'
 import debounce from 'lodash.debounce'
+import { RefreshIcon, TagIcon } from './common/Icons'
 
 function formatCurrency(amount) {
   return Number(amount || 0).toLocaleString('vi-VN') + ' đ'
@@ -171,7 +172,8 @@ function AdminPromotionTable({
             onClick={handleResetFilters}
             title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
         <button type="button" className="admin-btn-primary" onClick={onOpenCreate}>
@@ -255,7 +257,8 @@ function AdminPromotionTable({
                   <tr key={promo.id} className={isHidden ? 'admin-row-muted' : ''}>
                     <td>
                       <div className="admin-promo-code-badge">
-                        🎟️ <strong>{promo.code}</strong>
+                        <TagIcon size={14} style={{ marginRight: '6px', color: '#0088a9' }} />
+                        <strong>{promo.code}</strong>
                       </div>
                       <div className="admin-promo-meta">
                         <span className="admin-col-id">#{promo.id}</span>

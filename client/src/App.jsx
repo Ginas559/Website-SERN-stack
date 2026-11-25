@@ -12,6 +12,7 @@ import CheckoutPage from './components/CheckoutPage'
 import PaymentResult from './components/PaymentResult'
 import OrderHistoryPage from './components/OrderHistoryPage'
 import UserProfile from './components/UserProfile'
+import AppLayout from './components/layout/AppLayout'
 import { fetchBooks, fetchBookById, invalidateBooks } from './store/slices/bookSlice'
 import { fetchPublicCategories } from './store/slices/categorySlice'
 import { fetchCart, syncGuestCart, clearCartState, invalidateCart } from './store/slices/cartSlice'
@@ -475,63 +476,19 @@ function App() {
   const wishlistBadgeCount = user ? (wishlistState.totalItems || wishlistState.items.length) : guestWishlistCount
 
   return (
-    <div>
-      <header className="app-navbar">
-        <div 
-          className="app-brand" 
-          onClick={() => navigateTo({ tab: 'books', bookId: null })}
-        >
-          SERN BOOKSTORE
-        </div>
-        <nav className="app-nav-links">
-          <button 
-            type="button" 
-            className={`nav-btn ${activeTab === 'books' ? 'active' : ''}`}
-            onClick={() => navigateTo({ tab: 'books', bookId: null })}
-          >
-            Cửa hàng sách
-          </button>
-          <button 
-            type="button" 
-            className={`nav-btn ${activeTab === 'cart' ? 'active' : ''}`}
-            onClick={() => navigateTo({ tab: 'cart' })}
-          >
-            🛒 Giỏ hàng {cartBadgeCount > 0 ? `(${cartBadgeCount})` : ''}
-          </button>
-          <button 
-            type="button" 
-            className={`nav-btn ${activeTab === 'wishlist' ? 'active' : ''}`}
-            onClick={() => navigateTo({ tab: 'wishlist' })}
-          >
-            ❤️ Yêu thích {wishlistBadgeCount > 0 ? `(${wishlistBadgeCount})` : ''}
-          </button>
-          {user && (
-            <button 
-              type="button" 
-              className={`nav-btn ${activeTab === 'orders' ? 'active' : ''}`}
-              onClick={() => navigateTo({ tab: 'orders' })}
-            >
-              📦 Đơn mua
-            </button>
-          )}
-          {isAdmin && (
-            <button 
-              type="button" 
-              className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => navigateTo({ tab: 'admin', adminTab: 'overview' })}
-            >
-              Quản trị
-            </button>
-          )}
-          <button 
-            type="button" 
-            className={`nav-btn nav-btn-account ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => navigateTo({ tab: 'account' })}
-          >
-            👤 {user?.fullName || user?.username || 'Tài khoản'}
-          </button>
-        </nav>
-      </header>
+    <AppLayout
+      activeTab={activeTab}
+      navigateTo={navigateTo}
+      cartBadgeCount={cartBadgeCount}
+      wishlistBadgeCount={wishlistBadgeCount}
+      user={user}
+      isAdmin={isAdmin}
+      onQuickSearch={(query) => {
+        setFilters((prev) => ({ ...prev, search: query }))
+        setPage(1)
+        navigateTo({ tab: 'books', bookId: null })
+      }}
+    >
 
       {isPaymentReturn ? (
         <PaymentResult 
@@ -684,7 +641,7 @@ function App() {
           </section>
         </main>
       )}
-    </div>
+    </AppLayout>
   )
 }
 

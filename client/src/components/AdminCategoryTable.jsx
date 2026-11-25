@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { RefreshIcon } from './common/Icons'
 
 function AdminCategoryTable({
   categories = [],
@@ -89,7 +90,8 @@ function AdminCategoryTable({
             onClick={handleResetFilters}
             title="Đặt lại tìm kiếm và sắp xếp về ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
         <button type="button" className="admin-btn-primary" onClick={onOpenCreate}>

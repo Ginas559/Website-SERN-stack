@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react'
+import { RefreshIcon } from './common/Icons'
 import { getPaymentMethodLabel } from '../utils/pricing'
 
 const orderStatusLabels = {
-  0: { label: 'Chờ xác nhận', color: '#f59e0b', bg: '#451a03' },
-  1: { label: 'Đã thanh toán', color: '#34d399', bg: '#064e3b' },
-  2: { label: 'Đang giao hàng', color: '#60a5fa', bg: '#1e3a8a' },
-  3: { label: 'Hoàn thành', color: '#4ade80', bg: '#14532d' },
-  4: { label: 'Đã hủy', color: '#f87171', bg: '#450a0a' },
+  0: { label: 'Chờ xác nhận', color: '#b45309', bg: '#fef3c7' },
+  1: { label: 'Đã thanh toán', color: '#059669', bg: '#d1fae5' },
+  2: { label: 'Đang giao hàng', color: '#2563eb', bg: '#dbeafe' },
+  3: { label: 'Hoàn thành', color: '#16a34a', bg: '#dcfce7' },
+  4: { label: 'Đã hủy', color: '#dc2626', bg: '#fee2e2' },
 }
 
 function formatCurrency(amount) {
@@ -146,7 +147,8 @@ function AdminOrderTable({
             onClick={onResetFilters}
             title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về mặc định ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
       </div>
@@ -218,7 +220,7 @@ function AdminOrderTable({
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '40px 0', color: '#b9b0a7' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
                   Không tìm thấy đơn hàng nào phù hợp với bộ lọc.
                 </td>
               </tr>
@@ -229,7 +231,7 @@ function AdminOrderTable({
                   <tr key={order.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#e7b26a' }} title={`Mã đầy đủ: #${order.id}`}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: '700', color: '#0088a9' }} title={`Mã đầy đủ: #${order.id}`}>
                           #{order.id.slice(0, 8)}...
                         </span>
                         <button
@@ -243,21 +245,21 @@ function AdminOrderTable({
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontWeight: '600', color: '#fffaf1' }}>
+                      <div style={{ fontWeight: '600', color: '#0f172a' }}>
                         {order.customer_name || 'Khách hàng vãng lai'}
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: '#b9b0a7' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
                         {order.customer_phone || order.customer_email || '---'}
                       </div>
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: '#b9b0a7' }}>
+                    <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
                       {formatDate(order.createdAt)}
                     </td>
                     <td style={{ textAlign: 'center', fontWeight: '600' }}>
                       {order.total_quantity || 1} cuốn
                     </td>
                     <td>
-                      <span style={{ fontWeight: '700', color: '#4ade80' }}>
+                      <span style={{ fontWeight: '700', color: '#059669' }}>
                         {formatCurrency(order.total)}
                       </span>
                     </td>
@@ -497,7 +499,7 @@ function AdminOrderTable({
 
             <form onSubmit={handleSubmitStatusUpdate} className="admin-modal-form">
               <div className="admin-order-status-current-box">
-                <span style={{ color: '#b9b0a7' }}>
+                <span style={{ color: '#64748b' }}>
                   Đơn hàng <strong>#{statusModalOrder.id.slice(0, 8)}...</strong> hiện tại:
                 </span>
                 <span
