@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import debounce from 'lodash.debounce'
+import { RefreshIcon } from './common/Icons'
 
 function formatShortUserId(id) {
   const raw = String(id || '').trim()
@@ -216,7 +217,8 @@ function AdminUserTable({
             onClick={handleResetFilters}
             title="Đặt lại toàn bộ tìm kiếm, bộ lọc và sắp xếp về ban đầu"
           >
-            🔄 Xóa bộ lọc
+            <RefreshIcon size={14} />
+            <span>Xóa bộ lọc</span>
           </button>
         </div>
       </div>

@@ -5,8 +5,8 @@
 }
 
 .chart-panel {
-  background: #23211d;
-  border: 1px solid #383530;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 20px 22px;
   display: flex;
@@ -33,7 +33,7 @@
   margin: 0;
   font-size: 1.05rem;
   font-weight: 700;
-  color: #fffaf1;
+  color: #0f172a;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -42,7 +42,7 @@
 .chart-panel-subtitle {
   margin: 0;
   font-size: 0.8rem;
-  color: #8c857b;
+  color: #64748b;
 }
 
 .chart-header-right {
@@ -54,8 +54,8 @@
 
 .chart-mode-switch {
   display: inline-flex;
-  background: #1a1917;
-  border: 1px solid #383530;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 3px;
   gap: 2px;
@@ -64,7 +64,7 @@
 .chart-mode-btn {
   background: transparent;
   border: none;
-  color: #a8a29e;
+  color: #64748b;
   font-size: 0.78rem;
   font-weight: 600;
   padding: 5px 10px;
@@ -74,14 +74,14 @@
 }
 
 .chart-mode-btn.active {
-  background: #e7b26a;
-  color: #1a1917;
+  background: #0088a9;
+  color: #ffffff;
 }
 
 .chart-period-badge {
   background: rgba(231, 178, 106, 0.12);
   border: 1px solid rgba(231, 178, 106, 0.28);
-  color: #e7b26a;
+  color: #0088a9;
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 0.78rem;
@@ -94,7 +94,7 @@
   flex-wrap: wrap;
   gap: 16px;
   font-size: 0.8rem;
-  color: #c2b9ac;
+  color: #64748b;
 }
 
 .chart-legend-item {
@@ -110,7 +110,7 @@
   display: inline-block;
 }
 
-.legend-dot.gold { background: #e7b26a; }
+.legend-dot.gold { background: #0088a9; }
 .legend-dot.emerald { background: #10b981; }
 .legend-dot.amber { background: #f59e0b; }
 .legend-dot.blue { background: #3b82f6; }
@@ -133,7 +133,7 @@
   width: 16px;
   height: 0;
   display: inline-block;
-  border-top: 2px dashed #e7b26a;
+  border-top: 2px dashed #0088a9;
 }
 
 .chart-svg-wrapper {
@@ -157,13 +157,13 @@
 }
 
 .chart-grid-line {
-  stroke: #33302b;
+  stroke: #e2e8f0;
   stroke-width: 1;
   stroke-dasharray: 4 4;
 }
 
 .chart-axis-text {
-  fill: #8c857b;
+  fill: #64748b;
   font-size: 11px;
   font-family: inherit;
 }
@@ -174,7 +174,7 @@
 }
 
 .chart-axis-text.right-gold {
-  fill: #e7b26a;
+  fill: #0088a9;
   font-size: 10.5px;
 }
 
@@ -217,7 +217,7 @@
 }
 
 .chart-hover-column.active {
-  fill: rgba(231, 178, 106, 0.06);
+  fill: rgba(0, 136, 169, 0.06);
 }
 
 .chart-tooltip {
@@ -240,8 +240,8 @@
 .chart-tooltip-date {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #e7b26a;
-  border-bottom: 1px solid #383530;
+  color: #0088a9;
+  border-bottom: 1px solid #e2e8f0;
   padding-bottom: 4px;
   margin-bottom: 2px;
 }
@@ -252,12 +252,12 @@
   align-items: center;
   gap: 14px;
   font-size: 0.78rem;
-  color: #d6cfc5;
+  color: #64748b;
 }
 
 .chart-tooltip-val {
   font-weight: 700;
-  color: #fffaf1;
+  color: #0f172a;
 }
 
 .chart-empty-state {
@@ -265,7 +265,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8c857b;
+  color: #64748b;
   font-size: 0.9rem;
 }
 
@@ -280,8 +280,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 12px;
-  background: #1a1917;
-  border: 1px solid #33302b;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
 }
 
@@ -290,9 +290,9 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  background: #23211d;
+  background: #ffffff;
   border-radius: 8px;
-  border-left: 3px solid #e7b26a;
+  border-left: 3px solid #0088a9;
 }
 
 .cashflow-box.reconciled { border-left-color: #10b981; }
@@ -302,19 +302,19 @@
 
 .cashflow-box-label {
   font-size: 0.74rem;
-  color: #a8a29e;
+  color: #64748b;
   font-weight: 600;
 }
 
 .cashflow-box-value {
   font-size: 1rem;
   font-weight: 800;
-  color: #fffaf1;
+  color: #0f172a;
 }
 
 .cashflow-box-hint {
   font-size: 0.72rem;
-  color: #8c857b;
+  color: #64748b;
 }
 
 @media (max-width: 960px) {

@@ -3,6 +3,17 @@ import statisticsService from '../services/statisticsService'
 import { buildCircularSegments } from '../utils/chartGeometry'
 import AdminAnalyticsCharts from './AdminAnalyticsCharts'
 import AdminCatalogAnalyticsCharts from './AdminCatalogAnalyticsCharts'
+import {
+  WalletIcon,
+  PackageIcon,
+  UsersIcon,
+  BookIcon,
+  TruckIcon,
+  CreditCardIcon,
+  FlameIcon,
+  RefreshIcon,
+  BarChartIcon,
+} from './common/Icons'
 import './AdminOverviewDashboard.css'
 
 function formatVND(value) {
@@ -195,7 +206,10 @@ function AdminOverviewDashboard({ onNavigateTab }) {
     <div className="admin-overview-container">
       <div className="overview-header-bar">
         <div className="overview-header-title">
-          <h2>📊 Tổng Quan Chỉ Số Vận Hành</h2>
+          <h2>
+            <BarChartIcon size={20} style={{ marginRight: '8px', color: '#0088a9' }} />
+            <span>Tổng Quan Chỉ Số Vận Hành</span>
+          </h2>
           <p>Số liệu thống kê thực tế theo chu kỳ kinh doanh của BookWeb</p>
         </div>
 
@@ -231,7 +245,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
               />
-              <span style={{ color: '#8c857b' }}>→</span>
+              <span style={{ color: '#64748b' }}>→</span>
               <input
                 type="date"
                 className="overview-date-input"
@@ -255,13 +269,14 @@ function AdminOverviewDashboard({ onNavigateTab }) {
             onClick={handleRefresh}
             disabled={loading}
           >
-            🔄 {loading ? 'Đang cập nhật...' : 'Làm mới'}
+            <RefreshIcon size={15} />
+            <span>{loading ? 'Đang cập nhật...' : 'Làm mới'}</span>
           </button>
         </div>
       </div>
 
       {errorMsg ? (
-        <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#fca5a5' }}>
+        <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c' }}>
           {errorMsg}
         </div>
       ) : null}
@@ -270,7 +285,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
         <div className="kpi-card revenue">
           <div className="kpi-top">
             <span className="kpi-label">Tổng Doanh Thu</span>
-            <div className="kpi-icon-badge">💰</div>
+            <div className="kpi-icon-badge">
+              <WalletIcon size={20} />
+            </div>
           </div>
           <div className="kpi-value">{loading && !dashboardData ? '...' : formatVND(revenue.total)}</div>
           <div className="kpi-subtext">
@@ -283,7 +300,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
         <div className="kpi-card orders">
           <div className="kpi-top">
             <span className="kpi-label">Tổng Đơn Hàng</span>
-            <div className="kpi-icon-badge">📦</div>
+            <div className="kpi-icon-badge">
+              <PackageIcon size={20} />
+            </div>
           </div>
           <div className="kpi-value">{loading && !dashboardData ? '...' : orders.total || 0}</div>
           <div className="kpi-subtext">
@@ -296,7 +315,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
         <div className="kpi-card users">
           <div className="kpi-top">
             <span className="kpi-label">Độc Giả Hệ Thống</span>
-            <div className="kpi-icon-badge">👥</div>
+            <div className="kpi-icon-badge">
+              <UsersIcon size={20} />
+            </div>
           </div>
           <div className="kpi-value">{loading && !dashboardData ? '...' : users.customers || 0}</div>
           <div className="kpi-subtext">
@@ -309,7 +330,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
         <div className="kpi-card inventory">
           <div className="kpi-top">
             <span className="kpi-label">Ấn Phẩm Kinh Doanh</span>
-            <div className="kpi-icon-badge">📚</div>
+            <div className="kpi-icon-badge">
+              <BookIcon size={20} />
+            </div>
           </div>
           <div className="kpi-value">{loading && !dashboardData ? '...' : books.total || 0}</div>
           <div className="kpi-subtext">
@@ -337,7 +360,10 @@ function AdminOverviewDashboard({ onNavigateTab }) {
       <div className="overview-two-col-grid">
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">🚚 Trạng Thái Xử Lý Đơn Hàng</h3>
+            <h3 className="overview-panel-title">
+              <TruckIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+              <span>Trạng Thái Xử Lý Đơn Hàng</span>
+            </h3>
             {onNavigateTab ? (
               <button
                 type="button"
@@ -390,7 +416,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
                     width={barW}
                     height={86}
                     rx={6}
-                    fill="#1a1917"
+                    fill="#f1f5f9"
+                    stroke="#e2e8f0"
+                    strokeWidth="1"
                   />
                   {barH > 0 ? (
                     <rect
@@ -423,7 +451,10 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">💳 Kênh Thanh Toán & Giá Trị Đơn (AOV)</h3>
+            <h3 className="overview-panel-title">
+              <CreditCardIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+              <span>Kênh Thanh Toán &amp; Giá Trị Đơn (AOV)</span>
+            </h3>
             {onNavigateTab ? (
               <button
                 type="button"
@@ -438,7 +469,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
           <div className="payment-duals-grid">
             <div className="payment-donut-card">
               <svg viewBox="0 0 92 92" className="payment-donut-svg">
-                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#2e2b26" strokeWidth="12" />
+                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#e2e8f0" strokeWidth="12" />
                 {(codOrdersCount + vnpayOrdersCount) > 0 ? orderMethodSlices.map((sl) => (
                   sl.segLen > 0 ? (
                     <circle
@@ -467,7 +498,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
             <div className="payment-donut-card">
               <svg viewBox="0 0 92 92" className="payment-donut-svg">
-                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#2e2b26" strokeWidth="12" />
+                <circle cx="46" cy="46" r={payRingRadius} fill="none" stroke="#e2e8f0" strokeWidth="12" />
                 {(codRevVal + vnpayRevVal) > 0 ? revMethodSlices.map((sl) => (
                   sl.segLen > 0 ? (
                     <circle
@@ -515,7 +546,10 @@ function AdminOverviewDashboard({ onNavigateTab }) {
       <div className="overview-two-col-grid">
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">🔥 Top Ấn Phẩm Bán Chạy Nhất</h3>
+            <h3 className="overview-panel-title">
+              <FlameIcon size={18} style={{ marginRight: '8px', color: '#f59e0b' }} />
+              <span>Top Ấn Phẩm Bán Chạy Nhất</span>
+            </h3>
             {onNavigateTab ? (
               <button
                 type="button"
@@ -529,11 +563,11 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
           <div className="top-books-list">
             {loading && topBooks.length === 0 ? (
-              <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>
                 Đang nạp top sách bán chạy...
               </div>
             ) : topBooks.length === 0 ? (
-              <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>
                 Chưa có dữ liệu sách bán thành công
               </div>
             ) : (
@@ -544,7 +578,9 @@ function AdminOverviewDashboard({ onNavigateTab }) {
                     {b.image ? (
                       <img src={b.image} alt="" className="top-book-thumb" />
                     ) : (
-                      <div className="top-book-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>📖</div>
+                      <div className="top-book-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BookIcon size={16} />
+                      </div>
                     )}
                     <div className="top-book-info">
                       <span className="top-book-title" title={b.title}>{b.title}</span>
@@ -564,7 +600,10 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
         <div className="overview-panel">
           <div className="overview-panel-header">
-            <h3 className="overview-panel-title">⚡ Đơn Hàng Gần Đây Nhất</h3>
+            <h3 className="overview-panel-title">
+              <PackageIcon size={18} style={{ marginRight: '8px', color: '#0088a9' }} />
+              <span>Đơn Hàng Gần Đây Nhất</span>
+            </h3>
             {onNavigateTab ? (
               <button
                 type="button"
@@ -578,11 +617,11 @@ function AdminOverviewDashboard({ onNavigateTab }) {
 
           <div className="recent-orders-list">
             {loading && recentOrders.length === 0 ? (
-              <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>
                 Đang nạp đơn hàng gần đây...
               </div>
             ) : recentOrders.length === 0 ? (
-              <div style={{ color: '#8c857b', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: '#64748b', textAlign: 'center', padding: '20px' }}>
                 Chưa có đơn hàng nào
               </div>
             ) : (
@@ -599,7 +638,7 @@ function AdminOverviewDashboard({ onNavigateTab }) {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                       <span className="recent-order-total">{formatVND(ord.total)}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '0.72rem', color: '#8c857b' }}>{formatDate(ord.createdAt)}</span>
+                        <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{formatDate(ord.createdAt)}</span>
                         <span className={`recent-order-badge ${b.cls}`}>{b.label}</span>
                       </div>
                     </div>

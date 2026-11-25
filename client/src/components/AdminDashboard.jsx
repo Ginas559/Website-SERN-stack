@@ -26,6 +26,15 @@ import AdminUserBlockModal from './AdminUserBlockModal'
 import AdminUserDetailModal from './AdminUserDetailModal'
 import AdminReviewTable from './AdminReviewTable'
 import AdminOverviewDashboard from './AdminOverviewDashboard'
+import {
+  BarChartIcon,
+  BookIcon,
+  TagIcon,
+  PackageIcon,
+  TicketIcon,
+  UsersIcon,
+  StarIcon,
+} from './common/Icons'
 import orderService from '../services/orderService'
 import discountService from '../services/discountService'
 import userService from '../services/userService'
@@ -701,7 +710,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Tổng quan hệ thống"
           onClick={() => handleSelectAdminTab('overview')}
         >
-          📊 Tổng quan
+          <BarChartIcon size={16} />
+          <span>Tổng quan</span>
         </button>
         <button
           type="button"
@@ -709,7 +719,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Ấn phẩm Sách"
           onClick={() => handleSelectAdminTab('books')}
         >
-          📚 Sách
+          <BookIcon size={16} />
+          <span>Sách</span>
         </button>
         <button
           type="button"
@@ -717,7 +728,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Thể loại Sách"
           onClick={() => handleSelectAdminTab('categories')}
         >
-          🏷️ Thể loại
+          <TagIcon size={16} />
+          <span>Thể loại</span>
         </button>
         <button
           type="button"
@@ -725,7 +737,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Đơn hàng"
           onClick={() => handleSelectAdminTab('orders')}
         >
-          📦 Đơn hàng
+          <PackageIcon size={16} />
+          <span>Đơn hàng</span>
         </button>
         <button
           type="button"
@@ -733,7 +746,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Khuyến mãi"
           onClick={() => handleSelectAdminTab('promotions')}
         >
-          🎟️ Khuyến mãi
+          <TicketIcon size={16} />
+          <span>Khuyến mãi</span>
         </button>
         <button
           type="button"
@@ -741,7 +755,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Người dùng"
           onClick={() => handleSelectAdminTab('users')}
         >
-          👥 Người dùng
+          <UsersIcon size={16} />
+          <span>Người dùng</span>
         </button>
         <button
           type="button"
@@ -749,7 +764,8 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Đánh giá & Bình luận"
           onClick={() => handleSelectAdminTab('reviews')}
         >
-          ⭐ Đánh giá &amp; Bình luận
+          <StarIcon size={16} />
+          <span>Đánh giá &amp; Bình luận</span>
         </button>
       </div>
 

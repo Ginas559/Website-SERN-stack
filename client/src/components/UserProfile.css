@@ -1,13 +1,13 @@
 .user-profile-wrapper {
-    min-height: calc(100vh - 80px);
-    background-color: #20201f;
-    padding: 32px 24px 60px;
+    min-height: calc(100vh - 120px);
+    background-color: #f8fafc;
+    padding: 36px 24px 64px;
     font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-    color: #f3eadb;
+    color: #0f172a;
 }
 
 .user-profile-container {
-    max-width: 1000px;
+    max-width: 1040px;
     margin: 0 auto;
 }
 
@@ -16,24 +16,24 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
-    border-bottom: 1px solid #3d3d3a;
-    padding-bottom: 16px;
+    border-bottom: 1.5px solid #e2e8f0;
+    padding-bottom: 18px;
     flex-wrap: wrap;
     gap: 12px;
 }
 
 .user-profile-title {
-    font-size: 2rem;
+    font-size: 2.2rem;
     font-weight: 800;
-    color: #e7b26a;
+    color: #0f172a;
     margin: 0;
     letter-spacing: -0.02em;
 }
 
 .user-profile-logout-btn {
-    background: transparent;
-    border: 1px solid #e78282;
-    color: #f87171;
+    background: #fff5f5;
+    border: 1.5px solid #fecdd3;
+    color: #dc2626;
     padding: 8px 18px;
     border-radius: 8px;
     font-size: 0.9rem;
@@ -43,21 +43,25 @@
 }
 
 .user-profile-logout-btn:hover {
-    background: rgba(248, 113, 113, 0.15);
+    background: #fee2e2;
+    border-color: #f87171;
 }
 
 .user-profile-tabs {
     display: flex;
     gap: 8px;
-    border-bottom: 1px solid #3d3d3a;
+    border-bottom: 1.5px solid #e2e8f0;
     margin-bottom: 24px;
 }
 
 .user-profile-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: transparent;
     border: none;
-    border-bottom: 2px solid transparent;
-    color: #b9b0a7;
+    border-bottom: 2.5px solid transparent;
+    color: #64748b;
     padding: 12px 20px;
     font-size: 1rem;
     font-weight: 600;
@@ -65,21 +69,34 @@
     transition: all 0.2s ease;
 }
 
+.status-dot-active {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #10b981;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}
+
+.badge-star-icon {
+    color: #f59e0b;
+}
+
 .user-profile-tab-btn:hover {
-    color: #f3eadb;
+    color: #0f172a;
 }
 
 .user-profile-tab-btn.active {
-    color: #e7b26a;
-    border-bottom-color: #e7b26a;
+    color: #0088a9;
+    border-bottom-color: #0088a9;
 }
 
 .user-profile-card {
-    background: #282827;
-    border: 1px solid #3d3d3a;
-    border-radius: 14px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 16px;
     padding: 28px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
     margin-bottom: 24px;
 }
 
@@ -96,11 +113,11 @@
     gap: 6px;
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 700;
-    background: rgba(231, 178, 106, 0.15);
-    color: #e7b26a;
-    border: 1px solid rgba(231, 178, 106, 0.3);
+    background: #e6f4f8;
+    color: #0088a9;
+    border: 1px solid #bae6fd;
 }
 
 .user-status-badge {
@@ -109,11 +126,11 @@
     gap: 6px;
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 700;
-    background: rgba(74, 222, 128, 0.15);
-    color: #4ade80;
-    border: 1px solid rgba(74, 222, 128, 0.3);
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
 }
 
 .user-form-grid {
@@ -133,30 +150,33 @@
 }
 
 .user-label {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-weight: 600;
-    color: #b9b0a7;
+    color: #475569;
 }
 
 .user-input {
-    background: #20201f;
-    border: 1px solid #4d4d48;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
     border-radius: 8px;
     padding: 12px 14px;
-    color: #f3eadb;
+    color: #0f172a;
     font-size: 0.95rem;
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .user-input:focus {
-    border-color: #e7b26a;
+    border-color: #0088a9;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(0, 136, 169, 0.12);
 }
 
 .user-input:disabled {
-    background: #1a1a19;
-    color: #88827b;
+    background: #f1f5f9;
+    color: #94a3b8;
     cursor: not-allowed;
+    border-color: #e2e8f0;
 }
 
 .user-form-actions,
@@ -166,26 +186,26 @@
     align-items: center;
     gap: 12px;
     margin-top: 24px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 18px;
+    border-top: 1px solid #e2e8f0;
     width: 100%;
     grid-column: 1 / -1;
 }
 
 .user-save-btn {
-    background-color: #e7b26a;
-    color: #1a1917;
+    background-color: #0088a9;
+    color: #ffffff;
     border: none;
     border-radius: 8px;
     padding: 12px 28px;
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease;
 }
 
 .user-save-btn:hover:not(:disabled) {
-    background-color: #d69f54;
+    background-color: #007390;
 }
 
 .user-save-btn:disabled {
@@ -194,9 +214,9 @@
 }
 
 .user-reset-btn {
-    background: transparent;
-    border: 1px solid #4d4d48;
-    color: #b9b0a7;
+    background: #f1f5f9;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
     border-radius: 8px;
     padding: 12px 20px;
     font-size: 0.95rem;
@@ -206,8 +226,8 @@
 }
 
 .user-reset-btn:hover {
-    background: #333230;
-    color: #f3eadb;
+    background: #e2e8f0;
+    color: #0f172a;
 }
 
 .user-promo-cards-grid {
@@ -217,20 +237,21 @@
 }
 
 .user-promo-card {
-    background: #20201f;
-    border: 1px dashed #e7b26a;
+    background: #ffffff;
+    border: 1.5px dashed #0088a9;
     border-radius: 12px;
     padding: 18px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     gap: 12px;
-    transition: transform 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .user-promo-card:hover {
     transform: translateY(-2px);
     border-style: solid;
+    box-shadow: 0 8px 20px rgba(0, 136, 169, 0.12);
 }
 
 .user-promo-card-header {
@@ -242,14 +263,14 @@
 .user-promo-card-code {
     font-size: 1.15rem;
     font-weight: 800;
-    color: #e7b26a;
+    color: #0088a9;
     letter-spacing: 0.05em;
 }
 
 .user-promo-copy-btn {
-    background: rgba(231, 178, 106, 0.15);
-    border: 1px solid #e7b26a;
-    color: #e7b26a;
+    background: #e6f4f8;
+    border: 1px solid #bae6fd;
+    color: #0088a9;
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 0.8rem;
@@ -259,13 +280,13 @@
 }
 
 .user-promo-copy-btn:hover {
-    background: #e7b26a;
-    color: #1a1917;
+    background: #0088a9;
+    color: #ffffff;
 }
 
 .user-promo-card-desc {
     font-size: 0.85rem;
-    color: #b9b0a7;
+    color: #64748b;
     line-height: 1.4;
 }
 
@@ -274,8 +295,8 @@
     justify-content: space-between;
     align-items: center;
     font-size: 0.75rem;
-    color: #88827b;
-    border-top: 1px solid #333230;
+    color: #94a3b8;
+    border-top: 1px solid #f1f5f9;
     padding-top: 8px;
 }
 
@@ -287,15 +308,15 @@
 }
 
 .user-feedback-msg.success {
-    background: rgba(74, 222, 128, 0.15);
-    border: 1px solid #4ade80;
-    color: #4ade80;
+    background: #d1fae5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
 }
 
 .user-feedback-msg.error {
-    background: rgba(248, 113, 113, 0.15);
-    border: 1px solid #f87171;
-    color: #f87171;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
 }
 
 .user-address-picker-grid {
@@ -373,4 +394,3 @@
         grid-template-columns: 1fr;
     }
 }
-

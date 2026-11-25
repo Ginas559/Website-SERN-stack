@@ -735,7 +735,7 @@ function CheckoutPage({
                                             onChange={handleChangeForm}
                                         />
                                     </div>
-                                </div>
+                        </div>
 
                                 <div className="checkout-address-section-body">
                                     {activeAddress ? (
@@ -845,7 +845,21 @@ function CheckoutPage({
                                                 Thanh toán bằng tiền mặt trực tiếp cho nhân viên bưu tá khi nhận kiện sách.
                                             </span>
                                         </div>
-                                    </label>
+                                </label>
+
+                                <label className={`payment-option-label ${paymentMethod === 'VNPAY' ? 'selected' : ''}`}>
+                                    <input
+                                        type="radio"
+                                        name="paymentMethod"
+                                        value="VNPAY"
+                                        checked={paymentMethod === 'VNPAY'}
+                                        onChange={() => setPaymentMethod('VNPAY')}
+                                        className="payment-radio"
+                                    />
+                                    <div className="payment-option-text">
+                                        <span className="payment-title">Cổng thanh toán VNPAY / QR Code</span>
+                                        <span className="payment-desc">Hỗ trợ quét mã QR ngân hàng, thẻ ATM nội địa và thẻ quốc tế Visa/MasterCard.</span>
+                                    </div>
 
                                     <label className={`payment-option-label ${paymentMethod === 'VNPAY' ? 'selected' : ''}`}>
                                         <input
@@ -901,7 +915,10 @@ function CheckoutPage({
                             {appliedCoupon ? (
                                 <div className="applied-coupon-card">
                                     <div className="applied-coupon-info">
-                                        <span className="applied-coupon-badge">🏷️ {appliedCoupon.discount?.code || couponInput}</span>
+                                        <span className="applied-coupon-badge">
+                                            <TagIcon size={13} />
+                                            <span>{appliedCoupon.discount?.code || couponInput}</span>
+                                        </span>
                                         <span className="applied-coupon-text">
                                             {appliedCoupon.discount?.discount_type === 'PERCENT'
                                                 ? `Giảm ${appliedCoupon.discount?.value}% (tối đa ${formatCurrency(appliedCoupon.discount?.maxDiscountValue)})`

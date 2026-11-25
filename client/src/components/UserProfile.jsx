@@ -412,21 +412,24 @@ const UserProfile = memo(function UserProfile({
                         className={`user-profile-tab-btn ${activeTab === 'info' ? 'active' : ''}`}
                         onClick={() => setActiveTab('info')}
                     >
-                        👤 Thông tin tài khoản
+                        <UserIcon size={16} />
+                        <span>Thông tin tài khoản</span>
                     </button>
                     <button
                         type="button"
                         className={`user-profile-tab-btn ${activeTab === 'vouchers' ? 'active' : ''}`}
                         onClick={() => setActiveTab('vouchers')}
                     >
-                        🏷️ Ưu đãi & Khuyến mãi
+                        <TagIcon size={16} />
+                        <span>Ưu đãi & Khuyến mãi</span>
                     </button>
                     <button
                         type="button"
                         className={`user-profile-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
                         onClick={() => setActiveTab('security')}
                     >
-                        🔒 Bảo mật & Mật khẩu
+                        <LockIcon size={16} />
+                        <span>Bảo mật & Mật khẩu</span>
                     </button>
                 </div>
 
@@ -439,8 +442,14 @@ const UserProfile = memo(function UserProfile({
                 {activeTab === 'info' && (
                     <div className="user-profile-card">
                         <div className="user-profile-badge-row">
-                            <span className="user-role-badge">⭐ {roleName}</span>
-                            <span className="user-status-badge">🟢 Đang hoạt động</span>
+                            <span className="user-role-badge">
+                                <StarIcon size={14} className="badge-star-icon" />
+                                <span>{roleName}</span>
+                            </span>
+                            <span className="user-status-badge">
+                                <span className="status-dot-active"></span>
+                                <span>Đang hoạt động</span>
+                            </span>
                         </div>
 
                         <form onSubmit={handleSaveProfile} className="user-form-grid">
