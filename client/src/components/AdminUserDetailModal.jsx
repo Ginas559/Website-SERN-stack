@@ -29,12 +29,12 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
               {user.avatar ? (
                 <img src={user.avatar} alt={user.username} />
               ) : (
-                <span>{(user.full_name || user.username || 'U')[0].toUpperCase()}</span>
+                <span>{(user.full_name || user.fullName || user.username || 'U')[0].toUpperCase()}</span>
               )}
             </div>
             <div>
               <h2 className="admin-modal-title">
-                {user.full_name || user.username}
+                {user.full_name || user.fullName || user.username}
               </h2>
               <div className="admin-user-username-tag">@{user.username}</div>
             </div>
@@ -58,7 +58,7 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
 
             <div className="admin-user-detail-field">
               <span className="label">Số điện thoại:</span>
-              <span className="value">{user.phone_number || '—'}</span>
+              <span className="value">{user.phone_number || user.phoneNumber || user.phone || '—'}</span>
             </div>
 
             <div className="admin-user-detail-field">

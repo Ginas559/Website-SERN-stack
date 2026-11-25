@@ -413,6 +413,24 @@ function AdminOrderTable({
                     <span className="label">Email khách hàng:</span>
                     <span className="value">{detailModalOrder.customer_email || '---'}</span>
                   </div>
+                  {detailModalOrder.ghn_code && (
+                    <div className="admin-user-detail-field">
+                      <span className="label">Mã vận đơn GHN:</span>
+                      <span className="value" style={{ color: '#c2410c', fontWeight: 700 }}>
+                        {detailModalOrder.ghn_code}
+                        {!detailModalOrder.ghn_code.startsWith('GHN_') && (
+                          <a
+                            href={`https://donhang.ghn.vn/?order_code=${detailModalOrder.ghn_code}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ marginLeft: '10px', color: '#ea580c', fontWeight: 600, fontSize: '0.85rem', textDecoration: 'none' }}
+                          >
+                            ↗ Xem trên GHN
+                          </a>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {items.length > 0 && (

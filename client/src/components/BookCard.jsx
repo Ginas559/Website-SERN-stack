@@ -71,7 +71,7 @@ function BookCard({ book, onSelectBook, onToggleFavorite, isFavoriteProp }) {
                         author: book.author,
                         price: originalPrice,
                         discount,
-                        stock: Number(book.quantity ?? book.stock ?? 999),
+                        stock: Math.max(0, Number(book.quantity ?? book.stockQuantity ?? book.stock ?? 0) || 0),
                         image: book.image
                     });
                 }
