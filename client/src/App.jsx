@@ -503,6 +503,10 @@ function App() {
             dispatch(invalidateBooks())
             navigateTo({ tab: 'books', bookId: null }, { replace: true })
           }}
+          onGoToCart={() => {
+            dispatch(fetchCart())
+            navigateTo({ tab: 'cart' }, { replace: true })
+          }}
         />
       ) : activeTab === 'admin' && isAdmin ? (
         <AdminDashboard
@@ -518,12 +522,9 @@ function App() {
           onViewOrders={() => navigateTo({ tab: 'orders' })}
           onOrderCompleted={() => {
             completedCheckoutRef.current = true
-            dispatch(clearCartState())
             dispatch(invalidateBooks())
-            try {
-              localStorage.removeItem('guestCart')
-            } catch {
-              return
+            if (localStorage.getItem('accessToken')) {
+              dispatch(fetchCart())
             }
           }}
         />

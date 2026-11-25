@@ -49,6 +49,7 @@ async function getCart(userId) {
         unitPrice: calculateDiscountedUnitPrice(item.price, item.discount),
         image: item.image,
         stockQuantity: Math.max(0, Number(item.stock_quantity) || 0),
+        stock: Math.max(0, Number(item.stock_quantity) || 0),
         isDeleted: item.book_is_deleted === 1,
         quantity: item.quantity,
         total: item.total,

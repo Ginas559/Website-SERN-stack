@@ -18,6 +18,7 @@ const adminStorePolicyRoutes = require("./routes/adminStorePolicyRoutes");
 const adminUserRoutes = require("./routes/adminUserRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const statisticsRoutes = require("./routes/statisticsRoutes");
+const shippingRoutes = require("./routes/shippingRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -54,6 +55,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/payment", orderRoutes);
+app.use("/api/shipping", shippingRoutes);
 app.use("/api", reviewRoutes);
 
 app.use((req, res) =>

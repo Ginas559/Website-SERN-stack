@@ -304,10 +304,10 @@ function AdminUserTable({
                     <td>
                       <div className="admin-user-cell">
                         <div className="admin-user-avatar-small">
-                          {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
+                          {(user.full_name || user.fullName) ? (user.full_name || user.fullName).charAt(0).toUpperCase() : 'U'}
                         </div>
                         <div>
-                          <div className="admin-user-name">{user.full_name || 'Chưa đặt tên'}</div>
+                          <div className="admin-user-name">{user.full_name || user.fullName || 'Chưa đặt tên'}</div>
                           <div className="admin-user-id-row">
                             <span className="admin-user-id-code" title={`#${rawUserId}`}>
                               #{formatShortUserId(rawUserId)}
@@ -327,7 +327,7 @@ function AdminUserTable({
                     <td>
                       <div className="admin-contact-email">📧 {user.email}</div>
                       <div className="admin-contact-phone">
-                        📱 {user.phone_number || <span className="admin-text-muted">Chưa cập nhật</span>}
+                        📱 {user.phone_number || user.phoneNumber || user.phone || <span className="admin-text-muted">Chưa cập nhật</span>}
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
