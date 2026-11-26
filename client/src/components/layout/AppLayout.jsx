@@ -8,7 +8,8 @@ export default function AppLayout({
   cartBadgeCount = 0,
   wishlistBadgeCount = 0,
   user = null,
-  isAdmin = false,
+  hasAdminRole = false,
+  isShipper = false,
   onQuickSearch = null,
   children
 }) {
@@ -20,7 +21,8 @@ export default function AppLayout({
         cartBadgeCount={cartBadgeCount}
         wishlistBadgeCount={wishlistBadgeCount}
         user={user}
-        isAdmin={isAdmin}
+        hasAdminRole={hasAdminRole}
+        isShipper={isShipper}
         onQuickSearch={onQuickSearch}
       />
       <main className="lumina-main-content">

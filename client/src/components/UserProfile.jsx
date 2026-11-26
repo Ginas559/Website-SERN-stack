@@ -3,13 +3,13 @@ import userService from '../services/userService';
 import discountService from '../services/discountService';
 import shippingService from '../services/shippingService';
 import axiosClient from '../services/axiosClient';
-import { UserIcon, TagIcon, LockIcon, StarIcon } from './common/Icons';
 import {
     getSavedShippingLocation,
     setSavedShippingLocation,
     composeFullAddress,
     resolveAddressToGhn
 } from '../utils/addressHelper';
+import { UserIcon, TagIcon, LockIcon, StarIcon, MaterialCommunityIcon } from './common/Icons';
 import './UserProfile.css';
 
 function formatCurrency(amount) {
@@ -388,7 +388,7 @@ const UserProfile = memo(function UserProfile({
 
     const roleName = useMemo(() => {
         if (!user) return 'Khách hàng';
-        return user.isAdmin || user.role === 'Admin' || user.role === 'admin' ? 'Quản trị viên (Admin)' : 'Khách hàng thân thiết';
+        return user.role === 'Admin' ? 'Quản trị viên (Admin)' : 'Khách hàng thân thiết';
     }, [user]);
 
     return (
@@ -573,7 +573,7 @@ const UserProfile = memo(function UserProfile({
 
                                 {previewAddress && (
                                     <div className="user-address-preview">
-                                        <span className="user-address-preview-tag">📍 Địa chỉ hoàn chỉnh xem trước:</span>
+                                         <span className="user-address-preview-tag"><MaterialCommunityIcon name="map-marker" size={15} /> Địa chỉ hoàn chỉnh xem trước:</span>
                                         <span>{previewAddress}</span>
                                     </div>
                                 )}

@@ -1,8 +1,10 @@
+import { MaterialCommunityIcon } from './common/Icons'
+
 function EmptyCart({ onExploreBooks }) {
     return (
         <div className="cart-empty-container">
             <div className="cart-empty-icon-wrap">
-                <span className="cart-empty-icon">🛒</span>
+                <span className="cart-empty-icon"><MaterialCommunityIcon name="cart" size={42} /></span>
             </div>
             <h2 className="cart-empty-title">Giỏ hàng đang trống</h2>
             <p className="cart-empty-desc">

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import debounce from 'lodash.debounce';
+import { BookIcon } from './common/Icons';
 
 function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect }) {
     const [imgError, setImgError] = useState(false);
@@ -96,7 +97,7 @@ function CartItem({ item, onUpdateQuantity, onRemove, isSelected, onToggleSelect
                                 onError={() => setImgError(true)}
                             />
                         ) : (
-                            <div className="cart-product-placeholder">📖</div>
+                            <div className="cart-product-placeholder"><BookIcon size={28} /></div>
                         )}
                     </div>
                     <div className="cart-product-details">
