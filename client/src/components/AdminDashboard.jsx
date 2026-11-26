@@ -33,7 +33,7 @@ import {
   PackageIcon,
   TicketIcon,
   UsersIcon,
-  StarIcon,
+  MessageSquareIcon,
 } from './common/Icons'
 import orderService from '../services/orderService'
 import discountService from '../services/discountService'
@@ -72,10 +72,13 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
   const [orderSearch, setOrderSearch] = useState('')
   const [orderStatusFilter, setOrderStatusFilter] = useState('all')
   const [orderPaymentFilter, setOrderPaymentFilter] = useState('all')
+  const [orderDeliveryTypeFilter, setOrderDeliveryTypeFilter] = useState('all')
   const [orderSortBy, setOrderSortBy] = useState('createdAt')
   const [orderSortOrder, setOrderSortOrder] = useState('DESC')
   const [ordersLoading, setOrdersLoading] = useState(() => (activeAdminTab || 'overview') === 'orders')
   const [orderRefreshTrigger, setOrderRefreshTrigger] = useState(0)
+  const [shippers, setShippers] = useState([])
+  const [shippersLoading, setShippersLoading] = useState(false)
 
   const [adminPromotions, setAdminPromotions] = useState([])
   const [promoTotal, setPromoTotal] = useState(0)
@@ -126,14 +129,25 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
   const loadedPromoKeyRef = useRef(null)
   const loadedUserKeyRef = useRef(null)
   const loadedReviewKeyRef = useRef(null)
+  const toastTimerRef = useRef(null)
 
   const [toast, setToast] = useState(null)
 
   const showToast = useCallback((text, type = 'success') => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
     setToast({ text, type })
-    setTimeout(() => {
+    toastTimerRef.current = setTimeout(() => {
       setToast(null)
+      toastTimerRef.current = null
     }, 3500)
+  }, [])
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
   }, [])
 
   const fetchBooksData = useCallback((customQuery = null) => {
@@ -186,6 +200,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       ...(orderSearch.trim() ? { search: orderSearch.trim() } : {}),
       ...(orderStatusFilter !== 'all' ? { status: orderStatusFilter } : {}),
       ...(orderPaymentFilter !== 'all' ? { paymentMethod: orderPaymentFilter } : {}),
+      ...(orderDeliveryTypeFilter !== 'all' ? { deliveryType: orderDeliveryTypeFilter } : {}),
       sortBy: orderSortBy,
       sortOrder: orderSortOrder,
     }
@@ -209,7 +224,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     return () => {
       isCurrent = false
     }
-  }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderSortBy, orderSortOrder, orderRefreshTrigger, showToast])
+  }, [adminTab, orderPage, orderSearch, orderStatusFilter, orderPaymentFilter, orderDeliveryTypeFilter, orderSortBy, orderSortOrder, orderRefreshTrigger, showToast])
 
   useEffect(() => {
     if (adminTab !== 'promotions') return
@@ -255,7 +270,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       limit: 10,
       ...(userSearch.trim() ? { search: userSearch.trim() } : {}),
       ...(userStatusFilter !== 'all' ? { isDelete: userStatusFilter } : {}),
-      ...(userRoleFilter === 'admin' ? { isAdmin: 1 } : userRoleFilter === 'customer' ? { isAdmin: 0 } : {}),
+      ...(userRoleFilter === 'admin' ? { role: 'Admin' } : userRoleFilter === 'customer' ? { role: 'Customer' } : userRoleFilter === 'shipper' ? { role: 'Shipper' } : {}),
       ...(userVipFilter !== 'all' ? { isVip: userVipFilter } : {}),
     }
     const cacheKey = JSON.stringify({ ...queryParams, refreshTrigger: userRefreshTrigger })
@@ -418,6 +433,32 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     }
   }, [dispatch, showToast])
 
+  const loadShippers = useCallback(async () => {
+    if (shippersLoading || shippers.length > 0) return
+    setShippersLoading(true)
+    try {
+      const response = await userService.getAdminUsers({ role: 'Shipper', isDelete: 0, page: 1, limit: 100, sortBy: 'full_name', sortOrder: 'ASC' })
+      setShippers(response.users || response.data?.users || [])
+    } catch (error) {
+      showToast(error.message || 'Không thể tải danh sách shipper.', 'error')
+    } finally {
+      setShippersLoading(false)
+    }
+  }, [shippersLoading, shippers.length, showToast])
+
+  const handleAssignOrder = useCallback(async (orderId, payload) => {
+    try {
+      await orderService.assignOrderToShipper(orderId, payload)
+      showToast('Phân công shipper thành công!')
+      setOrdersLoading(true)
+      setOrderRefreshTrigger((prev) => prev + 1)
+    } catch (error) {
+      showToast(error.message || 'Không thể phân công shipper.', 'error')
+      if (error?.response?.status === 409 || String(error?.message || '').includes('đã có')) setOrderRefreshTrigger((prev) => prev + 1)
+      throw error
+    }
+  }, [showToast])
+
   const handleOrderSearchChange = useCallback((val) => {
     if (val === orderSearch && orderPage === 1) return
     setOrdersLoading(true)
@@ -438,6 +479,13 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     setOrderPaymentFilter(val)
     setOrderPage(1)
   }, [orderPaymentFilter, orderPage])
+
+  const handleOrderDeliveryTypeChange = useCallback((val) => {
+    if (val === orderDeliveryTypeFilter && orderPage === 1) return
+    setOrdersLoading(true)
+    setOrderDeliveryTypeFilter(val)
+    setOrderPage(1)
+  }, [orderDeliveryTypeFilter, orderPage])
 
   const handleOrderPageChange = useCallback((nextPage) => {
     if (nextPage === orderPage) return
@@ -461,6 +509,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
       orderSearch !== '' ||
       orderStatusFilter !== 'all' ||
       orderPaymentFilter !== 'all' ||
+      orderDeliveryTypeFilter !== 'all' ||
       orderSortBy !== 'createdAt' ||
       orderSortOrder !== 'DESC' ||
       orderPage !== 1
@@ -469,10 +518,11 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
     setOrderSearch('')
     setOrderStatusFilter('all')
     setOrderPaymentFilter('all')
+    setOrderDeliveryTypeFilter('all')
     setOrderSortBy('createdAt')
     setOrderSortOrder('DESC')
     setOrderPage(1)
-  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderSortBy, orderSortOrder, orderPage])
+  }, [orderSearch, orderStatusFilter, orderPaymentFilter, orderDeliveryTypeFilter, orderSortBy, orderSortOrder, orderPage])
 
   const handlePromoSearchChange = useCallback((val) => {
     if (val === promoSearch && promoPage === 1) return
@@ -682,28 +732,17 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
         </div>
       )}
 
-      <div className="admin-header">
-        <div>
-          <span className="admin-eyebrow">HỆ THỐNG QUẢN TRỊ NỘI BỘ</span>
-          <h1 className="admin-title">Bảng điều khiển Quản trị viên</h1>
-          <p className="admin-subtitle">
-            Quản lý kho ấn phẩm, danh mục thể loại, đơn hàng, chương trình khuyến mãi và người dùng toàn hệ thống BookWeb.
-          </p>
-        </div>
-      </div>
-
-      <div className="admin-stats-grid">
-        {dashboardStats.map((stat) => (
-          <div className="admin-stat-card" key={stat.label}>
-            <div className="admin-stat-label">{stat.label}</div>
-            <div className={stat.success ? 'admin-stat-value success' : 'admin-stat-value'}>
-              {stat.value}
+      <div className="admin-layout">
+        <aside className="admin-sidebar">
+          <div className="admin-sidebar-brand">
+            <span className="admin-sidebar-mark">B</span>
+            <div>
+              <strong>BookWeb</strong>
+              <span>Quản trị hệ thống</span>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div className="admin-navigation-tabs">
+          <div className="admin-sidebar-label">Điều hướng</div>
+          <nav className="admin-navigation-tabs" aria-label="Điều hướng quản trị">
         <button
           type="button"
           className={`admin-nav-tab ${adminTab === 'overview' ? 'active' : ''}`}
@@ -720,7 +759,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onClick={() => handleSelectAdminTab('books')}
         >
           <BookIcon size={16} />
-          <span>Sách</span>
+          <span>Quản lý Ấn phẩm Sách</span>
         </button>
         <button
           type="button"
@@ -729,7 +768,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onClick={() => handleSelectAdminTab('categories')}
         >
           <TagIcon size={16} />
-          <span>Thể loại</span>
+          <span>Quản lý Thể loại Sách</span>
         </button>
         <button
           type="button"
@@ -738,7 +777,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onClick={() => handleSelectAdminTab('orders')}
         >
           <PackageIcon size={16} />
-          <span>Đơn hàng</span>
+          <span>Quản lý Đơn hàng</span>
         </button>
         <button
           type="button"
@@ -747,7 +786,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onClick={() => handleSelectAdminTab('promotions')}
         >
           <TicketIcon size={16} />
-          <span>Khuyến mãi</span>
+          <span>Quản lý Khuyến mãi</span>
         </button>
         <button
           type="button"
@@ -756,7 +795,7 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onClick={() => handleSelectAdminTab('users')}
         >
           <UsersIcon size={16} />
-          <span>Người dùng</span>
+          <span>Quản lý Người dùng</span>
         </button>
         <button
           type="button"
@@ -764,12 +803,36 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           title="Quản lý Đánh giá & Bình luận"
           onClick={() => handleSelectAdminTab('reviews')}
         >
-          <StarIcon size={16} />
-          <span>Đánh giá &amp; Bình luận</span>
+           <MessageSquareIcon size={17} />
+          <span>Quản lý Đánh giá &amp; Bình luận</span>
         </button>
-      </div>
+          </nav>
+        </aside>
 
-      {adminTab === 'overview' ? (
+        <main className="admin-main-content">
+          <div className="admin-header">
+            <div>
+              <span className="admin-eyebrow">HỆ THỐNG QUẢN TRỊ NỘI BỘ</span>
+              <h1 className="admin-title">Bảng điều khiển Quản trị viên</h1>
+              <p className="admin-subtitle">
+                Quản lý kho ấn phẩm, danh mục thể loại, đơn hàng, chương trình khuyến mãi và người dùng toàn hệ thống BookWeb.
+              </p>
+            </div>
+          </div>
+
+          <div className="admin-stats-grid">
+            {dashboardStats.map((stat) => (
+              <div className="admin-stat-card" key={stat.label}>
+                <div className="admin-stat-label">{stat.label}</div>
+                <div className={stat.success ? 'admin-stat-value success' : 'admin-stat-value'}>
+                  {stat.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <section className="admin-management-content">
+          {adminTab === 'overview' ? (
         <AdminOverviewDashboard
           onNavigateTab={handleSelectAdminTab}
         />
@@ -827,15 +890,21 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           search={orderSearch}
           statusFilter={orderStatusFilter}
           paymentMethodFilter={orderPaymentFilter}
+          deliveryTypeFilter={orderDeliveryTypeFilter}
           sortBy={orderSortBy}
           sortOrder={orderSortOrder}
           onSearchChange={handleOrderSearchChange}
           onStatusFilterChange={handleOrderStatusChange}
           onPaymentMethodFilterChange={handleOrderPaymentChange}
+          onDeliveryTypeFilterChange={handleOrderDeliveryTypeChange}
           onSortChange={handleOrderSortChange}
           onResetFilters={handleResetOrderFilters}
           onPageChange={handleOrderPageChange}
           onUpdateStatus={handleUpdateOrderStatus}
+          shippers={shippers}
+          shippersLoading={shippersLoading}
+          onLoadShippers={loadShippers}
+          onAssignOrder={handleAssignOrder}
         />
       ) : adminTab === 'promotions' ? (
         <>
@@ -909,7 +978,10 @@ function AdminDashboard({ activeAdminTab, onAdminTabChange }) {
           onPageChange={handleReviewPageChange}
           onToggleStatus={handleToggleReviewStatus}
         />
-      )}
+          )}
+          </section>
+        </main>
+      </div>
 
       <AdminBookModal
         isOpen={adminTab === 'books' && bookModalOpen}

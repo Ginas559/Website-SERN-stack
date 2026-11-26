@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useMemo } from 'react'
 import debounce from 'lodash.debounce'
-import { RefreshIcon, TagIcon } from './common/Icons'
+import { RefreshIcon, TagIcon, MaterialCommunityIcon } from './common/Icons'
+import AdminConfirmModal from './AdminConfirmModal'
 
 function formatCurrency(amount) {
   return Number(amount || 0).toLocaleString('vi-VN') + ' đ'
@@ -25,16 +26,16 @@ function formatDate(dateStr) {
 
 function getPromotionStatus(promo) {
   if (promo.isDelete) {
-    return { label: 'Đã ẩn', color: '#f87171', bg: '#450a0a' }
+    return { label: 'Đã ẩn', color: '#b91c1c', bg: '#fef2f2' }
   }
   const now = new Date()
   if (promo.expiredAt && new Date(promo.expiredAt) < now) {
-    return { label: 'Đã hết hạn', color: '#9ca3af', bg: '#374151' }
+    return { label: 'Đã hết hạn', color: '#475569', bg: '#f1f5f9' }
   }
   if (promo.usedCount >= promo.quantity) {
-    return { label: 'Hết lượt dùng', color: '#fb923c', bg: '#431407' }
+    return { label: 'Hết lượt dùng', color: '#c2410c', bg: '#fff7ed' }
   }
-  return { label: 'Đang áp dụng', color: '#4ade80', bg: '#14532d' }
+  return { label: 'Đang áp dụng', color: '#047857', bg: '#ecfdf5' }
 }
 
 function AdminPromotionTable({
@@ -57,6 +58,7 @@ function AdminPromotionTable({
   const [prevSearch, setPrevSearch] = useState(search)
   const [sortBy, setSortBy] = useState('id')
   const [sortOrder, setSortOrder] = useState('desc')
+  const [pendingStatusPromotion, setPendingStatusPromotion] = useState(null)
 
   if (search !== prevSearch) {
     setPrevSearch(search)
@@ -330,15 +332,15 @@ function AdminPromotionTable({
                           onClick={() => onOpenEdit(promo)}
                           title="Chỉnh sửa khuyến mãi"
                         >
-                          ✏️ Sửa
+                          <MaterialCommunityIcon name="pencil" size={15} />Sửa
                         </button>
                         <button
                           type="button"
                           className={`admin-btn-action ${isHidden ? 'restore' : 'delete'}`}
-                          onClick={() => onToggleStatus(promo)}
+                           onClick={() => setPendingStatusPromotion(promo)}
                           title={isHidden ? 'Khôi phục khuyến mãi' : 'Ẩn khuyến mãi'}
                         >
-                          {isHidden ? '🔄 Mở' : '👁️ Ẩn'}
+                          <><MaterialCommunityIcon name={isHidden ? 'eye-outline' : 'eye-off-outline'} size={15} />{isHidden ? 'Mở' : 'Ẩn'}</>
                         </button>
                       </div>
                     </td>
@@ -378,6 +380,20 @@ function AdminPromotionTable({
           </div>
         </div>
       )}
+
+      <AdminConfirmModal
+        isOpen={Boolean(pendingStatusPromotion)}
+        title={pendingStatusPromotion?.isDelete ? 'Xác nhận khôi phục khuyến mãi' : 'Xác nhận ẩn khuyến mãi'}
+        message={pendingStatusPromotion?.isDelete ? `Bạn có muốn khôi phục mã “${pendingStatusPromotion?.code || 'khuyến mãi này'}” không?` : `Bạn có muốn ẩn mã “${pendingStatusPromotion?.code || 'khuyến mãi này'}” không?`}
+        confirmLabel={pendingStatusPromotion?.isDelete ? 'Xác nhận khôi phục' : 'Xác nhận ẩn'}
+        danger={!pendingStatusPromotion?.isDelete}
+        onCancel={() => setPendingStatusPromotion(null)}
+        onConfirm={() => {
+          const promotion = pendingStatusPromotion
+          setPendingStatusPromotion(null)
+          onToggleStatus(promotion)
+        }}
+      />
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
   FlameIcon,
   RefreshIcon,
   BarChartIcon,
+  MaterialCommunityIcon,
 } from './common/Icons'
 import './AdminOverviewDashboard.css'
 
@@ -491,8 +492,8 @@ function AdminOverviewDashboard({ onNavigateTab }) {
               </svg>
               <div className="payment-donut-meta">
                 <span className="payment-donut-title">Số lượng đơn</span>
-                <span>🟡 COD: <strong>{codOrdersCount}</strong> ({orderMethodSlices[0]?.percentage || 0}%)</span>
-                <span>🟢 VNPAY: <strong>{vnpayOrdersCount}</strong> ({orderMethodSlices[1]?.percentage || 0}%)</span>
+                 <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#eab308' }} /> COD: <strong>{codOrdersCount}</strong> ({orderMethodSlices[0]?.percentage || 0}%)</span>
+                 <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#22c55e' }} /> VNPAY: <strong>{vnpayOrdersCount}</strong> ({orderMethodSlices[1]?.percentage || 0}%)</span>
               </div>
             </div>
 
@@ -520,8 +521,8 @@ function AdminOverviewDashboard({ onNavigateTab }) {
               </svg>
               <div className="payment-donut-meta">
                 <span className="payment-donut-title">Doanh thu đã chốt</span>
-                <span>🟡 COD: <strong>{revMethodSlices[0]?.percentage || 0}%</strong></span>
-                <span>🟢 VNPAY: <strong>{revMethodSlices[1]?.percentage || 0}%</strong></span>
+                 <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#eab308' }} /> COD: <strong>{revMethodSlices[0]?.percentage || 0}%</strong></span>
+                 <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#22c55e' }} /> VNPAY: <strong>{revMethodSlices[1]?.percentage || 0}%</strong></span>
               </div>
             </div>
           </div>
