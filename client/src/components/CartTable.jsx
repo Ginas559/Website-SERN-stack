@@ -1,4 +1,5 @@
 import CartItem from './CartItem';
+import { MaterialCommunityIcon } from './common/Icons';
 
 function CartTable({
     items,
@@ -69,7 +70,7 @@ function CartTable({
                         className="cart-action-link-btn clear-all"
                         onClick={onClearCart}
                     >
-                        🗑 Làm trống giỏ hàng
+                         <><MaterialCommunityIcon name="delete" size={15} />Làm trống giỏ hàng</>
                     </button>
                 </div>
                 <div className="cart-footer-right">

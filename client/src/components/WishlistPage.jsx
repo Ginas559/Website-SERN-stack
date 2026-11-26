@@ -8,6 +8,7 @@ import {
 import { addToCart } from '../store/slices/cartSlice';
 import WishlistCard from './WishlistCard';
 import EmptyWishlist from './EmptyWishlist';
+import { MaterialCommunityIcon } from './common/Icons';
 import './Wishlist.css';
 
 function cleanWishlistData(rawList) {
@@ -328,14 +329,14 @@ function WishlistPage({
                                 disabled={inStockCount === 0}
                                 onClick={handleAddAllToCart}
                             >
-                                🛒 Thêm tất cả vào giỏ ({inStockCount})
+                                 <><MaterialCommunityIcon name="cart" size={15} />Thêm tất cả vào giỏ ({inStockCount})</>
                             </button>
                             <button
                                 type="button"
                                 className="wishlist-header-btn clear-all"
                                 onClick={() => setShowClearConfirmModal(true)}
                             >
-                                🗑 Xóa tất cả
+                                 <><MaterialCommunityIcon name="delete" size={15} />Xóa tất cả</>
                             </button>
                         </div>
                     )}
@@ -375,7 +376,7 @@ function WishlistPage({
                     <div className="wishlist-modal-backdrop" onClick={() => setShowClearConfirmModal(false)}>
                         <div className="wishlist-modal-card" onClick={(e) => e.stopPropagation()}>
                             <div className="wishlist-modal-icon-wrap">
-                                <span className="wishlist-modal-icon">💔</span>
+                                 <span className="wishlist-modal-icon"><MaterialCommunityIcon name="heart-outline" size={28} /></span>
                             </div>
                             <h3 className="wishlist-modal-title">Xác nhận làm trống yêu thích</h3>
                             <p className="wishlist-modal-desc">

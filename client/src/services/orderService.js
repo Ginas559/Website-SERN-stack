@@ -18,6 +18,7 @@ const orderService = {
   reorder: (orderId) => axiosClient.post(`/orders/${orderId}/reorder`),
   getAdminOrders: (params = {}) => axiosClient.get('/orders/admin', { params }),
   updateOrderStatus: (orderId, data) => axiosClient.patch(`/orders/${orderId}/status`, data),
+  assignOrderToShipper: (orderId, data) => axiosClient.post(`/orders/admin/${orderId}/assignment`, data),
 }
 
 export default orderService

@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BookCard from "./BookCard";
 import BookReviews from "./BookReviews";
 import { addToCart } from "../store/slices/cartSlice";
 import { addToWishlist, removeFromWishlist } from "../store/slices/wishlistSlice";
+import { BookIcon, HeartIcon, MaterialCommunityIcon } from './common/Icons';
 
 function BookDetail({
     book,
@@ -26,6 +27,11 @@ function BookDetail({
     const [quantity, setQuantity] = useState(1);
     const [addedNotice, setAddedNotice] = useState(false);
     const [optimisticFavorite, setOptimisticFavorite] = useState(null);
+    const addedNoticeTimerRef = useRef(null);
+
+    useEffect(() => () => {
+        if (addedNoticeTimerRef.current) clearTimeout(addedNoticeTimerRef.current);
+    }, []);
 
     const isFavoriteRedux = isAuthenticated && book && Array.isArray(reduxWishlist.items)
         ? reduxWishlist.items.some((it) => (it.bookId || it.id) === book.id)
@@ -132,12 +138,17 @@ function BookDetail({
                     });
                 }
                 localStorage.setItem("guestCart", JSON.stringify(current));
+                window.dispatchEvent(new CustomEvent('sern:guest-cart-updated'));
             } catch {
                 return;
             }
         }
         setAddedNotice(true);
-        setTimeout(() => setAddedNotice(false), 2500);
+        if (addedNoticeTimerRef.current) clearTimeout(addedNoticeTimerRef.current);
+        addedNoticeTimerRef.current = setTimeout(() => {
+            setAddedNotice(false);
+            addedNoticeTimerRef.current = null;
+        }, 2500);
     };
 
     const handleToggleFavorite = () => {
@@ -203,7 +214,7 @@ function BookDetail({
                         className="book-cover-placeholder" 
                         style={{ display: book.image ? "none" : "flex", fontSize: "4rem" }}
                     >
-                        📚
+                        <BookIcon size={64} />
                     </div>
                     {discount > 0 ? (
                         <span className="discount-badge">-{discount}%</span>
@@ -246,6 +257,7 @@ function BookDetail({
                                     </button>
                                     <input
                                         type="number"
+                                        inputMode="numeric"
                                         value={quantity}
                                         min="1"
                                         max={stockCount}
@@ -295,7 +307,7 @@ function BookDetail({
                                         boxSizing: "border-box"
                                     }}
                                 >
-                                    🛒 Thêm vào giỏ hàng
+                                    <><MaterialCommunityIcon name="cart" size={17} />Thêm vào giỏ hàng</>
                                 </button>
                             </>
                         ) : null}
@@ -318,7 +330,7 @@ function BookDetail({
                             }}
                             title={isFavorite ? "Bỏ thích" : "Thêm vào yêu thích"}
                         >
-                            <span>{isFavorite ? "❤️" : "🤍"}</span>
+                            <HeartIcon size={18} />
                             <span>{isFavorite ? "Đã thích" : "Yêu thích"}</span>
                         </button>
                     </div>

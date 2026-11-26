@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BookIcon, CartIcon, HeartIcon, PackageIcon, ShieldCheckIcon, UserIcon } from '../common/Icons'
+import { BookIcon, CartIcon, HeartIcon, PackageIcon, ShieldCheckIcon, UserIcon, MaterialCommunityIcon } from '../common/Icons'
 import './Header.css'
 
 export default function Header({
@@ -8,7 +8,8 @@ export default function Header({
   cartBadgeCount = 0,
   wishlistBadgeCount = 0,
   user = null,
-  isAdmin = false,
+  hasAdminRole = false,
+  isShipper = false,
   onQuickSearch = null
 }) {
   const [searchValue, setSearchValue] = useState('')
@@ -32,18 +33,18 @@ export default function Header({
         <div className="lumina-topbar-container">
           <div className="lumina-topbar-left">
             <span className="topbar-item">
-              <span className="topbar-icon">📞</span>
+              <MaterialCommunityIcon name="phone" className="topbar-icon" size={14} />
               <span className="topbar-text">1900 8386</span>
             </span>
             <span className="topbar-divider">•</span>
             <span className="topbar-item">
-              <span className="topbar-icon">✉️</span>
+              <MaterialCommunityIcon name="email" className="topbar-icon" size={14} />
               <span className="topbar-text">bookstore@gmail.com</span>
             </span>
           </div>
           <div className="lumina-topbar-right">
             <span className="topbar-item">
-              <span className="topbar-icon">📍</span>
+              <MaterialCommunityIcon name="map-marker" className="topbar-icon" size={14} />
               <span className="topbar-text">1 Võ Văn Ngân, Phường Linh Trung, Thủ Đức, TP. Hồ Chí Minh</span>
             </span>
           </div>
@@ -79,7 +80,7 @@ export default function Header({
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
               />
-              <button type="submit" className="lumina-search-btn">
+              <button type="button" className="lumina-search-btn" onClick={handleSearchSubmit}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -97,7 +98,7 @@ export default function Header({
               title="Cửa hàng sách"
             >
               <BookIcon className="pill-icon" size={16} />
-              <span className="pill-label">Cửa hàng</span>
+                <span className="pill-label">Cửa hàng sách</span>
             </button>
 
             <button
@@ -107,7 +108,7 @@ export default function Header({
               title="Giỏ hàng"
             >
               <CartIcon className="pill-icon" size={16} />
-              <span className="pill-label">Giỏ hàng</span>
+                <span className="pill-label">Giỏ hàng</span>
               <span className="pill-badge">{cartBadgeCount}</span>
             </button>
 
@@ -134,7 +135,7 @@ export default function Header({
               </button>
             )}
 
-            {isAdmin && (
+            {hasAdminRole && (
               <button
                 type="button"
                 className={`lumina-nav-pill-btn admin-pill ${activeTab === 'admin' ? 'active' : ''}`}
@@ -143,6 +144,18 @@ export default function Header({
               >
                 <ShieldCheckIcon className="pill-icon" size={16} />
                 <span className="pill-label">Quản trị</span>
+              </button>
+            )}
+
+            {isShipper && (
+              <button
+                type="button"
+                className={`lumina-nav-pill-btn shipper-pill ${activeTab === 'shipper' ? 'active' : ''}`}
+                onClick={() => navigateTo({ tab: 'shipper' })}
+                title="Đơn giao được phân công"
+              >
+                <PackageIcon className="pill-icon" size={16} />
+                <span className="pill-label">Giao hàng</span>
               </button>
             )}
 

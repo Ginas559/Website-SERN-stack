@@ -1,4 +1,4 @@
-const VALID_TABS = new Set(['books', 'cart', 'wishlist', 'orders', 'checkout', 'admin', 'account'])
+const VALID_TABS = new Set(['books', 'cart', 'wishlist', 'orders', 'checkout', 'admin', 'shipper', 'account'])
 const VALID_ADMIN_TABS = new Set(['overview', 'books', 'categories', 'orders', 'promotions', 'users', 'reviews'])
 const MAX_INT32 = 2147483647
 
@@ -32,13 +32,16 @@ export function parseRouteFromSearch(search = '') {
   return { tab, bookId, adminTab }
 }
 
-export function sanitizeRoute(route, { isAdmin = false, hasUser = false, hasCheckoutItems = false } = {}) {
+export function sanitizeRoute(route, { hasAdminRole = false, isShipper = false, hasUser = false, hasCheckoutItems = false } = {}) {
   const tab = VALID_TABS.has(route?.tab) ? route.tab : 'books'
-  if (tab === 'admin' && !isAdmin) {
+  if (tab === 'admin' && !hasAdminRole) {
     return { tab: 'books', bookId: null, adminTab: 'overview' }
   }
   if (tab === 'orders' && !hasUser) {
     return { tab: 'account', bookId: null, adminTab: 'overview' }
+  }
+  if (tab === 'shipper' && !isShipper) {
+    return { tab: hasUser ? 'account' : 'books', bookId: null, adminTab: 'overview' }
   }
   if (tab === 'checkout' && !hasCheckoutItems) {
     return { tab: 'cart', bookId: null, adminTab: 'overview' }
