@@ -112,9 +112,9 @@ async function createReview({ userId, bookId, rate, value, parentId = null }) {
             const pool = await connectDB();
             const actorRes = await new sql.Request(pool)
                 .input("userId", sql.Char(36), userId)
-                .query("SELECT TOP 1 isAdmin, isDelete FROM dbo.Users WHERE id = @userId");
+                .query("SELECT TOP 1 role, isDelete FROM dbo.Users WHERE id = @userId");
             const actor = actorRes.recordset[0];
-            if (!actor || actor.isDelete === 1 || !actor.isAdmin) {
+            if (!actor || actor.isDelete === 1 || actor.role !== "Admin") {
                 throw new AppError("Chỉ quản trị viên (Shop) mới có quyền phản hồi đánh giá sao của khách hàng.", 403);
             }
         }
