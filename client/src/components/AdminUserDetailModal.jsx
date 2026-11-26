@@ -1,3 +1,5 @@
+import { MaterialCommunityIcon } from './common/Icons'
+
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   try {
@@ -69,8 +71,10 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
             <div className="admin-user-detail-field">
               <span className="label">Vai trò hệ thống:</span>
               <span className="value">
-                {user.isAdmin ? (
+                {user.role === 'Admin' ? (
                   <span className="admin-role-badge admin">Quản trị viên (Admin)</span>
+                ) : user.role === 'Shipper' ? (
+                  <span className="admin-role-badge customer">Shipper</span>
                 ) : (
                   <span className="admin-role-badge customer">Khách hàng</span>
                 )}
@@ -81,7 +85,7 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
               <span className="label">Hạng thành viên:</span>
               <span className="value">
                 {user.isVip ? (
-                  <span className="admin-badge-vip">⭐ Thành viên VIP</span>
+                  <span className="admin-badge-vip"><MaterialCommunityIcon name="star" size={14} /> Thành viên VIP</span>
                 ) : (
                   <span>Thành viên thường</span>
                 )}
@@ -103,9 +107,9 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
               <span className="label">Trạng thái tài khoản:</span>
               <span className="value">
                 {isBlocked ? (
-                  <span className="admin-status-badge blocked">🔒 Đang bị khóa</span>
+                  <span className="admin-status-badge blocked"><MaterialCommunityIcon name="lock" size={14} /> Đang bị khóa</span>
                 ) : (
-                  <span className="admin-status-badge active">🟢 Hoạt động bình thường</span>
+                  <span className="admin-status-badge active"><MaterialCommunityIcon name="check-circle-outline" size={14} /> Hoạt động bình thường</span>
                 )}
               </span>
             </div>
@@ -123,7 +127,7 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
 
           {isBlocked && (
             <div className="admin-user-block-info-card">
-              <div className="admin-user-block-title">⚠️ Lý do khóa tài khoản:</div>
+              <div className="admin-user-block-title"><MaterialCommunityIcon name="alert-circle-outline" size={16} /> Lý do khóa tài khoản:</div>
               <div className="admin-user-block-desc">
                 {user.blockReason || 'Không có lý do cụ thể.'}
               </div>
@@ -142,4 +146,3 @@ function AdminUserDetailModal({ isOpen, user = null, onClose }) {
 }
 
 export default AdminUserDetailModal
-

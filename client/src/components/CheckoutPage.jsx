@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import orderService from '../services/orderService';
 import discountService from '../services/discountService';
 import userService from '../services/userService';
@@ -9,10 +9,12 @@ import {
     composeFullAddress,
     resolveAddressToGhn
 } from '../utils/addressHelper';
-import { MapPinIcon, TruckIcon, CreditCardIcon, TagIcon } from './common/Icons';
+import { MapPinIcon, TruckIcon, CreditCardIcon, TagIcon, MaterialCommunityIcon } from './common/Icons';
 import {
+    useShippingRule,
     calculateDiscountedUnitPrice,
     calculateSelectedItemsTotals,
+    calculateShippingFee,
     getPaymentMethodLabel
 } from '../utils/pricing';
 import './Checkout.css';
@@ -60,6 +62,7 @@ function CheckoutPage({
     const [toast, setToast] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successOrder, setSuccessOrder] = useState(null);
+    const toastTimerRef = useRef(null);
 
     const [provinces, setProvinces] = useState([]);
     const [selectedProvinceId, setSelectedProvinceId] = useState(() => (initialSavedLoc?.provinceId ? String(initialSavedLoc.provinceId) : ''));
@@ -89,10 +92,16 @@ function CheckoutPage({
     const [isLoadingTempDistricts, setIsLoadingTempDistricts] = useState(false);
     const [isLoadingTempWards, setIsLoadingTempWards] = useState(false);
 
+    useEffect(() => () => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    }, []);
+
     const triggerToast = useCallback((message, type = 'info') => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ message, type });
-        setTimeout(() => {
+        toastTimerRef.current = setTimeout(() => {
             setToast(null);
+            toastTimerRef.current = null;
         }, 3200);
     }, []);
 
@@ -114,6 +123,41 @@ function CheckoutPage({
     }, []);
 
     useEffect(() => {
+        if (!activeAddress || provinces.length === 0 || (selectedProvinceId && selectedDistrictId && selectedWardCode)) {
+            return undefined;
+        }
+        let isCurrent = true;
+        resolveAddressToGhn(activeAddress, provinces, shippingService)
+            .then((resolved) => {
+                if (!isCurrent || !resolved?.provinceId || !resolved?.districtId || !resolved?.wardCode) return;
+                const province = provinces.find((item) => String(item.provinceId) === String(resolved.provinceId));
+                const fullAddress = resolved.fullAddress || composeFullAddress(
+                    resolved.streetAddress,
+                    resolved.wardName,
+                    resolved.districtName,
+                    province?.provinceName || resolved.provinceName
+                );
+                setSelectedProvinceId(String(resolved.provinceId));
+                setSelectedDistrictId(String(resolved.districtId));
+                setSelectedWardCode(String(resolved.wardCode));
+                setStreetAddress(resolved.streetAddress || '');
+                setSavedShippingLocation({
+                    ...resolved,
+                    address: fullAddress || activeAddress,
+                    fullName: form.fullName,
+                    phone: form.phone
+                });
+            })
+            .catch((error) => {
+                if (!isCurrent) return;
+                triggerToast(error.message || 'Không thể tự nhận diện địa chỉ đã lưu. Vui lòng chọn địa chỉ từ danh sách.', 'warning');
+            });
+        return () => {
+            isCurrent = false;
+        };
+    }, [activeAddress, provinces, selectedProvinceId, selectedDistrictId, selectedWardCode, form.fullName, form.phone, triggerToast]);
+
+    useEffect(() => {
         let isCurrent = true;
         if (localStorage.getItem('accessToken')) {
             userService.getProfile()
@@ -126,17 +170,19 @@ function CheckoutPage({
                             phone: prev.phone || profile.phone || profile.phoneNumber || profile.phone_number || '',
                             note: prev.note
                         }));
-                        if (profile.address && !activeAddress) {
-                            setActiveAddress(profile.address);
+                        if (profile.address) {
+                            setActiveAddress((currentAddress) => currentAddress || profile.address);
                         }
                     }
                 })
-                .catch(() => {});
+                .catch((error) => {
+                    triggerToast(error.message || 'Không thể tải thông tin hồ sơ người nhận.', 'warning');
+                });
         }
         return () => {
             isCurrent = false;
         };
-    }, [activeAddress]);
+    }, [triggerToast]);
 
     useEffect(() => {
         let isCurrent = true;
@@ -146,6 +192,15 @@ function CheckoutPage({
                 const list = res?.data || res || [];
                 setProvinces(Array.isArray(list) ? list : []);
                 setIsLoadingProvinces(false);
+
+                const savedLoc = getSavedShippingLocation();
+
+                if (savedLoc?.provinceId && savedLoc?.districtId && savedLoc?.wardCode) {
+                    setSelectedProvinceId(String(savedLoc.provinceId));
+                    setSelectedDistrictId(String(savedLoc.districtId));
+                    setSelectedWardCode(String(savedLoc.wardCode));
+                    setStreetAddress(savedLoc.streetAddress || '');
+                }
             })
             .catch((err) => {
                 if (!isCurrent) return;
@@ -158,34 +213,6 @@ function CheckoutPage({
         };
     }, [triggerToast]);
 
-    useEffect(() => {
-        if (!activeAddress || !provinces.length) return;
-        if (selectedProvinceId && selectedDistrictId && selectedWardCode) return;
-
-        let isCurrent = true;
-        resolveAddressToGhn(activeAddress, provinces, shippingService)
-            .then((resolved) => {
-                if (!isCurrent || !resolved?.provinceId || !resolved?.districtId || !resolved?.wardCode) return;
-                const province = provinces.find((item) => String(item.provinceId) === String(resolved.provinceId));
-                const districtName = resolved.districtName || '';
-                const wardName = resolved.wardName || '';
-                const fullAddress = resolved.fullAddress || composeFullAddress(
-                    resolved.streetAddress,
-                    wardName,
-                    districtName,
-                    province?.provinceName || resolved.provinceName
-                );
-                setSelectedProvinceId(String(resolved.provinceId));
-                setSelectedDistrictId(String(resolved.districtId));
-                setSelectedWardCode(String(resolved.wardCode));
-                setStreetAddress(resolved.streetAddress || '');
-                setSavedShippingLocation({ ...resolved, address: fullAddress });
-            });
-        return () => {
-            isCurrent = false;
-        };
-    }, [activeAddress, provinces, selectedProvinceId, selectedDistrictId, selectedWardCode, streetAddress]);
-
     const { selectedCount, subtotal } = useMemo(
         () => calculateSelectedItemsTotals(items),
         [items]
@@ -195,13 +222,15 @@ function CheckoutPage({
         return Math.min(20000, Math.max(300, selectedCount * 350));
     }, [selectedCount]);
 
+    const shippingRule = useShippingRule();
     const shippingQuoteKey = `${selectedProvinceId}|${selectedDistrictId}|${selectedWardCode}|${subtotal}|${estimatedWeightGrams}|${shippingRefreshKey}`;
 
     useEffect(() => {
         let isCurrent = true;
-        if (!selectedProvinceId) {
+        if (!selectedProvinceId || !selectedDistrictId || !selectedWardCode) {
             Promise.resolve().then(() => {
                 if (!isCurrent) return;
+                setShippingDetail(null);
                 setIsLoadingFee(false);
                 setShippingError('');
             });
@@ -210,36 +239,24 @@ function CheckoutPage({
             };
         }
 
-        const prov = provinces.find((p) => String(p.provinceId) === String(selectedProvinceId));
-        const isHcm = Number(selectedProvinceId) === 202 || String(prov?.provinceName || '').toLowerCase().includes('hồ chí minh');
-        if (!isHcm && (!selectedDistrictId || !selectedWardCode)) {
-            Promise.resolve().then(() => {
+        Promise.resolve()
+            .then(() => {
                 if (!isCurrent) return;
-                setIsLoadingFee(false);
+                setIsLoadingFee(true);
                 setShippingError('');
-            });
-            return () => {
-                isCurrent = false;
-            };
-        }
-
-        Promise.resolve().then(() => {
-            if (!isCurrent) return;
-            setIsLoadingFee(true);
-            setShippingError('');
-        });
-        shippingService.calculateFee({
-            provinceId: Number(selectedProvinceId),
-            provinceName: prov?.provinceName || '',
-            toDistrictId: selectedDistrictId ? Number(selectedDistrictId) : undefined,
-            toWardCode: selectedWardCode ? String(selectedWardCode) : undefined,
-            orderTotal: subtotal,
-            weightInGrams: estimatedWeightGrams
-        })
+                return shippingService.calculateFee({
+                    provinceId: Number(selectedProvinceId),
+                    toDistrictId: Number(selectedDistrictId),
+                    toWardCode: String(selectedWardCode),
+                    orderTotal: subtotal,
+                    weightInGrams: estimatedWeightGrams
+                });
+            })
             .then((res) => {
                 if (!isCurrent) return;
                 const data = res.data || res;
                 setShippingDetail({ quoteKey: shippingQuoteKey, data });
+                setShippingError('');
             })
             .catch((err) => {
                 if (!isCurrent) return;
@@ -252,16 +269,14 @@ function CheckoutPage({
         return () => {
             isCurrent = false;
         };
-    }, [selectedProvinceId, selectedDistrictId, selectedWardCode, subtotal, provinces, estimatedWeightGrams, shippingRefreshKey, shippingQuoteKey]);
+    }, [selectedProvinceId, selectedDistrictId, selectedWardCode, subtotal, estimatedWeightGrams, shippingRefreshKey, shippingQuoteKey]);
 
     const isNonHcmAddress = useMemo(() => {
         if (selectedProvinceId) {
             return Number(selectedProvinceId) !== 202;
         }
-        const raw = String(activeAddress || '').toLowerCase();
-        if (!raw || raw.length < 3) return false;
-        return !(raw.includes('hồ chí minh') || raw.includes('tp.hcm') || raw.includes('tphcm') || raw.includes('hcm') || raw.includes('thủ đức') || raw.includes('sài gòn'));
-    }, [selectedProvinceId, activeAddress]);
+        return false;
+    }, [selectedProvinceId]);
 
     const currentShippingDetail = shippingDetail?.quoteKey === shippingQuoteKey ? shippingDetail.data : null;
 
@@ -276,16 +291,16 @@ function CheckoutPage({
 
     const rawShippingFee = currentShippingDetail?.shippingFee;
     const numericShippingFee = Number(rawShippingFee);
-    const currentShippingFee = rawShippingFee !== undefined
+    const quotedShippingFee = rawShippingFee !== undefined
         && rawShippingFee !== null
         && Number.isFinite(numericShippingFee)
         && numericShippingFee >= 0
         ? numericShippingFee
         : null;
+    const currentShippingFee = quotedShippingFee
+        ?? (isNonHcmAddress ? 38000 : calculateShippingFee(subtotal, shippingRule));
 
-    const finalTotal = currentShippingFee === null
-        ? null
-        : Math.max(0, subtotal + currentShippingFee - appliedDiscount);
+    const finalTotal = Math.max(0, subtotal + currentShippingFee - appliedDiscount);
 
     const handleApplyCoupon = useCallback(async (e, overrideCode) => {
         if (e && e.preventDefault) e.preventDefault();
@@ -585,7 +600,7 @@ function CheckoutPage({
             }
         }
 
-        if (isLoadingFee || shippingError || currentShippingFee === null) {
+        if (isLoadingFee || shippingError || quotedShippingFee === null) {
             triggerToast(shippingError || (isLoadingFee
                 ? 'Đang cập nhật phí vận chuyển, vui lòng chờ trong giây lát.'
                 : 'Chưa thể xác nhận phí vận chuyển. Vui lòng kiểm tra lại địa chỉ.'), 'warning');
@@ -612,7 +627,7 @@ function CheckoutPage({
             provinceId: Number(finalProvinceId),
             toDistrictId: Number(finalDistrictId),
             toWardCode: String(finalWardCode),
-            expectedShippingFee: currentShippingFee,
+            expectedShippingFee: quotedShippingFee,
             note: form.note.trim() || undefined,
             paymentMethod,
             discountId: appliedCoupon?.discount?.id,
@@ -661,9 +676,23 @@ function CheckoutPage({
             });
         } catch (err) {
             if (err.status === 409) {
+                setShippingDetail(null);
+                setIsLoadingFee(true);
                 setShippingRefreshKey((current) => current + 1);
+                triggerToast(err.message || 'Phí vận chuyển đã thay đổi. Vui lòng kiểm tra lại trước khi đặt hàng.', 'warning');
+            } else if (err.status === 400) {
+                const errorMessage = String(err.message || '');
+                const isAddressError = ['Tỉnh/Thành', 'Quận/Huyện', 'Phường/Xã', 'địa chỉ', 'GHN'].some((keyword) => errorMessage.includes(keyword));
+                if (isAddressError) {
+                    setShippingDetail(null);
+                    triggerToast(errorMessage || 'Địa chỉ giao hàng không hợp lệ. Vui lòng chọn lại địa chỉ từ danh sách GHN.', 'warning');
+                    handleOpenAddressModal();
+                } else {
+                    triggerToast(errorMessage || 'Dữ liệu đặt hàng không hợp lệ, vui lòng kiểm tra lại.', 'warning');
+                }
+            } else {
+                triggerToast(err.message || 'Không thể tạo đơn hàng, vui lòng thử lại.', 'error');
             }
-            triggerToast(err.message || 'Không thể tạo đơn hàng, vui lòng thử lại.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -674,7 +703,7 @@ function CheckoutPage({
             <div className="checkout-page-wrapper">
                 <div className="checkout-container">
                     <div className="checkout-empty-state">
-                        <div className="checkout-empty-icon">🛒</div>
+                        <div className="checkout-empty-icon"><MaterialCommunityIcon name="cart" size={38} /></div>
                         <h2 className="checkout-empty-title">Không có sản phẩm nào để thanh toán</h2>
                         <p className="checkout-empty-text">Vui lòng quay lại giỏ hàng và tích chọn các cuốn sách bạn muốn mua trước khi tiếp tục.</p>
                         <button
@@ -813,8 +842,6 @@ function CheckoutPage({
                                             <span style={{ color: '#b42318' }}>{shippingError}</span>
                                         ) : isLoadingFee ? (
                                             <span className="shipping-loading-text">Đang tính cước...</span>
-                                        ) : currentShippingFee === null ? (
-                                            <span className="shipping-loading-text">Chọn đủ địa chỉ để tính phí</span>
                                         ) : currentShippingFee === 0 ? (
                                             <span className="shipping-free-tag">Miễn phí</span>
                                         ) : (
@@ -976,11 +1003,9 @@ function CheckoutPage({
                                             ? 'Chưa thể tính'
                                             : isLoadingFee
                                                 ? 'Đang tính...'
-                                                : currentShippingFee === null
-                                                    ? 'Chọn đủ địa chỉ'
-                                                    : currentShippingFee === 0
-                                                        ? 'Miễn phí'
-                                                        : formatCurrency(currentShippingFee)}
+                                                : currentShippingFee === 0
+                                                    ? 'Miễn phí'
+                                                    : formatCurrency(currentShippingFee)}
                                     </span>
                                 </div>
                                 {appliedDiscount > 0 && (
@@ -993,7 +1018,7 @@ function CheckoutPage({
                                 <div className="checkout-calc-row total-row">
                                     <span>Tổng thanh toán:</span>
                                     <span className="checkout-total-val">
-                                        {finalTotal === null ? 'Chưa thể tính' : formatCurrency(finalTotal)}
+                                        {formatCurrency(finalTotal)}
                                     </span>
                                 </div>
                             </div>
@@ -1147,7 +1172,7 @@ function CheckoutPage({
 
                                     {tempPreviewAddress && (
                                         <div className="checkout-address-preview">
-                                            <span className="checkout-address-preview-label">📍 Địa chỉ hoàn chỉnh xem trước:</span>
+                                            <span className="checkout-address-preview-label"><MaterialCommunityIcon name="map-marker" size={15} /> Địa chỉ hoàn chỉnh xem trước:</span>
                                             <span className="checkout-address-preview-text">{tempPreviewAddress}</span>
                                         </div>
                                     )}
@@ -1197,56 +1222,57 @@ function CheckoutPage({
             {successOrder && (
                 <div className="checkout-modal-overlay">
                     <div className="checkout-modal-content">
-                        <div className="checkout-success-icon">✓</div>
+                        <div className="checkout-success-icon"><MaterialCommunityIcon name="check-circle-outline" size={42} /></div>
                         <h2 className="checkout-success-title">Đặt hàng thành công!</h2>
                         <p className="checkout-success-desc">
                             Cảm ơn bạn đã lựa chọn SERN Bookstore. Đơn hàng của bạn đã được ghi nhận vào hệ thống và đang được chuẩn bị để đóng gói chuyển giao.
                         </p>
 
                         <div className="checkout-success-details">
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-reference">
                                 <span className="checkout-success-label">Mã tham chiếu đơn:</span>
                                 <span className="checkout-success-value">
-                                    {successOrder.orderCode}
+                                    <span className="checkout-success-code">{successOrder.orderCode}</span>
                                     <button
                                         type="button"
                                         className="order-copy-id-btn"
                                         title="Sao chép toàn bộ mã đơn"
                                         onClick={() => {
                                             if (navigator?.clipboard?.writeText) {
-                                                navigator.clipboard.writeText(successOrder.orderCode).catch(() => {});
+                                                navigator.clipboard.writeText(successOrder.orderCode).catch(() => triggerToast('Không thể sao chép mã đơn hàng.', 'warning'));
                                             }
                                         }}
                                     >
-                                        📋 Chép mã
+                                        <MaterialCommunityIcon name="content-copy" size={15} />
+                                        Chép mã
                                     </button>
                                 </span>
                             </div>
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-recipient">
                                 <span className="checkout-success-label">Người nhận hàng:</span>
                                 <span className="checkout-success-value">{successOrder.fullName}</span>
                             </div>
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-recipient">
                                 <span className="checkout-success-label">Số điện thoại:</span>
                                 <span className="checkout-success-value">{successOrder.phone}</span>
                             </div>
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-address">
                                 <span className="checkout-success-label">Địa chỉ giao:</span>
                                 <span className="checkout-success-value">{successOrder.address}</span>
                             </div>
                             {successOrder.ghnCode && (
-                                <div className="checkout-success-row">
+                                <div className="checkout-success-row checkout-success-shipping-code">
                                     <span className="checkout-success-label">Mã vận đơn GHN:</span>
                                     <span className="checkout-success-value" style={{ color: '#c2410c', fontWeight: 700 }}>
                                         {successOrder.ghnCode}
                                     </span>
                                 </div>
                             )}
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-payment">
                                 <span className="checkout-success-label">Phương thức:</span>
                                 <span className="checkout-success-value">{successOrder.paymentMethod}</span>
                             </div>
-                            <div className="checkout-success-row">
+                            <div className="checkout-success-row checkout-success-total">
                                 <span className="checkout-success-label">Tổng thanh toán:</span>
                                 <span className="checkout-success-value">{formatCurrency(successOrder.total)}</span>
                             </div>

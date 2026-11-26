@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import orderService from '../services/orderService'
+import { MaterialCommunityIcon } from './common/Icons'
 import './PaymentResult.css'
 
 function formatCurrency(amount) {
@@ -235,7 +236,7 @@ function PaymentResult({
                   onClick={handleRestoreCart}
                   disabled={restoringCart}
                 >
-                  {restoringCart ? 'Đang khôi phục...' : '🛒 Khôi phục lại vào giỏ hàng'}
+                   {restoringCart ? 'Đang khôi phục...' : <><MaterialCommunityIcon name="cart" size={15} />Khôi phục lại vào giỏ hàng</>}
                 </button>
               )}
               {restoreMessage && (
@@ -266,4 +267,3 @@ function PaymentResult({
 }
 
 export default PaymentResult
-

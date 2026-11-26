@@ -511,9 +511,9 @@
 .checkout-modal-content {
     background-color: #ffffff;
     border: 1.5px solid #e2e8f0;
-    border-radius: 20px;
-    padding: 36px 32px;
-    max-width: 520px;
+    border-radius: 24px;
+    padding: 34px 32px 30px;
+    max-width: 600px;
     width: 100%;
     text-align: center;
     box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
@@ -529,54 +529,111 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2.2rem;
-    margin: 0 auto 20px;
+    margin: 0 auto 18px;
+}
+
+.checkout-success-icon svg {
+    display: block;
 }
 
 .checkout-success-title {
-    font-size: 1.6rem;
+    font-size: clamp(1.45rem, 3vw, 1.8rem);
     font-weight: 800;
     color: #0f172a;
     margin: 0 0 10px;
 }
 
 .checkout-success-desc {
-    font-size: 0.95rem;
+    max-width: 500px;
+    margin: 0 auto 24px;
+    font-size: 0.94rem;
     color: #64748b;
     line-height: 1.6;
-    margin: 0 0 24px;
 }
 
 .checkout-success-details {
     background-color: #f8fafc;
     border: 1.5px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 24px;
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 22px;
     text-align: left;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
     font-size: 0.9rem;
 }
 
 .checkout-success-row {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 9px 0;
+    border-bottom: 1px solid #e7edf3;
+}
+
+.checkout-success-row:last-child {
+    border-bottom: 0;
 }
 
 .checkout-success-label {
+    flex: 0 0 145px;
     color: #64748b;
+    line-height: 1.35;
 }
 
 .checkout-success-value {
+    min-width: 0;
+    flex: 1;
     color: #0f172a;
     font-weight: 700;
+    line-height: 1.4;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.checkout-success-reference {
+    align-items: center;
+    padding-top: 2px;
+    padding-bottom: 13px;
+}
+
+.checkout-success-reference .checkout-success-value {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.checkout-success-code {
+    overflow-wrap: anywhere;
+}
+
+.checkout-success-address .checkout-success-value {
+    max-width: 360px;
+}
+
+.checkout-success-total {
+    margin-top: 5px;
+    padding-top: 14px;
+    border-top: 1px solid #cbd8e4;
+    border-bottom: 0;
+}
+
+.checkout-success-total .checkout-success-label {
+    color: #334155;
+    font-weight: 700;
+}
+
+.checkout-success-total .checkout-success-value {
+    color: #0088a9;
+    font-size: 1.08rem;
 }
 
 .checkout-modal-actions {
     display: flex;
-    gap: 12px;
+    gap: 14px;
 }
 
 .checkout-modal-btn-primary {
@@ -585,7 +642,8 @@
     color: #ffffff;
     border: none;
     border-radius: 10px;
-    padding: 14px;
+    min-height: 48px;
+    padding: 12px 16px;
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
@@ -602,7 +660,8 @@
     color: #0088a9;
     border: 1.5px solid #0088a9;
     border-radius: 10px;
-    padding: 14px;
+    min-height: 48px;
+    padding: 12px 16px;
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
@@ -611,6 +670,63 @@
 
 .checkout-modal-btn-secondary:hover {
     background-color: #e6f4f8;
+}
+
+.order-copy-id-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex: 0 0 auto;
+    border: 1px solid #b8e4f0;
+    border-radius: 7px;
+    padding: 5px 8px;
+    background: #eaf8fb;
+    color: #007f96;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.order-copy-id-btn:hover {
+    background: #d7f1f6;
+}
+
+@media (max-width: 560px) {
+    .checkout-modal-content {
+        padding: 28px 18px 22px;
+    }
+
+    .checkout-success-details {
+        padding: 14px 15px;
+    }
+
+    .checkout-success-row {
+        gap: 12px;
+    }
+
+    .checkout-success-label {
+        flex-basis: 112px;
+    }
+
+    .checkout-success-reference {
+        display: block;
+    }
+
+    .checkout-success-reference .checkout-success-value {
+        justify-content: flex-start;
+        margin-top: 7px;
+        text-align: left;
+    }
+
+    .checkout-success-address .checkout-success-value {
+        max-width: none;
+    }
+
+    .checkout-modal-actions {
+        flex-direction: column;
+    }
 }
 
 @keyframes scaleIn {

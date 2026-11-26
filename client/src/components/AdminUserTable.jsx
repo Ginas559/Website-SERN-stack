@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useMemo, useRef } from 'react'
 import debounce from 'lodash.debounce'
-import { RefreshIcon } from './common/Icons'
+import { RefreshIcon, MaterialCommunityIcon } from './common/Icons'
+import AdminConfirmModal from './AdminConfirmModal'
 
 function formatShortUserId(id) {
   const raw = String(id || '').trim()
@@ -50,6 +51,7 @@ function AdminUserTable({
   const [prevSearch, setPrevSearch] = useState(search)
   const [sortBy, setSortBy] = useState('createdAt')
   const [sortOrder, setSortOrder] = useState('desc')
+  const [pendingRestoreUser, setPendingRestoreUser] = useState(null)
   const [copiedUserId, setCopiedUserId] = useState(null)
   const copyTimerRef = useRef(null)
 
@@ -162,7 +164,12 @@ function AdminUserTable({
         const timeB = valB ? new Date(valB).getTime() : 0
         return sortOrder === 'asc' ? timeA - timeB : timeB - timeA
       }
-      if (sortBy === 'isAdmin' || sortBy === 'isVip' || sortBy === 'isDelete') {
+      if (sortBy === 'role') {
+        return sortOrder === 'asc'
+          ? String(valA || '').localeCompare(String(valB || ''), 'vi')
+          : String(valB || '').localeCompare(String(valA || ''), 'vi')
+      }
+      if (sortBy === 'isVip' || sortBy === 'isDelete') {
         const numA = a[sortBy] ? 1 : 0
         const numB = b[sortBy] ? 1 : 0
         return sortOrder === 'asc' ? numA - numB : numB - numA
@@ -190,8 +197,8 @@ function AdminUserTable({
             onChange={(e) => onStatusFilterChange(e.target.value)}
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="0">🟢 Đang hoạt động</option>
-            <option value="1">🔒 Đang bị khóa</option>
+            <option value="0">Đang hoạt động</option>
+            <option value="1">Đang bị khóa</option>
           </select>
           <select
             className="admin-filter-select"
@@ -201,6 +208,7 @@ function AdminUserTable({
             <option value="all">Tất cả vai trò</option>
             <option value="admin">Quản trị viên</option>
             <option value="customer">Khách hàng</option>
+            <option value="shipper">Shipper</option>
           </select>
           <select
             className="admin-filter-select"
@@ -208,7 +216,7 @@ function AdminUserTable({
             onChange={(e) => onVipFilterChange(e.target.value)}
           >
             <option value="all">Tất cả hạng</option>
-            <option value="1">⭐ Khách hàng VIP</option>
+            <option value="1">Khách hàng VIP</option>
             <option value="0">Thường</option>
           </select>
           <button
@@ -225,7 +233,7 @@ function AdminUserTable({
 
       <div className="admin-table-wrapper">
         {loading && sortedUsers.length > 0 && <div className="admin-table-loading-bar" />}
-        <table className="admin-table">
+        <table className="admin-table admin-user-table">
           <thead>
             <tr>
               <th
@@ -245,12 +253,12 @@ function AdminUserTable({
                 Thông tin liên hệ {renderSortIndicator('email')}
               </th>
               <th
-                className={`admin-th-sortable ${sortBy === 'isAdmin' ? 'sorted' : ''}`}
+                className={`admin-th-sortable ${sortBy === 'role' ? 'sorted' : ''}`}
                 style={{ width: '130px', textAlign: 'center' }}
-                onClick={() => handleSort('isAdmin')}
+                onClick={() => handleSort('role')}
                 title="Nhấn để sắp xếp theo Vai trò"
               >
-                Vai trò {renderSortIndicator('isAdmin')}
+                Vai trò {renderSortIndicator('role')}
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'isVip' ? 'sorted' : ''}`}
@@ -295,12 +303,18 @@ function AdminUserTable({
             ) : (
               sortedUsers.map((user) => {
                 const isBlocked = Boolean(user.isDelete)
-                const isAdmin = Boolean(user.isAdmin)
+                const hasAdminRole = user.role === 'Admin'
+                const isShipper = user.role === 'Shipper'
                 const rawUserId = String(user.id || '').trim()
                 const isCopied = copiedUserId === rawUserId
 
                 return (
-                  <tr key={user.id} className={isBlocked ? 'admin-row-muted' : ''}>
+                  <tr
+                    key={user.id}
+                    className={`${isBlocked ? 'admin-row-muted ' : ''}admin-user-clickable-row`}
+                    onClick={() => onViewDetail(user)}
+                    title="Bấm để xem chi tiết người dùng"
+                  >
                     <td>
                       <div className="admin-user-cell">
                         <div className="admin-user-avatar-small">
@@ -315,73 +329,70 @@ function AdminUserTable({
                             <button
                               type="button"
                               className={`admin-copy-id-btn ${isCopied ? 'copied' : ''}`}
-                              onClick={() => handleCopyUserId(rawUserId)}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                handleCopyUserId(rawUserId)
+                              }}
                               title={isCopied ? 'Đã sao chép ID đầy đủ' : `Sao chép ID đầy đủ: ${rawUserId}`}
                             >
-                              {isCopied ? '✓ Đã chép' : '📋 Chép'}
+                               {isCopied ? '✓ Đã chép' : <><MaterialCommunityIcon name="clipboard-text" size={14} />Chép</>}
                             </button>
                           </div>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <div className="admin-contact-email">📧 {user.email}</div>
+                        <div className="admin-contact-email"><MaterialCommunityIcon name="email" size={14} /> {user.email}</div>
                       <div className="admin-contact-phone">
-                        📱 {user.phone_number || user.phoneNumber || user.phone || <span className="admin-text-muted">Chưa cập nhật</span>}
+                          <MaterialCommunityIcon name="cellphone" size={14} /> {user.phone_number || user.phoneNumber || user.phone || <span className="admin-text-muted">Chưa cập nhật</span>}
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      {isAdmin ? (
+                      {hasAdminRole ? (
                         <span className="admin-role-badge admin">Quản trị</span>
+                      ) : isShipper ? (
+                        <span className="admin-role-badge customer">Shipper</span>
                       ) : (
                         <span className="admin-role-badge customer">Độc giả</span>
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {user.isVip ? (
-                        <span className="admin-vip-badge">⭐ VIP ({user.vipTier || 'Gold'})</span>
+                         <span className="admin-vip-badge"><MaterialCommunityIcon name="star" size={14} /> VIP ({user.vipTier || 'Gold'})</span>
                       ) : (
                         <span className="admin-regular-badge">Thường</span>
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {isBlocked ? (
-                        <span className="admin-status-badge blocked">🔒 Đã khóa</span>
+                         <span className="admin-status-badge blocked"><MaterialCommunityIcon name="lock" size={14} /> Đã khóa</span>
                       ) : (
-                        <span className="admin-status-badge active">🟢 Hoạt động</span>
+                         <span className="admin-status-badge active"><MaterialCommunityIcon name="check-circle-outline" size={14} /> Hoạt động</span>
                       )}
                     </td>
                     <td>
                       <div className="admin-date-text">{formatDate(user.createdAt)}</div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <div className="admin-table-actions">
-                        <button
-                          type="button"
-                          className="admin-btn-action detail"
-                          onClick={() => onViewDetail(user)}
-                          title="Xem chi tiết người dùng"
-                        >
-                          👁️ Chi tiết
-                        </button>
+                      <div className="admin-table-actions" onClick={(event) => event.stopPropagation()}>
                         {isBlocked ? (
                           <button
                             type="button"
                             className="admin-btn-action restore"
-                            onClick={() => onRestoreUser(user)}
+                            onClick={() => setPendingRestoreUser(user)}
                             title="Khôi phục tài khoản"
                           >
-                            🔄 Mở khóa
+                             <MaterialCommunityIcon name="sync" size={15} />Mở khóa
                           </button>
                         ) : (
                           <button
                             type="button"
                             className="admin-btn-action delete"
-                            disabled={isAdmin}
+                            disabled={hasAdminRole}
                             onClick={() => onRequestBlock(user)}
-                            title={isAdmin ? 'Không thể khóa tài khoản Admin' : 'Khóa tài khoản'}
+                            title={hasAdminRole ? 'Không thể khóa tài khoản Admin' : 'Khóa tài khoản'}
                           >
-                            🔒 Khóa
+                             <MaterialCommunityIcon name="lock" size={15} />Khóa
                           </button>
                         )}
                       </div>
@@ -422,6 +433,19 @@ function AdminUserTable({
           </div>
         </div>
       )}
+
+      <AdminConfirmModal
+        isOpen={Boolean(pendingRestoreUser)}
+        title="Xác nhận mở khóa tài khoản"
+        message={`Bạn có muốn mở khóa tài khoản của “${pendingRestoreUser?.fullName || pendingRestoreUser?.username || 'người dùng này'}” không?`}
+        confirmLabel="Xác nhận mở khóa"
+        onCancel={() => setPendingRestoreUser(null)}
+        onConfirm={() => {
+          const user = pendingRestoreUser
+          setPendingRestoreUser(null)
+          onRestoreUser(user)
+        }}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useMemo } from 'react'
 import debounce from 'lodash.debounce'
-import { RefreshIcon } from './common/Icons'
+import { RefreshIcon, MaterialCommunityIcon } from './common/Icons'
+import AdminConfirmModal from './AdminConfirmModal'
 
 function formatDate(dateStr) {
   if (!dateStr) return '—'
@@ -41,6 +42,7 @@ function AdminReviewTable({
   const [sortOrder, setSortOrder] = useState('desc')
   const [selectedReview, setSelectedReview] = useState(null)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [pendingStatusReview, setPendingStatusReview] = useState(null)
 
   if (search !== prevSearch) {
     setPrevSearch(search)
@@ -166,8 +168,8 @@ function AdminReviewTable({
             onChange={(e) => onStatusFilterChange(e.target.value)}
           >
             <option value="all">Tất cả trạng thái</option>
-            <option value="0">🟢 Đang hiển thị</option>
-            <option value="1">🔒 Đã ẩn vi phạm</option>
+            <option value="0">Đang hiển thị</option>
+            <option value="1">Đã ẩn vi phạm</option>
           </select>
           <select
             className="admin-filter-select"
@@ -180,7 +182,7 @@ function AdminReviewTable({
             <option value="3">★★★☆☆ 3 sao</option>
             <option value="2">★★☆☆☆ 2 sao</option>
             <option value="1">★☆☆☆☆ 1 sao</option>
-            <option value="discussion">💬 Thảo luận & Hỏi đáp</option>
+             <option value="discussion">Thảo luận &amp; Hỏi đáp</option>
           </select>
           <button
             type="button"
@@ -196,7 +198,7 @@ function AdminReviewTable({
 
       <div className="admin-table-wrapper">
         {loading && sortedReviews.length > 0 && <div className="admin-table-loading-bar" />}
-        <table className="admin-table">
+        <table className="admin-table admin-review-table">
           <thead>
             <tr>
               <th
@@ -221,7 +223,7 @@ function AdminReviewTable({
                 onClick={() => handleSort('user_name')}
                 title="Nhấn để sắp xếp theo Độc giả"
               >
-                Độc giả {renderSortIndicator('user_name')}
+                Người gửi {renderSortIndicator('user_name')}
               </th>
               <th
                 className={`admin-th-sortable ${sortBy === 'rate' ? 'sorted' : ''}`}
@@ -231,7 +233,6 @@ function AdminReviewTable({
               >
                 Đánh giá {renderSortIndicator('rate')}
               </th>
-              <th style={{ minWidth: '240px' }}>Nội dung nhận xét</th>
               <th
                 className={`admin-th-sortable ${sortBy === 'isDelete' ? 'sorted' : ''}`}
                 style={{ width: '130px', textAlign: 'center' }}
@@ -248,19 +249,19 @@ function AdminReviewTable({
               >
                 Thời gian {renderSortIndicator('createdAt')}
               </th>
-              <th style={{ width: '160px', textAlign: 'center' }}>Thao tác</th>
+              <th style={{ width: '120px', textAlign: 'center' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody className={loading && sortedReviews.length > 0 ? 'admin-tbody-loading' : ''}>
             {loading && sortedReviews.length === 0 ? (
               <tr>
-                <td colSpan="8" className="admin-table-empty">
+                  <td colSpan="7" className="admin-table-empty">
                   Đang tải danh sách bài đánh giá...
                 </td>
               </tr>
             ) : sortedReviews.length === 0 ? (
               <tr>
-                <td colSpan="8" className="admin-table-empty">
+                  <td colSpan="7" className="admin-table-empty">
                   Không tìm thấy đánh giá hoặc bình luận nào.
                 </td>
               </tr>
@@ -270,47 +271,28 @@ function AdminReviewTable({
                 const isRating = rev.rate !== null && rev.rate !== undefined
 
                 return (
-                  <tr key={rev.id} className={isHidden ? 'admin-row-muted' : ''}>
+                  <tr
+                    key={rev.id}
+                    className={`${isHidden ? 'admin-row-muted ' : ''}admin-review-clickable-row`}
+                    onClick={() => setSelectedReview(rev)}
+                    title="Bấm để xem chi tiết"
+                  >
                     <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#0088a9' }}>
                       #{rev.id}
                     </td>
-                    <td>
-                      <div style={{ fontWeight: '600', color: '#0f172a' }}>
+                    <td className="admin-review-book-cell">
+                      <div className="admin-review-primary">
                         {rev.book_title || <span style={{ color: '#64748b' }}>Sách #{rev.book_id}</span>}
                       </div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                        ID sách: #{rev.book_id}
-                      </div>
                     </td>
-                    <td>
-                      <div style={{ fontWeight: '600', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <span>{rev.user_name || rev.user_full_name || rev.user_username || 'Khách hàng'}</span>
-                        {rev.parent_id && (rev.parent_user_full_name || rev.parent_user_username) ? (
-                          <span
-                            style={{
-                              fontSize: '0.76rem',
-                              color: '#0088a9',
-                              background: '#e6f4f8',
-                              border: '1px solid #bce1ec',
-                              borderRadius: '4px',
-                              padding: '1px 5px',
-                              fontWeight: '500'
-                            }}
-                            title={`Trả lời ${rev.parent_user_full_name || rev.parent_user_username}`}
-                          >
-                            &gt; {rev.parent_user_full_name || rev.parent_user_username}
-                          </span>
-                        ) : null}
+                    <td className="admin-review-user-cell">
+                      <div className="admin-review-primary admin-review-user-name">
+                        {rev.user_name || rev.user_full_name || rev.user_username || 'Khách hàng'}
                       </div>
-                      {rev.user_username ? (
-                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                          @{rev.user_username}
-                        </div>
-                      ) : null}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {isRating ? (
-                        <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+                         <span className="admin-review-stars">
                           {'★'.repeat(rev.rate)}{'☆'.repeat(5 - rev.rate)}
                           <span style={{ fontSize: '0.8rem', marginLeft: '4px', color: '#64748b' }}>
                             ({rev.rate})
@@ -318,56 +300,26 @@ function AdminReviewTable({
                         </span>
                       ) : rev.parent_id ? (
                         <span
-                          style={{
-                            background: '#f3e8ff',
-                            color: '#7e22ce',
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '0.78rem'
-                          }}
+                          className="admin-review-type reply"
                         >
-                          ↩️ Phản hồi {rev.parent_user_full_name || rev.parent_user_username ? `@${rev.parent_user_full_name || rev.parent_user_username}` : `#${rev.parent_id}`}
+                            <MaterialCommunityIcon name="arrow-u-turn-left" size={14} /> Phản hồi
                         </span>
                       ) : (
                         <span
-                          style={{
-                            background: '#e0f2fe',
-                            color: '#0369a1',
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '0.78rem'
-                          }}
+                          className="admin-review-type discussion"
                         >
-                          💬 Thảo luận
+                          <MaterialCommunityIcon name="message" size={14} /> Thảo luận
                         </span>
                       )}
-                    </td>
-                    <td>
-                      <div
-                        style={{
-                          fontSize: '0.88rem',
-                          color: '#0f172a',
-                          lineHeight: 1.4,
-                          maxWidth: '300px',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                        title={rev.value || ''}
-                      >
-                        {rev.value || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Không có nội dung</span>}
-                      </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {isHidden ? (
                         <span className="admin-status-badge blocked" style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                          🔒 Đã ẩn
+                           <MaterialCommunityIcon name="lock" size={14} /> Đã ẩn
                         </span>
                       ) : (
                         <span className="admin-status-badge active">
-                          🟢 Hiển thị
+                           <MaterialCommunityIcon name="check-circle-outline" size={14} /> Hiển thị
                         </span>
                       )}
                     </td>
@@ -375,30 +327,18 @@ function AdminReviewTable({
                       {formatDate(rev.createdAt)}
                     </td>
                     <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                      <div className="admin-review-actions">
                         <button
                           type="button"
-                          className="admin-btn-action"
-                          onClick={() => setSelectedReview(rev)}
-                          title="Xem chi tiết nội dung"
-                          style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                        >
-                          👁️ Chi tiết
-                        </button>
-                        <button
-                          type="button"
-                          className={`admin-btn-action ${isHidden ? 'restore' : 'danger'}`}
-                          onClick={() => handleActionToggle(rev)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setPendingStatusReview(rev)
+                          }}
                           disabled={isUpdatingStatus}
                           title={isHidden ? 'Khôi phục hiển thị bài viết' : 'Ẩn bài viết khỏi người xem'}
-                          style={{
-                            padding: '4px 8px',
-                            fontSize: '0.8rem',
-                            color: isHidden ? '#86efac' : '#fca5a5',
-                            borderColor: isHidden ? '#166534' : '#7f1d1d'
-                          }}
+                          className={`admin-btn-action ${isHidden ? 'restore' : 'danger'} admin-review-action`}
                         >
-                          {isHidden ? '🟢 Mở lại' : '🔒 Ẩn'}
+                           <><MaterialCommunityIcon name={isHidden ? 'check-circle-outline' : 'lock'} size={15} />{isHidden ? 'Mở lại' : 'Ẩn'}</>
                         </button>
                       </div>
                     </td>
@@ -436,7 +376,7 @@ function AdminReviewTable({
 
       {selectedReview ? (
         <div className="admin-modal-backdrop" onClick={() => setSelectedReview(null)}>
-          <div className="admin-modal admin-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px' }}>
+          <div className="admin-modal admin-modal-card admin-review-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-header">
               <h3 className="admin-modal-title">Chi tiết bài đánh giá #{selectedReview.id}</h3>
               <button
@@ -448,82 +388,66 @@ function AdminReviewTable({
               </button>
             </div>
 
-            <div className="admin-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>Ấn phẩm sách:</span>
-                  <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{selectedReview.book_title || `Sách #${selectedReview.book_id}`}</strong>
-                  <div style={{ fontSize: '0.78rem', color: '#0088a9' }}>Mã sách: #{selectedReview.book_id}</div>
+            <div className="admin-modal-body admin-review-modal-body">
+              <div className="admin-review-meta-grid">
+                <div className="admin-review-meta-item">
+                  <span>Ấn phẩm sách</span>
+                  <strong>{selectedReview.book_title || `Sách #${selectedReview.book_id}`}</strong>
+                  <small>Mã sách: #{selectedReview.book_id}</small>
                 </div>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>Người gửi:</span>
-                  <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{selectedReview.user_full_name || selectedReview.user_username || 'Độc giả'}</strong>
+                <div className="admin-review-meta-item">
+                  <span>Người gửi</span>
+                  <strong>{selectedReview.user_full_name || selectedReview.user_username || 'Độc giả'}</strong>
                   {selectedReview.user_username ? (
-                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>@{selectedReview.user_username}</div>
+                    <small>@{selectedReview.user_username}</small>
                   ) : null}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 2px' }}>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>Hình thức:</span>
+              <div className="admin-review-detail-grid">
+                <div className="admin-review-detail-item">
+                  <span>Hình thức</span>
                   {selectedReview.rate !== null && selectedReview.rate !== undefined ? (
                     <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: '1rem' }}>
-                      {selectedReview.rate} ★ (Đánh giá chất lượng)
+                       <MaterialCommunityIcon name="star" size={15} /> {selectedReview.rate} (Đánh giá chất lượng)
                     </span>
                   ) : selectedReview.parent_id ? (
                     <span style={{ color: '#7e22ce', fontWeight: 600 }}>
-                      ↩️ Trả lời {selectedReview.parent_user_full_name || selectedReview.parent_user_username ? `@${selectedReview.parent_user_full_name || selectedReview.parent_user_username}` : `bình luận #${selectedReview.parent_id}`}
+                       <MaterialCommunityIcon name="arrow-u-turn-left" size={15} /> Trả lời {selectedReview.parent_user_full_name || selectedReview.parent_user_username ? `@${selectedReview.parent_user_full_name || selectedReview.parent_user_username}` : `bình luận #${selectedReview.parent_id}`}
                     </span>
                   ) : (
                     <span style={{ color: '#60a5fa', fontWeight: 600 }}>
-                      💬 Câu hỏi / Thảo luận
+                       <MaterialCommunityIcon name="message" size={15} /> Câu hỏi / Thảo luận
                     </span>
                   )}
                 </div>
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '8px' }}>Trạng thái:</span>
+                <div className="admin-review-detail-item">
+                  <span>Trạng thái</span>
                   {selectedReview.isDelete ? (
-                    <span style={{ color: '#fca5a5', fontWeight: 600 }}>🔒 Đang bị ẩn</span>
+                     <span style={{ color: '#fca5a5', fontWeight: 600 }}><MaterialCommunityIcon name="lock" size={15} /> Đang bị ẩn</span>
                   ) : (
-                    <span style={{ color: '#86efac', fontWeight: 600 }}>🟢 Đang hiển thị</span>
+                     <span style={{ color: '#86efac', fontWeight: 600 }}><MaterialCommunityIcon name="check-circle-outline" size={15} /> Đang hiển thị</span>
                   )}
                 </div>
               </div>
 
-              <div>
-                <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '6px' }}>
-                  Nội dung nhận xét:
-                </span>
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    padding: '14px',
-                    color: '#0f172a',
-                    fontSize: '0.92rem',
-                    lineHeight: 1.6,
-                    maxHeight: '220px',
-                    overflowY: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word'
-                  }}
-                >
+              <div className="admin-review-message-block">
+                <span>Nội dung nhận xét</span>
+                <div className="admin-review-message">
                   {selectedReview.value || <span style={{ fontStyle: 'italic', color: '#64748b' }}>Người dùng không để lại bình luận văn bản.</span>}
                 </div>
               </div>
 
-              <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'right' }}>
-                Thời gian tạo: {formatDate(selectedReview.createdAt)}
+              <div className="admin-review-created-at">
+                Tạo lúc {formatDate(selectedReview.createdAt)}
               </div>
             </div>
 
-            <div className="admin-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderTop: '1px solid #e2e8f0' }}>
+            <div className="admin-modal-footer admin-review-modal-footer">
               <button
                 type="button"
                 className={`admin-btn-action ${selectedReview.isDelete ? 'restore' : 'danger'}`}
-                onClick={() => handleActionToggle(selectedReview)}
+                onClick={() => setPendingStatusReview(selectedReview)}
                 disabled={isUpdatingStatus}
                 style={{
                   padding: '8px 16px',
@@ -534,7 +458,7 @@ function AdminReviewTable({
                   borderColor: selectedReview.isDelete ? '#166534' : '#7f1d1d'
                 }}
               >
-                {selectedReview.isDelete ? '🟢 Khôi phục hiển thị' : '🔒 Khóa ẩn bài viết'}
+                 <><MaterialCommunityIcon name={selectedReview.isDelete ? 'check-circle-outline' : 'lock'} size={15} />{selectedReview.isDelete ? 'Khôi phục hiển thị' : 'Khóa ẩn bài viết'}</>
               </button>
 
               <button
@@ -549,6 +473,20 @@ function AdminReviewTable({
           </div>
         </div>
       ) : null}
+
+      <AdminConfirmModal
+        isOpen={Boolean(pendingStatusReview)}
+        title={pendingStatusReview?.isDelete ? 'Xác nhận khôi phục nội dung' : 'Xác nhận ẩn nội dung'}
+        message={pendingStatusReview?.isDelete ? 'Bạn có muốn hiển thị lại đánh giá hoặc bình luận này không?' : 'Bạn có muốn ẩn đánh giá hoặc bình luận này khỏi website không?'}
+        confirmLabel={pendingStatusReview?.isDelete ? 'Xác nhận khôi phục' : 'Xác nhận ẩn'}
+        danger={!pendingStatusReview?.isDelete}
+        onCancel={() => setPendingStatusReview(null)}
+        onConfirm={() => {
+          const review = pendingStatusReview
+          setPendingStatusReview(null)
+          handleActionToggle(review)
+        }}
+      />
     </div>
   )
 }

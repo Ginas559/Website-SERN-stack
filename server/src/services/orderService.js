@@ -10,6 +10,7 @@ const storePolicyService = require("./storePolicyService");
 const discountModel = require("../models/discountModel");
 const userModel = require("../models/userModel");
 const ghnService = require("./ghnService");
+const orderAssignmentModel = require("../models/orderAssignmentModel");
 const AppError = require("../utils/AppError");
 const {
     SUPPORTED_PAYMENT_METHODS,
@@ -17,6 +18,11 @@ const {
     calculateShippingFee,
     calculateSelectedItemsTotals
 } = require("../utils/pricing");
+
+function isInternalDeliveryType(value) {
+    const normalized = String(value || "").trim().toUpperCase();
+    return normalized === "INTERNAL";
+}
 
 function validatePhoneNumber(phone) {
     let trimmed = typeof phone === "string" ? phone.trim().replace(/\D/g, "") : "";
@@ -120,23 +126,11 @@ async function createOrderFromCart(userId, orderPayload = {}) {
             toDistrictId: orderPayload.toDistrictId,
             toWardCode: orderPayload.toWardCode,
             provinceId: orderPayload.provinceId,
-            provinceName: orderPayload.provinceName,
             weightInGrams: estimatedWeightGrams,
             orderTotal: subtotal
         });
     } else {
-        const isHcm = ghnService.isInnerCityHcm(address, null);
-        if (!isHcm) {
-            throw new AppError("Địa chỉ nhận hàng liên tỉnh cần chọn Quận/Huyện và Phường/Xã để tính phí vận chuyển GHN chính xác.", 400);
-        }
-        const shippingRule = await storePolicyService.getShippingPolicy();
-        const fee = calculateShippingFee(subtotal, shippingRule);
-        shippingCalculation = {
-            shippingFee: fee,
-            deliveryType: "INTERNAL",
-            deliveryProvider: "Shop Shipper (Nội thành TP.HCM)",
-            estimatedDelivery: "Giao nhanh trong 24 giờ"
-        };
+        throw new AppError("Vui lòng chọn Tỉnh/Thành, Quận/Huyện và Phường/Xã từ danh sách GHN.", 400);
     }
     const shippingFee = shippingCalculation.shippingFee;
     if (
@@ -210,13 +204,8 @@ async function createOrderFromCart(userId, orderPayload = {}) {
 
     const ghnInfo = {
         receiverName,
-        recipientName: receiverName,
-        fullName: receiverName,
         phone,
-        phoneNumber: phone,
-        recipientPhone: phone,
         address,
-        shippingAddress: address,
         note,
         subtotal,
         shippingFee,
@@ -307,13 +296,14 @@ async function createOrderFromCart(userId, orderPayload = {}) {
         try {
             await transaction.rollback();
         } catch {
-            return;
+            void error;
         }
         orderModel.handleOrderWriteError(error);
     }
 }
 
-async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, currentStatus = null } = {}) {
+async function cancelOrder(orderId, userId, { reason = null, actorRole = null, currentStatus = null } = {}) {
+    const adminActor = actorRole === "Admin";
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -323,11 +313,11 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
         throw new AppError("Không tìm thấy đơn hàng.", 404);
     }
 
-    if (!isAdmin && order.user_id !== userId) {
+    if (!adminActor && order.user_id !== userId) {
         throw new AppError("Bạn không có quyền hủy đơn hàng này.", 403);
     }
 
-    if (!isAdmin && order.payment_method === "VNPAY" && Number(order.status) >= 1) {
+    if (!adminActor && order.payment_method === "VNPAY" && Number(order.status) >= 1) {
         throw new AppError("Đơn hàng đã được thanh toán qua VNPAY. Quý khách vui lòng liên hệ bộ phận Chăm sóc khách hàng để được hỗ trợ đối soát và hoàn tiền.", 400);
     }
 
@@ -343,7 +333,7 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
         throw new AppError("Đơn hàng đã được giao thành công, không thể hủy.", 400);
     }
 
-    if (order.status === 2 && !isAdmin) {
+    if (order.status === 2 && !adminActor) {
         throw new AppError("Đơn hàng đang trên đường giao, khách hàng không thể tự hủy.", 400);
     }
 
@@ -353,6 +343,15 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
 
     try {
         const expectedCancelStatus = currentStatus !== null && currentStatus !== undefined ? Number(currentStatus) : order.status;
+        const assignmentCancelResult = await orderAssignmentModel.cancelActiveByOrderId(
+            orderId,
+            reason || (adminActor ? "Quản trị viên hủy đơn hàng" : "Khách hàng hủy đơn hàng"),
+            transaction
+        );
+        if (assignmentCancelResult?.blocked) {
+            throw new AppError("Đơn hàng đã được shipper nhận và đang giao, không thể hủy.", 409);
+        }
+
         const updatedOrder = await orderModel.updateStatus(orderId, 4, expectedCancelStatus, transaction);
 
         let ghnInfoObj = {};
@@ -362,9 +361,9 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
             ghnInfoObj = {};
         }
 
-        ghnInfoObj.cancelReason = reason || (isAdmin ? "Quản trị viên hủy đơn hàng" : "Khách hàng yêu cầu hủy đơn");
+        ghnInfoObj.cancelReason = reason || (adminActor ? "Quản trị viên hủy đơn hàng" : "Khách hàng yêu cầu hủy đơn");
         ghnInfoObj.cancelledAt = new Date().toISOString();
-        ghnInfoObj.cancelledBy = isAdmin ? "ADMIN" : "CUSTOMER";
+        ghnInfoObj.cancelledBy = adminActor ? "ADMIN" : "CUSTOMER";
 
         const updateInfoReq = new sql.Request(transaction);
         await updateInfoReq
@@ -404,7 +403,7 @@ async function cancelOrder(orderId, userId, { reason = null, isAdmin = false, cu
         try {
             await transaction.rollback();
         } catch {
-            return;
+            void error;
         }
         orderModel.handleOrderWriteError(error);
     }
@@ -434,7 +433,7 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
     }
 
     if (safeNext === 4) {
-        return await cancelOrder(orderId, null, { isAdmin: true, reason: note, currentStatus });
+        return await cancelOrder(orderId, null, { actorRole: "Admin", reason: note, currentStatus });
     }
 
     if (order.status === 4) {
@@ -458,6 +457,24 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
     await transaction.begin();
 
     try {
+        const ghnInfoForState = typeof order.ghn_info === "string" ? (() => {
+            try {
+                return JSON.parse(order.ghn_info);
+            } catch {
+                return {};
+            }
+        })() : (order.ghn_info || {});
+        let assignment = null;
+        if (isInternalDeliveryType(ghnInfoForState.deliveryType) && [2, 3].includes(safeNext)) {
+            assignment = await orderAssignmentModel.findLatestByOrderIdForUpdate(orderId, transaction);
+            if (safeNext === 2 && (Number(order.status) !== 1 || assignment?.status !== "ACCEPTED" || !assignment.isActive)) {
+                throw new AppError("Đơn nội thành chỉ được chuyển sang đang giao sau khi shipper đã nhận đơn.", 409);
+            }
+            if (safeNext === 3 && (Number(order.status) !== 2 || assignment?.status !== "COMPLETED" || assignment.isActive)) {
+                throw new AppError("Đơn nội thành chỉ được hoàn tất sau khi shipper xác nhận đã giao.", 409);
+            }
+        }
+
         const updated = await orderModel.updateStatus(orderId, safeNext, currentStatus !== null ? Number(currentStatus) : order.status, transaction);
 
         let ghnInfoObj = {};
@@ -488,7 +505,7 @@ async function updateOrderStatus(orderId, nextStatus, { currentStatus = null, no
         try {
             await transaction.rollback();
         } catch {
-            return;
+            void error;
         }
         orderModel.handleOrderWriteError(error);
     }
@@ -540,12 +557,6 @@ function parseOrderJsonFields(order) {
 async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {}) {
     if (!userId) {
         throw new AppError("Người dùng không hợp lệ.", 401);
-    }
-
-    try {
-        await releaseExpiredVnpayOrders();
-    } catch (err) {
-        void err;
     }
 
     const safePage = Math.max(1, Number(page) || 1);
@@ -602,7 +613,8 @@ async function getUserOrders(userId, { page = 1, limit = 10, status = null } = {
     };
 }
 
-async function getOrderDetails(orderId, userId, { isAdmin = false } = {}) {
+async function getOrderDetails(orderId, userId, { actorRole = null } = {}) {
+    const adminActor = actorRole === "Admin";
     if (!orderId) {
         throw new AppError("Mã đơn hàng không hợp lệ.", 400);
     }
@@ -612,20 +624,20 @@ async function getOrderDetails(orderId, userId, { isAdmin = false } = {}) {
         throw new AppError("Không tìm thấy đơn hàng.", 404);
     }
 
-    if (!isAdmin && order.user_id !== userId) {
+    if (!adminActor && order.user_id !== userId) {
         throw new AppError("Bạn không có quyền truy cập thông tin đơn hàng này.", 403);
     }
 
-    return parseOrderJsonFields(order);
+    const parsedOrder = parseOrderJsonFields(order);
+    if (!adminActor) {
+        parsedOrder.assignment_shipper_name = null;
+        parsedOrder.assignment_rejection_reason = null;
+        parsedOrder.assignment_cancellation_reason = null;
+    }
+    return parsedOrder;
 }
 
 async function getAllOrdersForAdmin(filters = {}) {
-    try {
-        await releaseExpiredVnpayOrders();
-    } catch (err) {
-        void err;
-    }
-
     const safePage = Math.max(1, Number(filters.page) || 1);
     const safeLimit = Math.max(1, Math.min(100, Number(filters.limit) || 10));
 
@@ -646,12 +658,17 @@ async function getAllOrdersForAdmin(filters = {}) {
         parsedPaymentMethod = cleanPm;
     }
 
+    const parsedDeliveryType = filters.deliveryType === "INTERNAL" || filters.deliveryType === "GHN"
+        ? filters.deliveryType
+        : null;
+
     const result = await orderModel.findAllForAdmin({
         page: safePage,
         limit: safeLimit,
         search: filters.search || null,
         status: parsedStatus,
         paymentMethod: parsedPaymentMethod,
+        deliveryType: parsedDeliveryType,
         fromDate: filters.fromDate || null,
         toDate: filters.toDate || null,
         sortBy: filters.sortBy || "createdAt",
@@ -822,7 +839,7 @@ async function reorder(orderId, userId) {
         try {
             await transaction.rollback();
         } catch {
-            return;
+            void error;
         }
         orderModel.handleOrderWriteError(error);
     }
@@ -958,6 +975,24 @@ async function syncGhnDelivered(ghnCode) {
 }
 
 async function releaseExpiredVnpayOrders() {
+    const now = Date.now();
+    if (releaseExpiredVnpayOrders.lastRunAt && now - releaseExpiredVnpayOrders.lastRunAt < 60000) {
+        return [];
+    }
+    if (releaseExpiredVnpayOrders.inFlight) {
+        return releaseExpiredVnpayOrders.inFlight;
+    }
+
+    releaseExpiredVnpayOrders.inFlight = releaseExpiredVnpayOrdersInternal();
+    try {
+        return await releaseExpiredVnpayOrders.inFlight;
+    } finally {
+        releaseExpiredVnpayOrders.lastRunAt = Date.now();
+        releaseExpiredVnpayOrders.inFlight = null;
+    }
+}
+
+async function releaseExpiredVnpayOrdersInternal() {
     const pool = await connectDB();
     const req = new sql.Request(pool);
     const expiredRes = await req.query("SELECT id FROM dbo.orders WHERE payment_method = 'VNPAY' AND status = 0 AND createdAt < DATEADD(minute, -15, GETDATE())");
@@ -966,7 +1001,7 @@ async function releaseExpiredVnpayOrders() {
     for (const exp of expiredOrders) {
         try {
             const cancelled = await cancelOrder(exp.id, null, {
-                isAdmin: true,
+                actorRole: "Admin",
                 reason: "Tự động hủy do quá thời gian chờ thanh toán VNPAY (15 phút)"
             });
             cancelledResults.push(cancelled);

@@ -3,6 +3,7 @@ const { body } = require("express-validator");
 const controller = require("../controllers/authController");
 const validate = require("../middleware/validateMiddleware");
 const { protect } = require("../middleware/authMiddleware");
+const { loginRateLimiter, refreshRateLimiter } = require("../middleware/rateLimitMiddleware");
 
 const router = express.Router();
 const passwordRule = (field = "password") => body(field).isLength({ min: 8 }).withMessage("Mật khẩu phải có ít nhất 8 ký tự.")
@@ -20,8 +21,8 @@ router.post("/register", [
     body("confirmPassword").custom((value, { req }) => value === req.body.password)
         .withMessage("Mật khẩu xác nhận không khớp."),
 ], validate, controller.register);
-router.post("/login", [body("email").trim().isEmail().withMessage("Email không hợp lệ."), body("password").notEmpty().withMessage("Vui lòng nhập mật khẩu.")], validate, controller.login);
-router.post("/refresh", controller.refresh);
+router.post("/login", [body("email").trim().isEmail().withMessage("Email không hợp lệ."), body("password").notEmpty().withMessage("Vui lòng nhập mật khẩu.")], validate, loginRateLimiter, controller.login);
+router.post("/refresh", refreshRateLimiter, controller.refresh);
 router.post("/logout", controller.logout);
 router.post("/forgot-password", [body("email").trim().isEmail().withMessage("Email không hợp lệ.")], validate, controller.forgotPassword);
 router.post("/reset-password", [

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { RefreshIcon } from './common/Icons'
+import { RefreshIcon, TagIcon } from './common/Icons'
+import AdminConfirmModal from './AdminConfirmModal'
 
 function AdminCategoryTable({
   categories = [],
@@ -13,6 +14,7 @@ function AdminCategoryTable({
 }) {
   const [sortBy, setSortBy] = useState('id')
   const [sortOrder, setSortOrder] = useState('asc')
+  const [pendingStatusCategory, setPendingStatusCategory] = useState(null)
 
   const handleSort = (field) => {
     if (sortBy === field) {
@@ -101,7 +103,7 @@ function AdminCategoryTable({
 
       <div className="admin-table-wrapper">
         {loading && filteredCategories.length > 0 && <div className="admin-table-loading-bar" />}
-        <table className="admin-table">
+        <table className="admin-table admin-category-table">
           <thead>
             <tr>
               <th
@@ -161,7 +163,7 @@ function AdminCategoryTable({
                     <td className="admin-col-id">#{cat.id}</td>
                     <td>
                       <div className="admin-category-item">
-                        <div className="admin-category-icon">📁</div>
+                        <div className="admin-category-icon"><TagIcon size={20} /></div>
                         <div className="admin-category-name">{cat.name}</div>
                       </div>
                     </td>
@@ -192,7 +194,7 @@ function AdminCategoryTable({
                         <button
                           type="button"
                           className={`admin-btn-action ${isHidden ? 'restore' : 'hide'}`}
-                          onClick={() => onToggleStatus(cat)}
+                          onClick={() => setPendingStatusCategory(cat)}
                         >
                           {isHidden ? 'Hiện' : 'Ẩn'}
                         </button>
@@ -211,6 +213,20 @@ function AdminCategoryTable({
           Tổng cộng: <strong>{filteredCategories.length}</strong> thể loại
         </div>
       </div>
+
+      <AdminConfirmModal
+        isOpen={Boolean(pendingStatusCategory)}
+        title={pendingStatusCategory?.isDelete ? 'Xác nhận khôi phục thể loại' : 'Xác nhận ẩn thể loại'}
+        message={pendingStatusCategory?.isDelete ? `Bạn có muốn khôi phục “${pendingStatusCategory?.name || 'thể loại này'}” không?` : `Bạn có muốn ẩn “${pendingStatusCategory?.name || 'thể loại này'}” không?`}
+        confirmLabel={pendingStatusCategory?.isDelete ? 'Xác nhận khôi phục' : 'Xác nhận ẩn'}
+        danger={!pendingStatusCategory?.isDelete}
+        onCancel={() => setPendingStatusCategory(null)}
+        onConfirm={() => {
+          const category = pendingStatusCategory
+          setPendingStatusCategory(null)
+          onToggleStatus(category)
+        }}
+      />
     </div>
   )
 }

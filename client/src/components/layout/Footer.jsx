@@ -1,16 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { MaterialCommunityIcon } from '../common/Icons'
 import './Footer.css'
 
 export default function Footer({ onNavigate = null }) {
   const [email, setEmail] = useState('')
   const [subscribed, setSubscribed] = useState(false)
+  const subscribedTimerRef = useRef(null)
+
+  useEffect(() => () => {
+    if (subscribedTimerRef.current) clearTimeout(subscribedTimerRef.current)
+  }, [])
 
   const handleSubscribe = (e) => {
     e.preventDefault()
     if (email.trim()) {
       setSubscribed(true)
       setEmail('')
-      setTimeout(() => setSubscribed(false), 4000)
+      if (subscribedTimerRef.current) clearTimeout(subscribedTimerRef.current)
+      subscribedTimerRef.current = setTimeout(() => {
+        setSubscribed(false)
+        subscribedTimerRef.current = null
+      }, 4000)
     }
   }
 
@@ -40,9 +50,9 @@ export default function Footer({ onNavigate = null }) {
               Nền tảng thương mại điện tử sách cao cấp, cung cấp hàng ngàn đầu sách chọn lọc chất lượng cao với dịch vụ tận tâm và giao hàng nhanh chóng toàn quốc.
             </p>
             <div className="footer-trust-chips">
-              <span className="trust-chip">🛡️ 100% Chính hãng</span>
-              <span className="trust-chip">⚡ Giao nhanh 1-2 ngày</span>
-              <span className="trust-chip">🔄 Đổi trả 7 ngày</span>
+              <span className="trust-chip"><MaterialCommunityIcon name="shield-check" size={14} />100% Chính hãng</span>
+              <span className="trust-chip"><MaterialCommunityIcon name="lightning-bolt" size={14} />Giao nhanh 1-2 ngày</span>
+              <span className="trust-chip"><MaterialCommunityIcon name="sync" size={14} />Đổi trả 7 ngày</span>
             </div>
           </div>
 
@@ -81,7 +91,7 @@ export default function Footer({ onNavigate = null }) {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
-                <button type="submit" className="newsletter-btn">Gửi</button>
+                <button type="button" className="newsletter-btn" onClick={handleSubscribe}>Gửi</button>
               </div>
             </form>
             {subscribed && (

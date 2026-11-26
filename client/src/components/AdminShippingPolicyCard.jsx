@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import storePolicyService from '../services/storePolicyService'
 import { DEFAULT_SHIPPING_RULE, invalidateShippingRuleCache } from '../utils/pricing'
+import { MaterialCommunityIcon } from './common/Icons'
 
 function formatVnd(amount) {
   return Number(amount || 0).toLocaleString('vi-VN') + ' đ'
@@ -236,7 +237,7 @@ function AdminShippingPolicyCard({ onShowToast }) {
     <section className="admin-policy-card">
       <div className="admin-policy-header">
         <div>
-          <h3 className="admin-policy-title">🚚 Chính sách vận chuyển &amp; Freeship toàn shop</h3>
+          <h3 className="admin-policy-title"><MaterialCommunityIcon name="truck-delivery" size={18} /> Chính sách vận chuyển &amp; Freeship toàn shop</h3>
           <p className="admin-policy-subtitle">
             {loading
               ? 'Đang tải cấu hình từ SQL Server...'
@@ -252,7 +253,7 @@ function AdminShippingPolicyCard({ onShowToast }) {
             disabled={loading || saving || isDefaultInForm}
             onClick={handleApplyDefaultPreset}
           >
-            ↺ Mặc định ({formatVnd(DEFAULT_SHIPPING_RULE.standardFee)} / {formatVnd(DEFAULT_SHIPPING_RULE.freeThreshold)})
+             <><MaterialCommunityIcon name="sync" size={15} /> Mặc định ({formatVnd(DEFAULT_SHIPPING_RULE.standardFee)} / {formatVnd(DEFAULT_SHIPPING_RULE.freeThreshold)})</>
           </button>
           <button
             type="button"
@@ -260,7 +261,7 @@ function AdminShippingPolicyCard({ onShowToast }) {
             disabled={loading || saving || isFreeshipInForm}
             onClick={handleApplyFreeShipPreset}
           >
-            ⚡ Freeship toàn shop (0đ)
+             <><MaterialCommunityIcon name="lightning-bolt" size={15} /> Freeship toàn shop (0đ)</>
           </button>
         </div>
       </div>
@@ -329,8 +330,8 @@ function AdminShippingPolicyCard({ onShowToast }) {
         <div className={`admin-policy-alert ${liveRisk.severity}`}>
           <strong>
             {liveRisk.severity === 'danger'
-              ? '🚨 Cảnh báo rủi ro ảnh hưởng doanh thu cửa hàng:'
-              : '⚠️ Lưu ý mức phí/ngưỡng khác thường:'}
+               ? <><MaterialCommunityIcon name="alert-circle-outline" size={16} /> Cảnh báo rủi ro ảnh hưởng doanh thu cửa hàng:</>
+               : <><MaterialCommunityIcon name="alert-circle-outline" size={16} /> Lưu ý mức phí/ngưỡng khác thường:</>}
           </strong>
           <ul>
             {liveRisk.risks.map((risk) => (
@@ -361,8 +362,8 @@ function AdminShippingPolicyCard({ onShowToast }) {
                 style={{ color: pendingConfirm.severity === 'danger' ? '#f87171' : '#f3c57e' }}
               >
                 {pendingConfirm.severity === 'danger'
-                  ? '🚨 Xác nhận thay đổi rủi ro cao'
-                  : '⚠️ Xác nhận cập nhật chính sách'}
+                   ? <><MaterialCommunityIcon name="alert-circle-outline" size={18} /> Xác nhận thay đổi rủi ro cao</>
+                   : <><MaterialCommunityIcon name="alert-circle-outline" size={18} /> Xác nhận cập nhật chính sách</>}
               </h2>
               <button
                 type="button"
