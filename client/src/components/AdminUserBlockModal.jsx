@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MaterialCommunityIcon } from './common/Icons'
 
 function AdminUserBlockModal({
   isOpen,
@@ -42,7 +43,7 @@ function AdminUserBlockModal({
       <div className="admin-modal-box block-confirm">
         <div className="admin-modal-header">
           <h2 className="admin-modal-title" style={{ color: '#f87171' }}>
-            🔒 Xác nhận Khóa Tài Khoản
+            <><MaterialCommunityIcon name="lock" size={18} />Xác nhận Khóa Tài Khoản</>
           </h2>
           <button type="button" className="admin-modal-close" onClick={onClose}>
             &times;
@@ -97,4 +98,3 @@ function AdminUserBlockModal({
 }
 
 export default AdminUserBlockModal
-

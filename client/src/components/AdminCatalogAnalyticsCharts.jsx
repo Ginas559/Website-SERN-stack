@@ -1,6 +1,6 @@
 import { useState, memo } from 'react'
 import { buildCircularSegments } from '../utils/chartGeometry'
-import { TagIcon, BookIcon, TicketIcon } from './common/Icons'
+import { TagIcon, BookIcon, TicketIcon, MaterialCommunityIcon } from './common/Icons'
 import './AdminCatalogAnalyticsCharts.css'
 
 const CATEGORY_COLORS = [
@@ -528,13 +528,13 @@ function AdminCatalogAnalyticsCharts({
             <span className="stock-gauge-title">Sức khỏe tồn kho ({totalBooksCount} đầu sách)</span>
             <div className="inventory-health-legend vertical">
               <span onMouseEnter={() => setHoverStockKey('instock')} onMouseLeave={() => setHoverStockKey(null)}>
-                🟢 Còn nhiều: <strong>{inStockCount}</strong>
+                <MaterialCommunityIcon name="circle" size={10} style={{ color: '#22c55e' }} /> Còn nhiều: <strong>{inStockCount}</strong>
               </span>
               <span onMouseEnter={() => setHoverStockKey('low')} onMouseLeave={() => setHoverStockKey(null)}>
-                🟡 Sắp hết: <strong>{lowStockCount}</strong>
+                <MaterialCommunityIcon name="circle" size={10} style={{ color: '#eab308' }} /> Sắp hết: <strong>{lowStockCount}</strong>
               </span>
               <span onMouseEnter={() => setHoverStockKey('out')} onMouseLeave={() => setHoverStockKey(null)}>
-                🔴 Hết hàng: <strong>{outOfStockCount}</strong>
+                <MaterialCommunityIcon name="circle" size={10} style={{ color: '#ef4444' }} /> Hết hàng: <strong>{outOfStockCount}</strong>
               </span>
             </div>
           </div>
@@ -544,7 +544,7 @@ function AdminCatalogAnalyticsCharts({
       <div className={`catalog-chart-card ${loading && resolvedTotalPosts > 0 ? 'loading' : ''}`}>
         <div className="catalog-chart-header">
           <div className="catalog-chart-title-wrap">
-            <h3 className="catalog-chart-title">⭐ Phân Bố Đánh Giá & Thảo Luận</h3>
+            <h3 className="catalog-chart-title"><MaterialCommunityIcon name="star" size={17} /> Phân Bố Đánh Giá &amp; Thảo Luận</h3>
             <p className="catalog-chart-sub">
               Vòng điểm chất lượng, tỷ trọng tương tác & phổ 1★ → 5★ ({resolvedTotalPosts} bài)
             </p>
@@ -609,14 +609,14 @@ function AdminCatalogAnalyticsCharts({
                 onMouseEnter={() => setHoverReviewSlice('ratings')}
                 onMouseLeave={() => setHoverReviewSlice(null)}
               >
-                ⭐ Đánh giá: <strong>{resolvedTotalRatings}</strong> ({ratingShare}%)
+                <MaterialCommunityIcon name="star" size={14} /> Đánh giá: <strong>{resolvedTotalRatings}</strong> ({ratingShare}%)
               </span>
               <span
                 className={hoverReviewSlice === 'discussions' ? 'highlighted' : ''}
                 onMouseEnter={() => setHoverReviewSlice('discussions')}
                 onMouseLeave={() => setHoverReviewSlice(null)}
               >
-                💬 Thảo luận: <strong>{resolvedTotalDiscussions}</strong> ({discussionShare}%)
+                <MaterialCommunityIcon name="message" size={14} /> Thảo luận: <strong>{resolvedTotalDiscussions}</strong> ({discussionShare}%)
               </span>
             </div>
           </div>
@@ -739,8 +739,8 @@ function AdminCatalogAnalyticsCharts({
               </span>
             </div>
             <div className="promo-rev-split">
-              <span>🟣 DT có mã: <strong>{formatCompactVND(promoAdoption.promoRevenue)}</strong></span>
-              <span>🔵 DT nguyên giá: <strong>{formatCompactVND(promoAdoption.regularRevenue)}</strong></span>
+               <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#a855f7' }} /> DT có mã: <strong>{formatCompactVND(promoAdoption.promoRevenue)}</strong></span>
+               <span><MaterialCommunityIcon name="circle" size={10} style={{ color: '#3b82f6' }} /> DT nguyên giá: <strong>{formatCompactVND(promoAdoption.regularRevenue)}</strong></span>
             </div>
           </div>
         </div>
